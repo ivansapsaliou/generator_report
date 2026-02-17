@@ -1,0 +1,21 @@
+CREATE TABLE public.a_111111 (
+    line_id bigint,
+    line_name text,
+    node_id bigint,
+    child_id bigint,
+    level integer,
+    path bigint[],
+    path_str text,
+    start_date timestamp without time zone,
+    end_date timestamp without time zone,
+    accounting_type_id bigint,
+    accounting_type_node_id bigint,
+    connection_id bigint,
+    branch_id bigint,
+    group_recalculation_attitude_id bigint,
+    allocation_source_consumption_id bigint,
+    value numeric,
+    connection_name character varying,
+    val numeric,
+    source_consumption_id integer
+);

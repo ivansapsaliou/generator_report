@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}Выбор таблицы{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-table"></i> Выберите таблицу для отчета</h4>
+            </div>
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="tableSearch" placeholder="Поиск таблицы...">
+                </div>
+
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-hover table-striped">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Таблица</th>
+                                <th>Описание</th>
+                                <th>Действие</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablesList">
+                            {% for table in tables %}
+                            <tr>
+                                <td><strong>{{ table.table_name }}</strong></td>
+                                <td>
+                                    {% if table.table_comment %}
+                                        <small class="text-muted">{{ table.table_comment }}</small>
+                                    {% else %}
+                                        <small class="text-muted text-secondary">Без описания</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('report_builder', table=table.table_name) }}" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-plus-circle"></i> Создать отчет
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Сохранённые шаблоны -->
+<div class="card">
+        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-bookmark-star"></i> Сохраненные отчеты</span>
+            <button class="btn btn-sm btn-light" onclick="loadTemplates()">
+                <i class="bi bi-arrow-clockwise"></i> Обновить
+            </button>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0" style="font-size: 14px;" id="templatesTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>Название</th>
+                        <th>Создан</th>
+                        <th>Автор</th>
+                        <th style="width: 200px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="templatesBody">
+                    <tr>
+                        <td colspan="4" class="text-center p-3 text-muted">Загрузка...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div>
+</div>
+
+<script>
+    async function loadTemplates() {
+        const tbody = document.getElementById('templatesBody');
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center p-3"><div class="spinner-border spinner-border-sm"></div> Загрузка...</td></tr>';
+
+        try {
+            const response = await fetch('/api/templates');
+            const result = await response.json();
+
+            if (result.success && result.data.length > 0) {
+                tbody.innerHTML = result.data.map(t => `
+                    <tr style="cursor: pointer;" data-template-id="${t.id}">
+                        <td><strong>${t.name}</strong></td>
+                        <td style="color: #6c757d; font-size: 12px;">${new Date(t.created_at).toLocaleString('ru-RU')}</td>
+                        <td style="color: #6c757d;">${t.created_by}</td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-success" title="Открыть" data-action="open" data-id="${t.id}">
+                                <i class="bi bi-play-fill"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-primary" title="Переименовать" data-action="rename" data-id="${t.id}" data-name="${encodeURIComponent(t.name)}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" title="Дублировать" data-action="duplicate" data-id="${t.id}">
+                                <i class="bi bi-files"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-danger" title="Удалить" data-action="delete" data-id="${t.id}" data-name="${encodeURIComponent(t.name)}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center p-3 text-muted">Нет сохраненных отчетов</td></tr>';
+            }
+        } catch (error) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger p-3">Ошибка загрузки</td></tr>';
+        }
+    }
+
+    function loadTemplate(id) {
+        if (window.reportBuilderInstance) {
+            window.reportBuilderInstance.loadTemplateSPA(id);
+        } else {
+            window.location.href = `/report-builder?template_id=${id}`;
+        }
+    }
+
+    function initTemplatesActions() {
+        const tbody = document.getElementById('templatesBody');
+        if (!tbody) return;
+        if (tbody.dataset.bound === '1') return;
+        tbody.dataset.bound = '1';
+
+        tbody.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (btn) {
+                e.stopPropagation();
+                const action = btn.dataset.action;
+                const id = parseInt(btn.dataset.id, 10);
+                const name = btn.dataset.name ? decodeURIComponent(btn.dataset.name) : '';
+
+                if (action === 'open') return loadTemplate(id);
+                if (action === 'rename') return renameTemplate(id, name);
+                if (action === 'duplicate') return duplicateTemplate(id);
+                if (action === 'delete') return deleteTemplate(id, name);
+                return;
+            }
+
+            const tr = e.target.closest('tr[data-template-id]');
+            if (!tr) return;
+            const id = parseInt(tr.dataset.templateId, 10);
+            if (!Number.isNaN(id)) loadTemplate(id);
+        });
+    }
+
+    async function renameTemplate(id, oldName) {
+        const newName = prompt('Введите новое название шаблона:', oldName || '');
+        if (newName === null) return; // Cancel
+
+        const trimmed = newName.trim();
+        if (!trimmed) {
+            alert('Название не может быть пустым');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/templates/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: trimmed })
+            });
+            const result = await response.json();
+            if (!result.success) {
+                alert('Ошибка: ' + (result.error || 'Не удалось переименовать'));
+                return;
+            }
+            await loadTemplates();
+        } catch (e) {
+            alert('Ошибка подключения: ' + e.message);
+        }
+    }
+
+    async function duplicateTemplate(id) {
+        try {
+            const response = await fetch(`/api/templates/${id}/duplicate`, { method: 'POST' });
+            const result = await response.json();
+            if (!result.success) {
+                alert('Ошибка: ' + (result.error || 'Не удалось дублировать'));
+                return;
+            }
+            await loadTemplates();
+        } catch (e) {
+            alert('Ошибка подключения: ' + e.message);
+        }
+    }
+
+    async function deleteTemplate(id, name) {
+        const ok = confirm(`Удалить шаблон "${name}"?`);
+        if (!ok) return;
+
+        try {
+            const response = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
+            const result = await response.json();
+            if (!result.success) {
+                alert('Ошибка: ' + (result.error || 'Не удалось удалить'));
+                return;
+            }
+            await loadTemplates();
+        } catch (e) {
+            alert('Ошибка подключения: ' + e.message);
+        }
+    }
+
+    // Загружаем шаблоны при старте
+    initTemplatesActions();
+    loadTemplates();
+</script>
+
+{% endblock %}

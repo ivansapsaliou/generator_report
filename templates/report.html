@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block title %}Конструктор отчета: {{ selected_table }}{% endblock %}
+
+{% block content %}
+
+<div style="display: grid; grid-template-columns: 1fr auto; gap: 0;">
+    
+    <!-- ГЛАВНАЯ КОЛОННА -->
+    <div style="padding: 20px 30px;">
+        <!-- ЗАГОЛОВОК -->
+        <div style="margin-bottom: 12px;">
+            <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--primary-color);">
+                <i class="bi bi-gear"></i> Параметры отчета: <strong>{{ selected_table }}</strong>
+            </h2>
+        </div>
+
+        <!-- БЛОК 1: КОЛОНКИ -->
+        <div class="card" style="margin-bottom: 10px;">
+            <div class="card-header" style="padding: 9px 12px;">
+                <i class="bi bi-columns-gap"></i> Выберите колонки
+            </div>
+            <div class="card-body" style="padding: 15px;">
+                <div class="columns-selector">
+                    <!-- Доступные колонки -->
+                    <div class="columns-list-wrapper">
+                        <label>Доступные:</label>
+                        <!-- ИЗМЕНЕНО: Добавлена высота -->
+                        <select id="availableColumns" class="form-select" multiple style="height: 500px;"></select>
+                    </div>
+                    
+                    <!-- Кнопки управления -->
+                    <div class="columns-buttons">
+                        <button id="addColumns" class="btn btn-primary" title="Добавить выбранные">
+                            <i class="bi bi-arrow-right"></i>
+                        </button>
+                        <button id="removeColumns" class="btn btn-secondary" title="Удалить выбранные">
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                        <button id="addAllColumns" class="btn btn-primary" title="Добавить все">
+                            <i class="bi bi-arrow-right-circle"></i>
+                        </button>
+                        <button id="removeAllColumns" class="btn btn-secondary" title="Удалить все">
+                            <i class="bi bi-arrow-left-circle"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Выбранные колонки -->
+                    <div class="columns-list-wrapper">
+                        <label>Выбранные:</label>
+                        <!-- ИЗМЕНЕНО: Добавлена высота -->
+                        <select id="selectedColumns" class="form-select" multiple style="height: 500px;"></select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- БЛОК 2: ДЖОЙНЫ -->
+        <div class="card" style="margin-bottom: 10px;">
+            <!-- ИЗМЕНЕНО: Добавлен id="joinsHeader" и style="cursor: pointer" -->
+            <div id="joinsHeader" class="card-header" style="padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+                <span><i class="bi bi-link-45deg"></i> Джойны</span>
+                <button id="addJoinBtn" class="btn btn-primary btn-sm" style="padding: 4px 6px; font-size: 10px;">
+                    <i class="bi bi-plus-circle"></i>
+                </button>
+            </div>
+            <!-- ИЗМЕНЕНО: Добавлен id="joinsContainer" -->
+            <div id="joinsContainer" class="card-body" style="padding: 10px;">
+                <div style="min-height: 50px; font-size: 11px;">
+                    Нет джойнов
+                </div>
+            </div>
+        </div>
+
+        <!-- БЛОК 3: УСЛОВИЯ -->
+        <div class="card" style="margin-bottom: 10px;">
+            <!-- ИЗМЕНЕНО: Добавлен id="conditionsHeader" и style="cursor: pointer" -->
+            <div id="conditionsHeader" class="card-header" style="padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+                <span><i class="bi bi-funnel"></i> Условия WHERE</span>
+                <button id="addConditionBtn" class="btn btn-primary btn-sm" style="padding: 4px 6px; font-size: 10px;">
+                    <i class="bi bi-plus-circle"></i>
+                </button>
+            </div>
+            <!-- ИЗМЕНЕНО: Добавлен id="conditionsContainer" -->
+            <div id="conditionsContainer" class="card-body" style="padding: 10px;">
+                <div style="min-height: 40px; font-size: 11px;"></div>
+            </div>
+        </div>
+
+        <!-- БЛОК 4: АГРЕГАНТЫ -->
+        <div class="card" style="margin-bottom: 10px;">
+            <!-- ИЗМЕНЕНО: Добавлен id="aggregatesHeader" и style="cursor: pointer" -->
+            <div id="aggregatesHeader" class="card-header" style="padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+                <span><i class="bi bi-calculator"></i> Агреганты</span>
+                <button id="addAggregateBtn" class="btn btn-primary btn-sm" style="padding: 4px 6px; font-size: 10px;">
+                    <i class="bi bi-plus-circle"></i>
+                </button>
+            </div>
+            <!-- ИЗМЕНЕНО: Добавлен id="aggregatesContainer" -->
+            <div id="aggregatesContainer" class="card-body" style="padding: 10px;">
+                <div style="min-height: 40px; font-size: 11px;"></div>
+            </div>
+        </div>
+
+        <!-- БЛОК 5: СОРТИРОВКА -->
+        <div class="card" style="margin-bottom: 10px;">
+            <!-- ИЗМЕНЕНО: Добавлен id="sortHeader" и style="cursor: pointer" -->
+            <div id="sortHeader" class="card-header" style="padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+                <span><i class="bi bi-sort-up"></i> Сортировка</span>
+                <button id="addSortBtn" class="btn btn-primary btn-sm" style="padding: 4px 6px; font-size: 10px;">
+                    <i class="bi bi-plus-circle"></i>
+                </button>
+            </div>
+            <!-- ИЗМЕНЕНО: Добавлен id="sortContainer" -->
+            <div id="sortContainer" class="card-body" style="padding: 10px;">
+                <div style="min-height: 40px; font-size: 11px;"></div>
+            </div>
+        </div>
+
+        <!-- БЛОК 6: ПАРАМЕТРЫ -->
+        <div class="card" style="margin-bottom: 0;">
+            <!-- ИЗМЕНЕНО: Добавлен id="parametersHeader" и style="cursor: pointer" -->
+            <div id="parametersHeader" class="card-header" style="padding: 9px 12px; cursor: pointer; user-select: none;">
+                <i class="bi bi-sliders"></i> Параметры
+            </div>
+            <!-- ИЗМЕНЕНО: Добавлен id="parametersContainer" -->
+            <div id="parametersContainer" class="card-body" style="padding: 10px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label class="form-label" style="margin-bottom: 5px;">Лимит:</label>
+                        <input type="number" id="limit" class="form-control" value="100" min="1" style="font-size: 11px;">
+                    </div>
+                    <div>
+                        <label class="form-label" style="margin-bottom: 5px;">Смещение:</label>
+                        <input type="number" id="offset" class="form-control" value="0" min="0" style="font-size: 11px;">
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button id="generateBtn" class="btn btn-primary" style="font-size: 11px; padding: 6px 10px;">
+                    <i class="bi bi-play-fill"></i> Генерировать
+                </button>
+                <button id="saveTemplateBtn" class="btn btn-success" style="font-size: 11px; padding: 6px 10px;">
+                    <i class="bi bi-bookmark"></i> Сохранить
+                </button>
+                <button id="resetBtn" class="btn btn-secondary" style="font-size: 11px; padding: 6px 10px;">
+                    <i class="bi bi-arrow-clockwise"></i> Сбросить
+                </button>
+                <a href="{{ url_for('index') }}" class="btn btn-secondary" style="font-size: 11px; padding: 6px 10px;">
+                    <i class="bi bi-arrow-left"></i> Назад
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: JOIN -->
+<div id="joinModal" class="modal">
+    <div class="modal-content" style="max-width: 420px;">
+        <div class="modal-header">
+            <h5 style="margin: 0;"><i class="bi bi-link-45deg"></i> Добавить джойн</h5>
+            <button type="button" class="close-modal" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 0;">×</button>
+        </div>
+        <div class="modal-body" style="font-size: 12px;">
+            <div class="form-section" style="margin-bottom: 10px;">
+                <label class="form-label">Таблица:</label>
+                <select id="joinTableSelect" class="form-select" style="font-size: 11px;"></select>
+            </div>
+            <div id="joinColumnsContainer"></div>
+            <div class="form-section" style="margin-bottom: 10px;">
+                <label class="form-label">Тип джойна:</label>
+                <select id="joinType" class="form-select" style="font-size: 11px;">
+                    <option value="INNER">INNER JOIN</option>
+                    <option value="LEFT">LEFT JOIN</option>
+                    <option value="RIGHT">RIGHT JOIN</option>
+                </select>
+            </div>
+            <div class="form-section">
+                <label class="form-label">Алиас:</label>
+                <input type="text" id="joinAlias" class="form-control" placeholder="Опционально" style="font-size: 11px;">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary close-modal" style="font-size: 11px;">Отмена</button>
+            <button id="confirmJoinBtn" class="btn btn-primary" style="font-size: 11px;">Добавить</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: RESULT -->
+<div id="resultModal" class="modal">
+    <div class="modal-content" data-result="true">
+        <div class="modal-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="bi bi-table"></i>
+                <span>Результат</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="export-buttons">
+                    <button class="export-btn" data-format="csv" title="Экспорт в CSV">
+                        <i class="bi bi-file-text"></i>
+                    </button>
+                    <button class="export-btn" data-format="json" title="Экспорт в JSON">
+                        <i class="bi bi-code-square"></i>
+                    </button>
+                    <button class="export-btn" data-format="xml" title="Экспорт в XML">
+                        <i class="bi bi-code-slash"></i>
+                    </button>
+                    <button class="export-btn" data-format="html" title="Экспорт в HTML">
+                        <i class="bi bi-file-earmark-code"></i>
+                    </button>
+                    <button class="export-btn" data-format="xlsx" title="Экспорт в Excel">
+                        <i class="bi bi-table"></i>
+                    </button>
+                </div>
+                <button type="button" class="close-modal" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 0; margin: 0;">×</button>
+            </div>
+        </div>
+        <div class="modal-body" data-result="true">
+            <div class="result-table-wrapper">
+                <div id="resultContainer"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: SAVE TEMPLATE -->
+<div id="saveTemplateModal" class="modal">
+    <div class="modal-content" style="max-width: 380px;">
+        <div class="modal-header">
+            <h5 style="margin: 0;"><i class="bi bi-bookmark"></i> Сохранить шаблон</h5>
+            <button type="button" class="close-modal" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 0;">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-section">
+                <label class="form-label">Название:</label>
+                <input type="text" id="templateName" class="form-control" placeholder="Введите название" style="font-size: 11px;">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary close-modal" style="font-size: 11px;">Отмена</button>
+            <button id="saveTemplateConfirmBtn" class="btn btn-success" style="font-size: 11px;" title="Создать новый шаблон">Сохранить как новый</button>
+            <button id="updateTemplateConfirmBtn" class="btn btn-primary" style="font-size: 11px; display: none;" title="Обновить текущий шаблон">Обновить текущий</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // MODAL CLOSE HANDLERS
+    document.querySelectorAll('.close-modal').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const modal = this.closest('.modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        });
+    });
+
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.style.display = 'none';
+            }
+        });
+    });
+</script>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+<script>
+    // Инициализация ReportBuilder
+    const urlParams = new URLSearchParams(window.location.search);
+    const templateId = urlParams.get('template_id');
+
+    window.reportBuilder = new ReportBuilder('{{ selected_table }}', templateId);
+
+    // КНОПКА: добавить джойн
+    const addJoinBtn = document.getElementById('addJoinBtn');
+    if (addJoinBtn) {
+        addJoinBtn.addEventListener('click', function() {
+            // Важно: останавливаем всплытие события, чтобы не сработал клик по заголовку (сворачивание)
+            event.stopPropagation();
+            const joinModal = document.getElementById('joinModal');
+            joinModal.style.display = 'flex';
+
+            const tableSelect = document.getElementById('joinTableSelect');
+            if (tableSelect && tableSelect.value) {
+                reportBuilder.loadJoinColumns(tableSelect.value);
+            }
+        });
+    }
+
+    // КНОПКА: подтвердить джойн
+    const confirmJoinBtn = document.getElementById('confirmJoinBtn');
+    if (confirmJoinBtn) {
+        confirmJoinBtn.addEventListener('click', function() {
+            reportBuilder.addJoin();
+            document.getElementById('joinModal').style.display = 'none';
+        });
+    }
+
+    // КНОПКА: сохранить шаблон
+    const saveTemplateBtn = document.getElementById('saveTemplateBtn');
+    if (saveTemplateBtn) {
+        saveTemplateBtn.addEventListener('click', function() {
+            document.getElementById('saveTemplateModal').style.display = 'flex';
+            const nameInput = document.getElementById('templateName');
+            if (nameInput && window.reportBuilder) {
+                nameInput.value = window.reportBuilder.templateName || '';
+                nameInput.focus();
+                nameInput.select();
+            }
+
+            const updateBtn = document.getElementById('updateTemplateConfirmBtn');
+            if (updateBtn && window.reportBuilder) {
+                updateBtn.style.display = window.reportBuilder.templateId ? 'inline-block' : 'none';
+            }
+        });
+    }
+
+    const saveTemplateConfirmBtn = document.getElementById('saveTemplateConfirmBtn');
+    if (saveTemplateConfirmBtn) {
+        saveTemplateConfirmBtn.addEventListener('click', function() {
+            reportBuilder.saveTemplate();
+        });
+    }
+
+    const updateTemplateConfirmBtn = document.getElementById('updateTemplateConfirmBtn');
+    if (updateTemplateConfirmBtn) {
+        updateTemplateConfirmBtn.addEventListener('click', function() {
+            reportBuilder.updateTemplate();
+        });
+    }
+    
+    // Добавьте stopPropagation для остальных кнопок в заголовках
+    const headerButtons = ['addConditionBtn', 'addAggregateBtn', 'addSortBtn'];
+    headerButtons.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.addEventListener('click', (e) => e.stopPropagation());
+        }
+    });
+</script>
+{% endblock %}

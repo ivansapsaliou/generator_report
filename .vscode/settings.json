@@ -1,0 +1,16 @@
+{
+    "sqltools.connections": [
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "10.100.102.90",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "rul",
+            "group": "rul",
+            "database": "rul_jkh",
+            "username": "rul_developer",
+            "password": "1234567890!@#$%^&*()"
+        }
+    ]
+}
