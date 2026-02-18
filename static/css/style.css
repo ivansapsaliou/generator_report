@@ -21,6 +21,9 @@
   --amber-dim:   #c07a1a;
   --amber-glow:  rgba(240,168,67,.12);
   --amber-glow2: rgba(240,168,67,.06);
+  
+  --primary:     #f0a843;
+  --text-on-primary: #0d0d0d;
 
   --red:         #e05252;
   --green:       #52b788;
@@ -52,6 +55,8 @@ body.light-theme {
   --amber-dim:   #8a4e08;
   --amber-glow:  rgba(184,104,10,.1);
   --amber-glow2: rgba(184,104,10,.05);
+  --primary:     #b8680a;
+  --text-on-primary: #0d0d0d;
   --shadow-sm: 0 1px 3px rgba(0,0,0,.1);
   --shadow-md: 0 4px 16px rgba(0,0,0,.08);
   --shadow-lg: 0 8px 32px rgba(0,0,0,.1);
