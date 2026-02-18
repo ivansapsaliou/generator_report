@@ -7,6 +7,15 @@ import re
 import psycopg2.extensions
 from psycopg2.extensions import AsIs
 from collections import defaultdict
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+import os
+from datetime import datetime
+import io
+import csv
 
 
 app = Flask(__name__)
@@ -266,6 +275,8 @@ def get_possible_joins(table_name):
                 'match_confidence': float(join['match_confidence']),
                 'join_suggestion': join['join_suggestion']
             })
+
+        print(result)
 
         cur.close()
         conn.close()
@@ -530,120 +541,6 @@ def get_templates():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/templates/<int:template_id>', methods=['PUT'])
-def update_template(template_id: int):
-    """API: Обновить/переименовать шаблон отчета"""
-    try:
-        data = request.json or {}
-        name = data.get('name')
-        config = data.get('config')
-
-        if name is not None:
-            name = str(name).strip()
-            if not name:
-                return jsonify({'success': False, 'error': 'Название шаблона не может быть пустым'}), 400
-
-        if name is None and config is None:
-            return jsonify({'success': False, 'error': 'Нет данных для обновления (name/config)'}), 400
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        # Проверяем существование
-        cur.execute("SELECT 1 FROM report_templates WHERE id = %s", (template_id,))
-        if cur.fetchone() is None:
-            cur.close()
-            conn.close()
-            return jsonify({'success': False, 'error': 'Шаблон не найден'}), 404
-
-        config_json = None
-        if config is not None:
-            config_json = json.dumps(config, ensure_ascii=False)
-
-        cur.execute(
-            """
-            UPDATE report_templates
-            SET
-                name = COALESCE(%s, name),
-                config = COALESCE(%s::jsonb, config)
-            WHERE id = %s
-            """,
-            (name, config_json, template_id)
-        )
-        conn.commit()
-
-        cur.close()
-        conn.close()
-
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/templates/<int:template_id>', methods=['DELETE'])
-def delete_template(template_id: int):
-    """API: Удалить шаблон отчета"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        cur.execute("DELETE FROM report_templates WHERE id = %s", (template_id,))
-        deleted = cur.rowcount
-        conn.commit()
-
-        cur.close()
-        conn.close()
-
-        if deleted == 0:
-            return jsonify({'success': False, 'error': 'Шаблон не найден'}), 404
-
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/templates/<int:template_id>/duplicate', methods=['POST'])
-def duplicate_template(template_id: int):
-    """API: Дублировать шаблон отчета"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-        cur.execute("SELECT name, config FROM report_templates WHERE id = %s", (template_id,))
-        tpl = cur.fetchone()
-        if not tpl:
-            cur.close()
-            conn.close()
-            return jsonify({'success': False, 'error': 'Шаблон не найден'}), 404
-
-        base_name = (tpl['name'] or 'Шаблон').strip()
-        new_name = f"{base_name} (копия)"
-
-        config_data = tpl['config']
-        if isinstance(config_data, str):
-            config_data = json.loads(config_data)
-
-        cur2 = conn.cursor()
-        cur2.execute(
-            """
-            INSERT INTO report_templates (name, config, created_by)
-            VALUES (%s, %s::jsonb, %s)
-            RETURNING id
-            """,
-            (new_name, json.dumps(config_data, ensure_ascii=False), 'current_user')
-        )
-        new_id = cur2.fetchone()[0]
-        conn.commit()
-
-        cur2.close()
-        cur.close()
-        conn.close()
-
-        return jsonify({'success': True, 'report_id': new_id})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
 @app.route('/api/load-report/<int:report_id>', methods=['GET'])
 def load_report(report_id):
     """API: Загрузить шаблон отчета"""
@@ -679,6 +576,599 @@ def load_report(report_id):
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# === Роуты для запланированных отчётов ===
+
+@app.route('/scheduled')
+def scheduled_reports():
+    """Страница запланированных отчётов"""
+    return render_template('scheduled.html')
+
+
+@app.route('/settings')
+def settings():
+    """Страница настроек"""
+    return render_template('settings.html', config=app.config)
+
+
+# === API для запланированных отчётов ===
+
+@app.route('/api/scheduled', methods=['GET'])
+def get_scheduled_reports():
+    """Получить список запланированных отчётов"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("""
+            SELECT sr.*, rt.name as template_name
+            FROM report_scheduled sr
+            LEFT JOIN report_templates rt ON sr.template_id = rt.id
+            ORDER BY sr.id DESC
+        """)
+        reports = cur.fetchall()
+        
+        result = []
+        for r in reports:
+            result.append({
+                'id': r['id'],
+                'name': r['name'],
+                'template_id': r['template_id'],
+                'template_name': r['template_name'],
+                'schedule_type': r['schedule_type'],
+                'schedule_time': r['schedule_time'],
+                'schedule_day': r['schedule_day'],
+                'export_format': r['export_format'],
+                'recipients': r['recipients'],
+                'last_status': r['last_status'],
+                'last_run_at': r['last_run_at'].isoformat() if r['last_run_at'] else None,
+                'created_at': r['created_at'].isoformat() if r['created_at'] else None
+            })
+        
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/scheduled', methods=['POST'])
+def create_scheduled_report():
+    """Создать запланированный отчёт"""
+    try:
+        data = request.json
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            INSERT INTO report_scheduled (name, template_id, config, schedule_type, schedule_time, schedule_day, export_format, export_email, recipients)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            data['name'],
+            data['template_id'],
+            json.dumps(data.get('config', {})),
+            data.get('schedule_type', 'manual'),
+            data.get('schedule_time'),
+            data.get('schedule_day'),
+            data.get('export_format', 'xlsx'),
+            data.get('recipients', ''),  # export_email
+            data.get('recipients', '')    # recipients
+        ))
+        
+        report_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'id': report_id})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/scheduled/<int:report_id>', methods=['GET'])
+def get_scheduled_report(report_id):
+    """Получить один запланированный отчёт"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT * FROM report_scheduled WHERE id = %s", (report_id,))
+        report = cur.fetchone()
+        
+        if not report:
+            return jsonify({'success': False, 'error': 'Отчёт не найден'}), 404
+        
+        result = {
+            'id': report['id'],
+            'name': report['name'],
+            'template_id': report['template_id'],
+            'config': report['config'],
+            'schedule_type': report['schedule_type'],
+            'schedule_time': report['schedule_time'],
+            'schedule_day': report['schedule_day'],
+            'export_format': report['export_format'],
+            'recipients': report['recipients'],
+            'last_status': report['last_status'],
+            'last_run_at': report['last_run_at'].isoformat() if report['last_run_at'] else None
+        }
+        
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/scheduled/<int:report_id>', methods=['PUT'])
+def update_scheduled_report(report_id):
+    """Обновить запланированный отчёт"""
+    try:
+        data = request.json
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            UPDATE report_scheduled SET
+                name = %s,
+                template_id = %s,
+                config = %s,
+                schedule_type = %s,
+                schedule_time = %s,
+                schedule_day = %s,
+                export_format = %s,
+                export_email = %s,
+                recipients = %s
+            WHERE id = %s
+        """, (
+            data['name'],
+            data['template_id'],
+            json.dumps(data.get('config', {})),
+            data.get('schedule_type', 'manual'),
+            data.get('schedule_time'),
+            data.get('schedule_day'),
+            data.get('export_format', 'xlsx'),
+            data.get('recipients', ''),
+            data.get('recipients', ''),
+            report_id
+        ))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/scheduled/<int:report_id>', methods=['DELETE'])
+def delete_scheduled_report(report_id):
+    """Удалить запланированный отчёт"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM report_scheduled WHERE id = %s", (report_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/scheduled/<int:report_id>/run', methods=['POST'])
+def run_scheduled_report(report_id):
+    """Выполнить запланированный отчёт и отправить на почту"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Получаем данные отчёта
+        cur.execute("SELECT * FROM report_scheduled WHERE id = %s", (report_id,))
+        report = cur.fetchone()
+        
+        if not report:
+            return jsonify({'success': False, 'error': 'Отчёт не найден'}), 404
+        
+        # Получаем конфиг шаблона
+        config = report['config']
+        if isinstance(config, str):
+            config = json.loads(config)
+        
+        # Выполняем отчёт
+        main_table = config.get('main_table')
+        columns = config.get('columns', [])
+        joins = config.get('joins', [])
+        conditions = config.get('conditions', [])
+        aggregates = config.get('aggregates', [])
+        group_by = config.get('group_by', [])
+        sort = config.get('sort', [])
+        limit = 1000
+        
+        # Формируем параметры для SQL
+        joins_param = None
+        if joins:
+            join_tuples = [
+                (
+                    j.get('source_table'),
+                    j['table_name'],
+                    j.get('alias', j['table_name']),
+                    j['join_type'],
+                    j['left_column'],
+                    j['right_column'],
+                    j.get('confidence', 0.0)
+                )
+                for j in joins
+            ]
+            joins_param = make_composite_array(join_tuples, 'report_join')
+        
+        conditions_param = None
+        if conditions:
+            cond_tuples = [
+                (c['column_name'], c['operator'], c['value'], c.get('logic_operator', 'AND'))
+                for c in conditions
+            ]
+            conditions_param = make_composite_array(cond_tuples, 'report_condition')
+        
+        aggregates_param = None
+        if aggregates:
+            agg_tuples = [
+                (a['function_name'], a['column_name'], a.get('alias', ''))
+                for a in aggregates
+            ]
+            aggregates_param = make_composite_array(agg_tuples, 'report_aggregate')
+        
+        sort_param = None
+        if sort:
+            sort_tuples = []
+            for s in sort:
+                col = s.get('column_name', '').strip()
+                dir_ = s.get('direction', 'ASC').upper().strip()
+                if col:
+                    sort_tuples.append((col, dir_))
+            if sort_tuples:
+                sort_param = make_composite_array(sort_tuples, 'report_sort')
+        
+        result_cols = []
+        for col in columns:
+            clean_col = re.sub(r'[^\w]', '_', col)
+            result_cols.append(f'"{clean_col}" TEXT')
+        for agg in aggregates:
+            alias = agg.get('alias') or f"{agg['function_name'].upper()}_{agg['column_name']}"
+            clean_alias = re.sub(r'[^\w]', '_', alias)
+            result_cols.append(f'"{clean_alias}" TEXT')
+        result_cols_str = ', '.join(result_cols) if result_cols else '"data" TEXT'
+        
+        sql_template = """
+            SELECT * FROM report_generate(
+                %s, 'public',
+                %s::report_join[],
+                %s,
+                %s::report_condition[],
+                %s::report_aggregate[],
+                %s,
+                %s::report_sort[],
+                %s, 0
+            ) AS result({result_cols})
+        """.format(result_cols=result_cols_str)
+        
+        params = [
+            main_table,
+            joins_param,
+            columns if columns else None,
+            conditions_param,
+            aggregates_param,
+            group_by if group_by else None,
+            sort_param,
+            limit
+        ]
+        
+        cur.execute(sql_template, params)
+        rows = cur.fetchall()
+        column_names = [desc[0] for desc in cur.description]
+        
+        # Обновляем статус
+        cur.execute("""
+            UPDATE report_scheduled SET last_status = 'success', last_run_at = NOW() WHERE id = %s
+        """, (report_id,))
+        conn.commit()
+        cur.close()
+        
+        # Формируем файл и отправляем на почту
+        export_format = report['export_format'] or 'xlsx'
+        recipients = report['recipients'] or report['export_email'] or ''
+        
+        sent_count = 0
+        if recipients:
+            # Готовим данные
+            data_rows = [dict(row) for row in rows]
+            
+            # Генерируем файл
+            filename = f"report_{report_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            file_content = None
+            
+            if export_format == 'xlsx':
+                import xlsxwriter
+                output = io.BytesIO()
+                workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+                worksheet = workbook.add_worksheet()
+                
+                # Заголовки
+                for col, name in enumerate(column_names):
+                    worksheet.write(0, col, name)
+                
+                # Данные
+                for row_idx, row in enumerate(data_rows):
+                    for col_idx, col_name in enumerate(column_names):
+                        worksheet.write(row_idx + 1, col_idx, str(row.get(col_name, '')))
+                
+                workbook.close()
+                file_content = output.getvalue()
+                filename += '.xlsx'
+                mime_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                
+            elif export_format == 'csv':
+                output = io.StringIO()
+                writer = csv.DictWriter(output, fieldnames=column_names)
+                writer.writeheader()
+                writer.writerows(data_rows)
+                file_content = output.getvalue().encode('utf-8')
+                filename += '.csv'
+                mime_type = 'text/csv'
+                
+            elif export_format == 'json':
+                file_content = json.dumps({'columns': column_names, 'data': data_rows}, ensure_ascii=False, indent=2).encode('utf-8')
+                filename += '.json'
+                mime_type = 'application/json'
+            
+            # Отправляем на почту
+            mail_settings = get_mail_settings()
+            if mail_settings and mail_settings.get('smtp_host'):
+                sent_count = send_email(
+                    mail_settings,
+                    recipients.split(','),
+                    f"Отчёт: {report['name']}",
+                    f"Автоматически сгенерированный отчёт.\n\nНазвание: {report['name']}\nДата: {datetime.now().strftime('%d.%m.%Y %H:%M')}\nСтрок: {len(rows)}",
+                    file_content,
+                    filename,
+                    mime_type
+                )
+        
+        conn.close()
+        
+        return jsonify({'success': True, 'data': {'total': len(rows), 'sent_count': sent_count}})
+        
+    except Exception as e:
+        import traceback
+        # Обновляем статус на ошибку
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("UPDATE report_scheduled SET last_status = 'failed' WHERE id = %s", (report_id,))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except:
+            pass
+        
+        return jsonify({'success': False, 'error': str(e), 'details': traceback.format_exc()}), 500
+
+
+# === API для настроек ===
+
+def get_mail_settings():
+    """Получить настройки почты из БД"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT * FROM app_settings WHERE setting_key = 'mail_config'")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if row and row['setting_value']:
+            return json.loads(row['setting_value'])
+        return None
+    except:
+        return None
+
+
+def save_mail_settings(settings):
+    """Сохранить настройки почты в БД"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Создаём таблицу если нет
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_settings (
+                id SERIAL PRIMARY KEY,
+                setting_key VARCHAR(100) UNIQUE NOT NULL,
+                setting_value TEXT,
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        
+        cur.execute("""
+            INSERT INTO app_settings (setting_key, setting_value, updated_at)
+            VALUES ('mail_config', %s, NOW())
+            ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()
+        """, (json.dumps(settings),))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error saving mail settings: {e}")
+        return False
+
+
+def send_email(mail_settings, recipients, subject, body, attachment=None, filename=None, mime_type=None):
+    """Отправить email с вложением"""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"{mail_settings.get('from_name', 'Report Builder')} <{mail_settings['smtp_user']}>"
+        msg['To'] = ', '.join(recipients)
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        if attachment:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(attachment)
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', f'attachment; filename={filename}')
+            msg.attach(part)
+        
+        server = smtplib.SMTP(mail_settings['smtp_host'], mail_settings['smtp_port'])
+        if mail_settings.get('smtp_tls', True):
+            server.starttls()
+        server.login(mail_settings['smtp_user'], mail_settings['smtp_password'])
+        server.sendmail(mail_settings['smtp_user'], recipients, msg.as_string())
+        server.quit()
+        
+        return len(recipients)
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return 0
+
+
+@app.route('/api/settings/mail', methods=['GET'])
+def get_mail_settings_api():
+    """Получить настройки почты"""
+    settings = get_mail_settings()
+    # Не возвращаем пароль
+    if settings:
+        settings.pop('smtp_password', None)
+    return jsonify({'success': True, 'data': settings})
+
+
+@app.route('/api/settings/mail', methods=['POST'])
+def save_mail_settings_api():
+    """Сохранить настройки почты"""
+    data = request.json
+    if save_mail_settings(data):
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Ошибка сохранения'}), 500
+
+
+@app.route('/api/settings/mail/test', methods=['POST'])
+def test_mail_settings():
+    """Тестовая отправка письма"""
+    data = request.json or {}
+    test_email = data.get('test_email')
+    
+    settings = get_mail_settings()
+    if not settings:
+        return jsonify({'success': False, 'error': 'Настройки почты не настроены'}), 400
+    
+    recipients = [test_email] if test_email else [settings.get('smtp_user')]
+    
+    sent = send_email(
+        settings,
+        recipients,
+        "Тестовое письмо от Report Builder",
+        "Это тестовое письмо от системы автоматической отправки отчётов.\n\nЕсли вы получили это письмо, настройки почты корректны."
+    )
+    
+    if sent > 0:
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Не удалось отправить письмо'}), 500
+
+
+@app.route('/api/settings/db/test', methods=['GET'])
+def test_db_connection():
+    """Проверить подключение к БД"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT version()")
+        version = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'data': {'version': version}})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chart-data', methods=['POST'])
+def get_chart_data():
+    """API: Получить данные для графика"""
+    try:
+        data = request.json
+        
+        main_table = data.get('main_table')
+        x_axis = data.get('x_axis')
+        y_axis = data.get('y_axis')
+        aggregate_function = data.get('aggregate_function', 'COUNT')
+        joins = data.get('joins', [])
+        conditions = data.get('conditions', [])
+        limit = data.get('limit', 20)
+        
+        if not main_table or not x_axis:
+            return jsonify({'success': False, 'error': 'Необходимы main_table и x_axis'}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Формируем JOINs - передаем пустой массив вместо None
+        joins_param = []
+        if joins:
+            join_tuples = [
+                (
+                    j.get('source_table'),
+                    j['table_name'],
+                    j.get('alias', j['table_name']),
+                    j['join_type'],
+                    j['left_column'],
+                    j['right_column'],
+                    j.get('confidence', 0.0)
+                )
+                for j in joins
+            ]
+            joins_param = join_tuples
+        
+        # Формируем Conditions - передаем пустой массив вместо None
+        conditions_param = []
+        if conditions:
+            cond_tuples = [
+                (c['column_name'], c['operator'], c['value'], c.get('logic_operator', 'AND'))
+                for c in conditions
+            ]
+            conditions_param = cond_tuples
+        
+        # Вызываем функцию report_get_chart_data с явным приведением типов
+        cur.execute("""
+            SELECT * FROM report_get_chart_data(
+                %s, 'public', 
+                %s::report_join[], 
+                %s, %s, %s, 
+                %s::report_condition[], 
+                %s
+            )
+        """, (
+            main_table,
+            joins_param if joins_param else None,
+            x_axis,
+            y_axis if y_axis else None,
+            aggregate_function,
+            conditions_param if conditions_param else None,
+            limit
+        ))
+        
+        rows = cur.fetchall()
+        result = [{'label': row['label'], 'value': float(row['value']), 'tooltip': row['tooltip']} for row in rows]
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'data': result})
+    
+    except Exception as e:
+        import traceback
+        return jsonify({'success': False, 'error': str(e), 'details': traceback.format_exc()}), 500
 
 
 if __name__ == '__main__':

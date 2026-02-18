@@ -1482,6 +1482,9 @@ renderJoins() {
             case 'xlsx':
                 this.exportToXLSX(columns, rows);
                 break;
+            case 'xlsx_styled':
+                this.exportToStyledXLSX(columns, rows);
+                break;
             case 'xml':
                 this.exportToXML(columns, rows);
                 break;
@@ -1614,6 +1617,40 @@ renderJoins() {
         XLSX.writeFile(wb, 'report.xlsx');
     }
 
+    async exportToStyledXLSX(columns, rows) {
+        try {
+            const response = await fetch('/api/export/styled-excel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    columns: columns,
+                    rows: rows,
+                    sheet_name: 'Отчет',
+                    title: 'Отчет ' + new Date().toLocaleDateString('ru-RU')
+                })
+            });
+            
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Export failed');
+            }
+            
+            // Handle blob response
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'report_styled_' + new Date().toISOString().slice(0,10) + '.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+            
+        } catch (e) {
+            this.showError('Ошибка экспорта: ' + e.message);
+        }
+    }
+
     downloadFile(blob, filename) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1741,5 +1778,201 @@ renderJoins() {
 
     showSuccess(message) {
         alert('✓ ' + message);
+    }
+
+    // ==================== CHART FUNCTIONALITY ====================
+    chartInstance = null;
+    currentChartData = null;
+
+    openChartModal() {
+        const modal = document.getElementById('chartModal');
+        const xAxisSelect = document.getElementById('xAxisColumn');
+        const yAxisSelect = document.getElementById('yAxisColumn');
+        
+        // Заполняемselect'ы колонками
+        const columns = this.getSelectedColumns();
+        xAxisSelect.innerHTML = '';
+        yAxisSelect.innerHTML = '<option value="">— COUNT по умолчанию —</option>';
+        
+        columns.forEach(col => {
+            xAxisSelect.add(new Option(col, col));
+            yAxisSelect.add(new Option(col, col));
+        });
+        
+        modal.style.display = 'flex';
+    }
+
+    async showChart() {
+        const modal = document.getElementById('chartModal');
+        modal.style.display = 'none';
+        
+        const xAxis = document.getElementById('xAxisColumn').value;
+        const yAxis = document.getElementById('yAxisColumn').value;
+        const aggregateFunc = document.getElementById('aggregateFunction').value;
+        const chartLimit = document.getElementById('chartLimit').value;
+        const chartType = document.getElementById('modalChartType').value;
+        
+        if (!xAxis) {
+            this.showError('Выберите колонку для оси X');
+            return;
+        }
+        
+        // Переключаем на вид графика
+        document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector('[data-view="chart"]').classList.add('active');
+        
+        document.getElementById('resultTableWrapper').style.display = 'none';
+        document.getElementById('resultChartWrapper').style.display = 'block';
+        
+        // Показываем результат
+        document.getElementById('resultModal').style.display = 'flex';
+        
+        // Загружаем данные
+        await this.fetchAndRenderChart(xAxis, yAxis, aggregateFunc, chartLimit, chartType);
+    }
+
+    async fetchAndRenderChart(xAxis, yAxis, aggregateFunc, limit, chartType) {
+        const container = document.getElementById('resultChartWrapper');
+        container.innerHTML = '<div class="chart-loading">Загрузка данных...</div>';
+        
+        try {
+            const response = await fetch('/api/chart-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    main_table: this.mainTable,
+                    x_axis: xAxis,
+                    y_axis: yAxis,
+                    aggregate_function: aggregateFunc,
+                    joins: this.joins,
+                    conditions: this.conditions,
+                    limit: parseInt(limit)
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error);
+            }
+            
+            this.currentChartData = result.data;
+            this.renderChart(chartType);
+            
+        } catch (err) {
+            container.innerHTML = '<div class="empty-state" style="color:var(--red);">Ошибка: ' + err.message + '</div>';
+        }
+    }
+
+    renderChart(chartType = 'bar') {
+        const container = document.getElementById('resultChartWrapper');
+        
+        // Очищаем контейнер
+        container.innerHTML = `
+            <div style="margin-bottom:15px;display:flex;gap:10px;align-items:center;">
+                <select id="chartType" class="form-select" style="width:auto;" onchange="window.reportBuilder.renderChart(this.value)">
+                    <option value="bar" ${chartType === 'bar' ? 'selected' : ''}>Гистограмма</option>
+                    <option value="line" ${chartType === 'line' ? 'selected' : ''}>График</option>
+                    <option value="pie" ${chartType === 'pie' ? 'selected' : ''}>Круговая</option>
+                    <option value="doughnut" ${chartType === 'doughnut' ? 'selected' : ''}>Пончик</option>
+                    <option value="polarArea" ${chartType === 'polarArea' ? 'selected' : ''}>Полярная</option>
+                </select>
+                <button onclick="window.reportBuilder.fetchAndRenderChart(
+                    document.getElementById('xAxisColumn').value,
+                    document.getElementById('yAxisColumn').value,
+                    document.getElementById('aggregateFunction').value,
+                    document.getElementById('chartLimit').value,
+                    document.getElementById('chartType').value
+                )" class="btn btn-primary btn-sm"><i class="bi bi-arrow-repeat"></i> Обновить</button>
+            </div>
+            <div style="position:relative;height:400px;">
+                <canvas id="resultChart"></canvas>
+            </div>
+        `;
+        
+        if (!this.currentChartData || this.currentChartData.length === 0) {
+            container.innerHTML += '<div class="empty-state">Нет данных для графика</div>';
+            return;
+        }
+        
+        const ctx = document.getElementById('resultChart').getContext('2d');
+        
+        // Уничтожаем старый график
+        if (this.chartInstance) {
+            this.chartInstance.destroy();
+        }
+        
+        const labels = this.currentChartData.map(d => d.label);
+        const values = this.currentChartData.map(d => d.value);
+        
+        // Цветовая схема
+        const colors = [
+            '#f0a843', '#5b8dee', '#52b788', '#e05252', '#9b59b6', 
+            '#e67e22', '#1abc9c', '#f39c12', '#3498db', '#2ecc71'
+        ];
+        
+        const bgColors = chartType === 'line' 
+            ? 'rgba(240, 168, 67, 0.1)' 
+            : colors.map(c => c + 'cc');
+        const borderColors = chartType === 'line' 
+            ? '#f0a843' 
+            : colors;
+        
+        this.chartInstance = new Chart(ctx, {
+            type: chartType,
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Значения',
+                    data: values,
+                    backgroundColor: bgColors,
+                    borderColor: borderColors,
+                    borderWidth: chartType === 'line' ? 2 : 1,
+                    fill: chartType === 'line',
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: chartType === 'pie' || chartType === 'doughnut' || chartType === 'polarArea',
+                        position: 'right',
+                        labels: { color: '#e8e3dc' }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.parsed.y !== null ? context.parsed.y : '';
+                            }
+                        }
+                    }
+                },
+                scales: chartType === 'pie' || chartType === 'doughnut' || chartType === 'polarArea' ? {} : {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: '#a09890' },
+                        grid: { color: '#2a2a2a' }
+                    },
+                    x: {
+                        ticks: { color: '#a09890' },
+                        grid: { color: '#2a2a2a' }
+                    }
+                }
+            }
+        });
+    }
+
+    toggleView(view) {
+        if (view === 'table') {
+            document.getElementById('resultTableWrapper').style.display = 'block';
+            document.getElementById('resultChartWrapper').style.display = 'none';
+        } else {
+            // Открываем модальное окно настройки графика
+            this.openChartModal();
+        }
     }
 }

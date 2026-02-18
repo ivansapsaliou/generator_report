@@ -1,246 +1,287 @@
 {% extends "base.html" %}
+{% block title %}Конструктор: {{ selected_table }}{% endblock %}
 
-{% block title %}Конструктор отчета: {{ selected_table }}{% endblock %}
+{% block topbar_title %}
+    <span style="color:var(--text-3);">Отчёт</span>
+    &nbsp;<span style="color:var(--text-3);">/</span>&nbsp;
+    <span style="color:var(--amber);">{{ selected_table }}</span>
+{% endblock %}
+
+{% block topbar_actions %}
+    <button id="saveTemplateBtn" class="btn btn-secondary btn-sm">
+        <i class="bi bi-bookmark"></i> Сохранить
+    </button>
+    <button id="resetBtn" class="btn btn-secondary btn-sm">
+        <i class="bi bi-arrow-counterclockwise"></i>
+    </button>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i>
+    </a>
+{% endblock %}
 
 {% block content %}
+<div class="builder-layout">
 
-<div style="display: grid; grid-template-columns: 1fr auto; gap: 0;">
-    
-    <!-- ГЛАВНАЯ КОЛОННА -->
-    <div style="padding: 20px 30px;">
-        <!-- ЗАГОЛОВОК -->
-        <div style="margin-bottom: 12px;">
-            <h2 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--primary-color);">
-                <i class="bi bi-gear"></i> Параметры отчета: <strong>{{ selected_table }}</strong>
-            </h2>
+    <!-- ── КОЛОНКИ ───────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left"><i class="bi bi-columns-gap"></i> Колонки</div>
         </div>
-
-        <!-- БЛОК 1: КОЛОНКИ -->
-        <div class="card" style="margin-bottom: 10px;">
-            <div class="card-header" style="padding: 9px 12px;">
-                <i class="bi bi-columns-gap"></i> Выберите колонки
-            </div>
-            <div class="card-body" style="padding: 15px;">
-                <div class="columns-selector">
-                    <!-- Доступные колонки -->
-                    <div class="columns-list-wrapper">
-                        <label>Доступные:</label>
-                        <!-- ИЗМЕНЕНО: Добавлена высота -->
-                        <select id="availableColumns" class="form-select" multiple style="height: 500px;"></select>
-                    </div>
-                    
-                    <!-- Кнопки управления -->
-                    <div class="columns-buttons">
-                        <button id="addColumns" class="btn btn-primary" title="Добавить выбранные">
-                            <i class="bi bi-arrow-right"></i>
-                        </button>
-                        <button id="removeColumns" class="btn btn-secondary" title="Удалить выбранные">
-                            <i class="bi bi-arrow-left"></i>
-                        </button>
-                        <button id="addAllColumns" class="btn btn-primary" title="Добавить все">
-                            <i class="bi bi-arrow-right-circle"></i>
-                        </button>
-                        <button id="removeAllColumns" class="btn btn-secondary" title="Удалить все">
-                            <i class="bi bi-arrow-left-circle"></i>
-                        </button>
-                    </div>
-                    
-                    <!-- Выбранные колонки -->
-                    <div class="columns-list-wrapper">
-                        <label>Выбранные:</label>
-                        <!-- ИЗМЕНЕНО: Добавлена высота -->
-                        <select id="selectedColumns" class="form-select" multiple style="height: 500px;"></select>
-                    </div>
+        <div class="card-body">
+            <div class="columns-selector">
+                <div class="columns-list-wrapper">
+                    <label>Доступные</label>
+                    <select id="availableColumns" class="form-select" multiple style="height:280px;"></select>
                 </div>
-            </div>
-        </div>
-
-        <!-- БЛОК 2: ДЖОЙНЫ -->
-        <div class="card" style="margin-bottom: 10px;">
-            <!-- ИЗМЕНЕНО: Добавлен id="joinsHeader" и style="cursor: pointer" -->
-            <div id="joinsHeader" class="card-header" style="padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
-                <span><i class="bi bi-link-45deg"></i> Джойны</span>
-                <button id="addJoinBtn" class="btn btn-primary btn-sm" style="padding: 4px 6px; font-size: 10px;">
-                    <i class="bi bi-plus-circle"></i>
-                </button>
-            </div>
-            <!-- ИЗМЕНЕНО: Добавлен id="joinsContainer" -->
-            <div id="joinsContainer" class="card-body" style="padding: 10px;">
-                <div style="min-height: 50px; font-size: 11px;">
-                    Нет джойнов
+                <div class="columns-buttons">
+                    <button id="addColumns"       class="btn btn-primary  btn-icon" title="Добавить выбранные"><i class="bi bi-chevron-right"></i></button>
+                    <button id="removeColumns"    class="btn btn-secondary btn-icon" title="Убрать выбранные"><i class="bi bi-chevron-left"></i></button>
+                    <button id="addAllColumns"    class="btn btn-primary  btn-icon" title="Добавить все"><i class="bi bi-chevron-double-right"></i></button>
+                    <button id="removeAllColumns" class="btn btn-secondary btn-icon" title="Убрать все"><i class="bi bi-chevron-double-left"></i></button>
                 </div>
-            </div>
-        </div>
-
-        <!-- БЛОК 3: УСЛОВИЯ -->
-        <div class="card" style="margin-bottom: 10px;">
-            <!-- ИЗМЕНЕНО: Добавлен id="conditionsHeader" и style="cursor: pointer" -->
-            <div id="conditionsHeader" class="card-header" style="padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
-                <span><i class="bi bi-funnel"></i> Условия WHERE</span>
-                <button id="addConditionBtn" class="btn btn-primary btn-sm" style="padding: 4px 6px; font-size: 10px;">
-                    <i class="bi bi-plus-circle"></i>
-                </button>
-            </div>
-            <!-- ИЗМЕНЕНО: Добавлен id="conditionsContainer" -->
-            <div id="conditionsContainer" class="card-body" style="padding: 10px;">
-                <div style="min-height: 40px; font-size: 11px;"></div>
-            </div>
-        </div>
-
-        <!-- БЛОК 4: АГРЕГАНТЫ -->
-        <div class="card" style="margin-bottom: 10px;">
-            <!-- ИЗМЕНЕНО: Добавлен id="aggregatesHeader" и style="cursor: pointer" -->
-            <div id="aggregatesHeader" class="card-header" style="padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
-                <span><i class="bi bi-calculator"></i> Агреганты</span>
-                <button id="addAggregateBtn" class="btn btn-primary btn-sm" style="padding: 4px 6px; font-size: 10px;">
-                    <i class="bi bi-plus-circle"></i>
-                </button>
-            </div>
-            <!-- ИЗМЕНЕНО: Добавлен id="aggregatesContainer" -->
-            <div id="aggregatesContainer" class="card-body" style="padding: 10px;">
-                <div style="min-height: 40px; font-size: 11px;"></div>
-            </div>
-        </div>
-
-        <!-- БЛОК 5: СОРТИРОВКА -->
-        <div class="card" style="margin-bottom: 10px;">
-            <!-- ИЗМЕНЕНО: Добавлен id="sortHeader" и style="cursor: pointer" -->
-            <div id="sortHeader" class="card-header" style="padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
-                <span><i class="bi bi-sort-up"></i> Сортировка</span>
-                <button id="addSortBtn" class="btn btn-primary btn-sm" style="padding: 4px 6px; font-size: 10px;">
-                    <i class="bi bi-plus-circle"></i>
-                </button>
-            </div>
-            <!-- ИЗМЕНЕНО: Добавлен id="sortContainer" -->
-            <div id="sortContainer" class="card-body" style="padding: 10px;">
-                <div style="min-height: 40px; font-size: 11px;"></div>
-            </div>
-        </div>
-
-        <!-- БЛОК 6: ПАРАМЕТРЫ -->
-        <div class="card" style="margin-bottom: 0;">
-            <!-- ИЗМЕНЕНО: Добавлен id="parametersHeader" и style="cursor: pointer" -->
-            <div id="parametersHeader" class="card-header" style="padding: 9px 12px; cursor: pointer; user-select: none;">
-                <i class="bi bi-sliders"></i> Параметры
-            </div>
-            <!-- ИЗМЕНЕНО: Добавлен id="parametersContainer" -->
-            <div id="parametersContainer" class="card-body" style="padding: 10px;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div>
-                        <label class="form-label" style="margin-bottom: 5px;">Лимит:</label>
-                        <input type="number" id="limit" class="form-control" value="100" min="1" style="font-size: 11px;">
-                    </div>
-                    <div>
-                        <label class="form-label" style="margin-bottom: 5px;">Смещение:</label>
-                        <input type="number" id="offset" class="form-control" value="0" min="0" style="font-size: 11px;">
-                    </div>
+                <div class="columns-list-wrapper">
+                    <label>Выбранные</label>
+                    <select id="selectedColumns" class="form-select" multiple style="height:280px;"></select>
                 </div>
-            </div>
-            <div class="card-footer" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                <button id="generateBtn" class="btn btn-primary" style="font-size: 11px; padding: 6px 10px;">
-                    <i class="bi bi-play-fill"></i> Генерировать
-                </button>
-                <button id="saveTemplateBtn" class="btn btn-success" style="font-size: 11px; padding: 6px 10px;">
-                    <i class="bi bi-bookmark"></i> Сохранить
-                </button>
-                <button id="resetBtn" class="btn btn-secondary" style="font-size: 11px; padding: 6px 10px;">
-                    <i class="bi bi-arrow-clockwise"></i> Сбросить
-                </button>
-                <a href="{{ url_for('index') }}" class="btn btn-secondary" style="font-size: 11px; padding: 6px 10px;">
-                    <i class="bi bi-arrow-left"></i> Назад
-                </a>
             </div>
         </div>
     </div>
+
+    <!-- ── JOIN-Ы ─────────────────────────────────────────────── -->
+    <div class="card">
+        <div id="joinsHeader" class="card-header">
+            <div class="header-left"><i class="bi bi-link-45deg"></i> Джойны</div>
+            <div class="header-right">
+                <button id="addJoinBtn" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus"></i> Добавить
+                </button>
+            </div>
+        </div>
+        <div id="joinsContainer" class="card-body">
+            <div class="empty-state">Нет джойнов</div>
+        </div>
+    </div>
+
+    <!-- ── УСЛОВИЯ ────────────────────────────────────────────── -->
+    <div class="card">
+        <div id="conditionsHeader" class="card-header">
+            <div class="header-left"><i class="bi bi-funnel"></i> Условия WHERE</div>
+            <div class="header-right">
+                <button id="addConditionBtn" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus"></i>
+                </button>
+            </div>
+        </div>
+        <div id="conditionsContainer" class="card-body">
+            <div class="empty-state" id="condEmptyState">Нет условий</div>
+        </div>
+    </div>
+
+    <!-- ── АГРЕГАТЫ ───────────────────────────────────────────── -->
+    <div class="card">
+        <div id="aggregatesHeader" class="card-header">
+            <div class="header-left"><i class="bi bi-calculator"></i> Агрегаты</div>
+            <div class="header-right">
+                <button id="addAggregateBtn" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus"></i>
+                </button>
+            </div>
+        </div>
+        <div id="aggregatesContainer" class="card-body">
+            <div class="empty-state" id="aggEmptyState">Нет агрегатов</div>
+        </div>
+    </div>
+
+    <!-- ── СОРТИРОВКА ─────────────────────────────────────────── -->
+    <div class="card">
+        <div id="sortHeader" class="card-header">
+            <div class="header-left"><i class="bi bi-sort-up"></i> Сортировка</div>
+            <div class="header-right">
+                <button id="addSortBtn" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus"></i>
+                </button>
+            </div>
+        </div>
+        <div id="sortContainer" class="card-body">
+            <div class="empty-state" id="sortEmptyState">Нет сортировки</div>
+        </div>
+    </div>
+
+    <!-- ── ПАРАМЕТРЫ + ЗАПУСК ─────────────────────────────────── -->
+    <div class="card">
+        <div id="parametersHeader" class="card-header no-indicator">
+            <div class="header-left"><i class="bi bi-sliders"></i> Параметры</div>
+        </div>
+        <div id="parametersContainer" class="card-body">
+            <div class="params-grid">
+                <div>
+                    <label class="form-label">Лимит</label>
+                    <input type="number" id="limit" class="form-control" value="100" min="1">
+                </div>
+                <div>
+                    <label class="form-label">Смещение</label>
+                    <input type="number" id="offset" class="form-control" value="0" min="0">
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button id="generateBtn" class="btn btn-primary">
+                <i class="bi bi-play-fill"></i> Генерировать
+            </button>
+            <button id="openChartBtn" class="btn btn-secondary" style="margin-left:8px;">
+                <i class="bi bi-bar-chart-line"></i> График
+            </button>
+        </div>
+    </div>
+
 </div>
 
-<!-- MODAL: JOIN -->
+<!-- ── MODAL: JOIN ────────────────────────────────────────── -->
 <div id="joinModal" class="modal">
-    <div class="modal-content" style="max-width: 420px;">
+    <div class="modal-content">
         <div class="modal-header">
-            <h5 style="margin: 0;"><i class="bi bi-link-45deg"></i> Добавить джойн</h5>
-            <button type="button" class="close-modal" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 0;">×</button>
+            <span><i class="bi bi-link-45deg"></i> Добавить джойн</span>
+            <button class="close-modal">×</button>
         </div>
-        <div class="modal-body" style="font-size: 12px;">
-            <div class="form-section" style="margin-bottom: 10px;">
-                <label class="form-label">Таблица:</label>
-                <select id="joinTableSelect" class="form-select" style="font-size: 11px;"></select>
-            </div>
-            <div id="joinColumnsContainer"></div>
-            <div class="form-section" style="margin-bottom: 10px;">
-                <label class="form-label">Тип джойна:</label>
-                <select id="joinType" class="form-select" style="font-size: 11px;">
-                    <option value="INNER">INNER JOIN</option>
-                    <option value="LEFT">LEFT JOIN</option>
-                    <option value="RIGHT">RIGHT JOIN</option>
-                </select>
-            </div>
-            <div class="form-section">
-                <label class="form-label">Алиас:</label>
-                <input type="text" id="joinAlias" class="form-control" placeholder="Опционально" style="font-size: 11px;">
+        <div class="modal-body">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label class="form-label">Таблица</label>
+                    <select id="joinTableSelect" class="form-select"></select>
+                </div>
+                <div>
+                    <label class="form-label">Тип джойна</label>
+                    <select id="joinType" class="form-select">
+                        <option value="LEFT">LEFT JOIN</option>
+                        <option value="INNER">INNER JOIN</option>
+                        <option value="RIGHT">RIGHT JOIN</option>
+                        <option value="FULL">FULL JOIN</option>
+                    </select>
+                </div>
+                <div id="joinColumnsContainer"></div>
+                <div>
+                    <label class="form-label">Алиас (опционально)</label>
+                    <input type="text" id="joinAlias" class="form-control" placeholder="Алиас таблицы">
+                </div>
             </div>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-secondary close-modal" style="font-size: 11px;">Отмена</button>
-            <button id="confirmJoinBtn" class="btn btn-primary" style="font-size: 11px;">Добавить</button>
+            <button class="btn btn-secondary close-modal">Отмена</button>
+            <button id="confirmJoinBtn" class="btn btn-primary">Добавить</button>
         </div>
     </div>
 </div>
 
-<!-- MODAL: RESULT -->
+<!-- ── MODAL: RESULT ──────────────────────────────────────── -->
 <div id="resultModal" class="modal">
     <div class="modal-content" data-result="true">
         <div class="modal-header">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <i class="bi bi-table"></i>
-                <span>Результат</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div class="export-buttons">
-                    <button class="export-btn" data-format="csv" title="Экспорт в CSV">
-                        <i class="bi bi-file-text"></i>
-                    </button>
-                    <button class="export-btn" data-format="json" title="Экспорт в JSON">
-                        <i class="bi bi-code-square"></i>
-                    </button>
-                    <button class="export-btn" data-format="xml" title="Экспорт в XML">
-                        <i class="bi bi-code-slash"></i>
-                    </button>
-                    <button class="export-btn" data-format="html" title="Экспорт в HTML">
-                        <i class="bi bi-file-earmark-code"></i>
-                    </button>
-                    <button class="export-btn" data-format="xlsx" title="Экспорт в Excel">
-                        <i class="bi bi-table"></i>
-                    </button>
+            <div><i class="bi bi-table"></i> Результат</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div class="view-toggle" style="display:flex;background:var(--bg-2);border-radius:6px;padding:2px;">
+                    <button class="view-toggle-btn active" data-view="table" title="Таблица"><i class="bi bi-table"></i></button>
+                    <button class="view-toggle-btn" data-view="chart" title="График"><i class="bi bi-bar-chart-line"></i></button>
                 </div>
-                <button type="button" class="close-modal" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 0; margin: 0;">×</button>
+                <div class="export-buttons">
+                    <button class="export-btn" data-format="csv"  title="CSV"><i class="bi bi-filetype-csv"></i></button>
+                    <button class="export-btn" data-format="json" title="JSON"><i class="bi bi-filetype-json"></i></button>
+                    <button class="export-btn" data-format="xlsx" title="Excel"><i class="bi bi-file-earmark-spreadsheet"></i></button>
+                    <button class="export-btn" data-format="xlsx_styled" title="Excel с форматированием"><i class="bi bi-file-earmark-excel"></i></button>
+                    <button class="export-btn" data-format="xml"  title="XML"><i class="bi bi-filetype-xml"></i></button>
+                    <button class="export-btn" data-format="html" title="HTML"><i class="bi bi-filetype-html"></i></button>
+                </div>
+                <button class="close-modal" style="background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;line-height:1;padding:0;">×</button>
             </div>
         </div>
         <div class="modal-body" data-result="true">
-            <div class="result-table-wrapper">
+            <div class="result-table-wrapper" id="resultTableWrapper">
                 <div id="resultContainer"></div>
+            </div>
+            <div class="result-chart-wrapper" id="resultChartWrapper" style="display:none;padding:20px;">
+                <div style="margin-bottom:15px;display:flex;gap:10px;align-items:center;">
+                    <select id="chartType" class="form-select" style="width:auto;">
+                        <option value="bar">Гистограмма</option>
+                        <option value="line">График</option>
+                        <option value="pie">Круговая</option>
+                        <option value="doughnut">Пончик</option>
+                        <option value="polarArea">Полярная</option>
+                    </select>
+                    <button id="updateChartBtn" class="btn btn-primary btn-sm"><i class="bi bi-arrow-repeat"></i> Обновить</button>
+                </div>
+                <div style="position:relative;height:400px;">
+                    <canvas id="resultChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- MODAL: SAVE TEMPLATE -->
-<div id="saveTemplateModal" class="modal">
-    <div class="modal-content" style="max-width: 380px;">
+<!-- ── MODAL: CHART CONFIG ─────────────────────────────────── -->
+<div id="chartModal" class="modal">
+    <div class="modal-content" style="max-width:420px;">
         <div class="modal-header">
-            <h5 style="margin: 0;"><i class="bi bi-bookmark"></i> Сохранить шаблон</h5>
-            <button type="button" class="close-modal" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 0;">×</button>
+            <h5><i class="bi bi-bar-chart-line"></i> Настроить график</h5>
+            <button class="close-modal" style="background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;line-height:1;padding:0;">×</button>
         </div>
         <div class="modal-body">
-            <div class="form-section">
-                <label class="form-label">Название:</label>
-                <input type="text" id="templateName" class="form-control" placeholder="Введите название" style="font-size: 11px;">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label class="form-label">Тип графика</label>
+                    <select id="modalChartType" class="form-select">
+                        <option value="bar">Гистограмма (Bar)</option>
+                        <option value="line">Линейный (Line)</option>
+                        <option value="pie">Круговая (Pie)</option>
+                        <option value="doughnut">Пончик (Doughnut)</option>
+                        <option value="polarArea">Полярная (Polar Area)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Ось X (категории) <span style="color:var(--red);">*</span></label>
+                    <select id="xAxisColumn" class="form-select"></select>
+                </div>
+                <div>
+                    <label class="form-label">Ось Y (значения)</label>
+                    <select id="yAxisColumn" class="form-select">
+                        <option value="">— COUNT по умолчанию —</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Агрегатная функция</label>
+                    <select id="aggregateFunction" class="form-select">
+                        <option value="COUNT">COUNT (количество)</option>
+                        <option value="SUM">SUM (сумма)</option>
+                        <option value="AVG">AVG (среднее)</option>
+                        <option value="MIN">MIN (минимум)</option>
+                        <option value="MAX">MAX (максимум)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Лимит записей</label>
+                    <input type="number" id="chartLimit" class="form-control" value="20" min="1" max="100">
+                </div>
             </div>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-secondary close-modal" style="font-size: 11px;">Отмена</button>
-            <button id="saveTemplateConfirmBtn" class="btn btn-success" style="font-size: 11px;" title="Создать новый шаблон">Сохранить как новый</button>
-            <button id="updateTemplateConfirmBtn" class="btn btn-primary" style="font-size: 11px; display: none;" title="Обновить текущий шаблон">Обновить текущий</button>
+            <button class="btn btn-secondary close-modal">Отмена</button>
+            <button id="showChartBtn" class="btn btn-primary">Показать график</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: SAVE ────────────────────────────────────────── -->
+<div id="saveTemplateModal" class="modal">
+    <div class="modal-content" style="max-width:360px;">
+        <div class="modal-header">
+            <h5><i class="bi bi-bookmark"></i> Сохранить шаблон</h5>
+            <button class="close-modal" style="background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;line-height:1;padding:0;">×</button>
+        </div>
+        <div class="modal-body">
+            <label class="form-label">Название</label>
+            <input type="text" id="templateName" class="form-control" placeholder="Введите название отчёта">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary close-modal">Отмена</button>
+            <button id="saveTemplateConfirmBtn" class="btn btn-success">Сохранить</button>
         </div>
     </div>
 </div>
@@ -248,100 +289,72 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    // MODAL CLOSE HANDLERS
-    document.querySelectorAll('.close-modal').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const modal = this.closest('.modal');
-            if (modal) {
-                modal.style.display = 'none';
-            }
-        });
-    });
-
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                this.style.display = 'none';
-            }
-        });
-    });
-</script>
-
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-
 <script>
-    // Инициализация ReportBuilder
-    const urlParams = new URLSearchParams(window.location.search);
-    const templateId = urlParams.get('template_id');
+    // Закрытие модалей
+    document.querySelectorAll('.close-modal').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var m = this.closest('.modal');
+            if (m) m.style.display = 'none';
+        });
+    });
+    document.querySelectorAll('.modal').forEach(function(m) {
+        m.addEventListener('click', function(e) {
+            if (e.target === this) this.style.display = 'none';
+        });
+    });
 
+    // Инициализация
+    var urlParams  = new URLSearchParams(window.location.search);
+    var templateId = urlParams.get('template_id');
     window.reportBuilder = new ReportBuilder('{{ selected_table }}', templateId);
 
-    // КНОПКА: добавить джойн
-    const addJoinBtn = document.getElementById('addJoinBtn');
-    if (addJoinBtn) {
-        addJoinBtn.addEventListener('click', function() {
-            // Важно: останавливаем всплытие события, чтобы не сработал клик по заголовку (сворачивание)
-            event.stopPropagation();
-            const joinModal = document.getElementById('joinModal');
-            joinModal.style.display = 'flex';
+    // Кнопка добавления джойна
+    document.getElementById('addJoinBtn').addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.getElementById('joinModal').style.display = 'flex';
+    });
 
-            const tableSelect = document.getElementById('joinTableSelect');
-            if (tableSelect && tableSelect.value) {
-                reportBuilder.loadJoinColumns(tableSelect.value);
-            }
+    document.getElementById('confirmJoinBtn').addEventListener('click', function() {
+        reportBuilder.addJoin();
+        document.getElementById('joinModal').style.display = 'none';
+    });
+
+    document.getElementById('saveTemplateBtn').addEventListener('click', function() {
+        document.getElementById('saveTemplateModal').style.display = 'flex';
+    });
+
+    document.getElementById('saveTemplateConfirmBtn').addEventListener('click', function() {
+        reportBuilder.saveTemplate();
+    });
+
+    document.getElementById('openChartBtn').addEventListener('click', function() {
+        if (reportBuilder) reportBuilder.openChartModal();
+    });
+
+    // stopPropagation для кнопок в заголовках (чтобы не сворачивали секцию)
+    ['addConditionBtn','addAggregateBtn','addSortBtn'].forEach(function(id) {
+        var btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', function(e) { e.stopPropagation(); });
+    });
+
+    // === CHART FUNCTIONALITY ===
+    document.querySelectorAll('.view-toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.view-toggle-btn').forEach(function(b) { b.classList.remove('active'); });
+            this.classList.add('active');
+            var view = this.dataset.view;
+            if (reportBuilder) reportBuilder.toggleView(view);
         });
-    }
+    });
 
-    // КНОПКА: подтвердить джойн
-    const confirmJoinBtn = document.getElementById('confirmJoinBtn');
-    if (confirmJoinBtn) {
-        confirmJoinBtn.addEventListener('click', function() {
-            reportBuilder.addJoin();
-            document.getElementById('joinModal').style.display = 'none';
-        });
-    }
+    document.getElementById('showChartBtn').addEventListener('click', function() {
+        if (reportBuilder) reportBuilder.showChart();
+    });
 
-    // КНОПКА: сохранить шаблон
-    const saveTemplateBtn = document.getElementById('saveTemplateBtn');
-    if (saveTemplateBtn) {
-        saveTemplateBtn.addEventListener('click', function() {
-            document.getElementById('saveTemplateModal').style.display = 'flex';
-            const nameInput = document.getElementById('templateName');
-            if (nameInput && window.reportBuilder) {
-                nameInput.value = window.reportBuilder.templateName || '';
-                nameInput.focus();
-                nameInput.select();
-            }
-
-            const updateBtn = document.getElementById('updateTemplateConfirmBtn');
-            if (updateBtn && window.reportBuilder) {
-                updateBtn.style.display = window.reportBuilder.templateId ? 'inline-block' : 'none';
-            }
-        });
-    }
-
-    const saveTemplateConfirmBtn = document.getElementById('saveTemplateConfirmBtn');
-    if (saveTemplateConfirmBtn) {
-        saveTemplateConfirmBtn.addEventListener('click', function() {
-            reportBuilder.saveTemplate();
-        });
-    }
-
-    const updateTemplateConfirmBtn = document.getElementById('updateTemplateConfirmBtn');
-    if (updateTemplateConfirmBtn) {
-        updateTemplateConfirmBtn.addEventListener('click', function() {
-            reportBuilder.updateTemplate();
-        });
-    }
-    
-    // Добавьте stopPropagation для остальных кнопок в заголовках
-    const headerButtons = ['addConditionBtn', 'addAggregateBtn', 'addSortBtn'];
-    headerButtons.forEach(id => {
-        const btn = document.getElementById(id);
-        if (btn) {
-            btn.addEventListener('click', (e) => e.stopPropagation());
-        }
+    document.getElementById('updateChartBtn')?.addEventListener('click', function() {
+        var chartType = document.getElementById('chartType')?.value || 'bar';
+        if (reportBuilder) reportBuilder.renderChart(chartType);
     });
 </script>
 {% endblock %}
