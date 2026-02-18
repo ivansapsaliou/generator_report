@@ -513,18 +513,7 @@ function displayDiagram(tableName, data) {
             },
             width: 3,
             hoverWidth: 4,
-            arrows: {
-                to: {
-                    enabled: true,
-                    scaleFactor: 1.5,
-                    type: 'arrow'
-                },
-                from: isReverse ? {
-                    enabled: true,
-                    scaleFactor: 1.5,
-                    type: 'arrow'
-                } : false
-            },
+            arrows: isReverse ? 'to;from' : 'to',
             smooth: {
                 type: 'cubicBezier',
                 forceDirection: 'vertical'

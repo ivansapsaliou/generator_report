@@ -46,6 +46,14 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
 
+from session_monitor import SessionMonitor
+from session_routines import register_session_routes
+
+# Инициализация монитора сессий
+session_monitor = SessionMonitor(app.config)
+
+# Регистрация маршрутов для управления сессиями
+register_session_routes(app, session_monitor)
 
 # ─────────────────────────────────────────────
 # SSH TUNNEL (используется модуль db_connection)
@@ -125,6 +133,15 @@ def ensure_scheduled_table(conn):
 import atexit
 atexit.register(close_all_ssh_tunnels)
 
+
+
+
+# Добавить перед другими маршрутами
+
+@app.route('/session-monitor')
+def session_monitor():
+    """Страница монитора сессий"""
+    return render_template('session_monitor.html')
 
 # ─────────────────────────────────────────────
 # MAIN ROUTES
