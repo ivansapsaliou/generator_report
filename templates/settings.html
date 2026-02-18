@@ -115,7 +115,13 @@
                         <i class="bi bi-save"></i> Сохранить
                     </button>
                     <button class="btn btn-info btn-sm" id="sshTestBtn" onclick="testSshConnection()">
-                        <i class="bi bi-plug-fill"></i> Тест соединения
+                        <i class="bi bi-plug-fill"></i> Тест SSH
+                    </button>
+                    <button class="btn btn-success btn-sm" id="sshStartBtn" onclick="startSshTunnel()" style="display:none;">
+                        <i class="bi bi-play-fill"></i> Запустить туннель
+                    </button>
+                    <button class="btn btn-danger btn-sm" id="sshStopBtn" onclick="stopSshTunnel()" style="display:none;">
+                        <i class="bi bi-stop-fill"></i> Остановить туннель
                     </button>
                 </div>
                 <div id="sshResult" style="display:none;margin-top:8px;"></div>
@@ -237,9 +243,78 @@ async function loadSshSettings() {
             document.getElementById('remoteDbHost').value = d.data.remote_db_host || '127.0.0.1';
             document.getElementById('remoteDbPort').value = d.data.remote_db_port || 5432;
         }
+        
+        // Обновляем статус туннеля
+        updateSshButtons(d.tunnel_active, d.tunnel_info);
     } catch(e) { 
         console.error('SSH settings load error', e); 
     }
+}
+
+function updateSshButtons(active, info) {
+    var startBtn = document.getElementById('sshStartBtn');
+    var stopBtn = document.getElementById('sshStopBtn');
+    var badge = document.getElementById('sshStatusBadge');
+    
+    if (active) {
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-flex';
+        badge.className = 'badge badge-green';
+        badge.textContent = 'Активен' + (info ? ' (' + info.local_host + ':' + info.local_port + ')' : '');
+    } else {
+        startBtn.style.display = 'inline-flex';
+        stopBtn.style.display = 'none';
+        badge.className = 'badge badge-red';
+        badge.textContent = 'Неактивен';
+    }
+}
+
+async function startSshTunnel() {
+    var btn = document.getElementById('sshStartBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Запуск...';
+    
+    try {
+        var r = await fetch('/api/settings/ssh/start', {method: 'POST'});
+        var d = await r.json();
+        
+        if (d.success) {
+            showResult('sshResult', true, d.message);
+            // Обновляем статус
+            loadSshSettings();
+        } else {
+            showResult('sshResult', false, d.error);
+        }
+    } catch(e) { 
+        showResult('sshResult', false, 'Ошибка: ' + e.message); 
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-fill"></i> Запустить туннель';
+}
+
+async function stopSshTunnel() {
+    var btn = document.getElementById('sshStopBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Остановка...';
+    
+    try {
+        var r = await fetch('/api/settings/ssh/stop', {method: 'POST'});
+        var d = await r.json();
+        
+        if (d.success) {
+            showResult('sshResult', true, d.message);
+            // Обновляем статус
+            loadSshSettings();
+        } else {
+            showResult('sshResult', false, d.error);
+        }
+    } catch(e) { 
+        showResult('sshResult', false, 'Ошибка: ' + e.message); 
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-stop-fill"></i> Остановить туннель';
 }
 
 async function saveSshSettings() {

@@ -15,3 +15,16 @@ class Config:
     DB_PASSWORD = os.environ.get('DB_PASSWORD', '1234567890!@#$%^&*()')
 
     SQLALCHEMY_DATABASE_URI = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
+
+    # SSH Tunnel Configuration
+    SSH_ENABLED = os.environ.get('SSH_ENABLED', 'false').lower() == 'true'
+    SSH_HOST = os.environ.get('SSH_HOST', '10.100.102.90')
+    SSH_PORT = int(os.environ.get('SSH_PORT', 22))
+    SSH_USER = os.environ.get('SSH_USER', 'nladmin')
+    SSH_PASSWORD = os.environ.get('SSH_PASSWORD', 'D#f;mV@KbX')
+    SSH_KEY_PATH = os.environ.get('SSH_KEY_PATH', '')
+    
+    # Remote database configuration (via SSH tunnel)
+    SSH_REMOTE_DB_HOST = os.environ.get('SSH_REMOTE_DB_HOST', '127.0.0.1')
+    SSH_REMOTE_DB_PORT = int(os.environ.get('SSH_REMOTE_DB_PORT', 5432))
+    SSH_LOCAL_PORT = int(os.environ.get('SSH_LOCAL_PORT', 15432))

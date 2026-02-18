@@ -8,202 +8,59 @@ import psycopg2.extensions
 from psycopg2.extensions import AsIs
 from collections import defaultdict
 import base64
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
 import os
 from datetime import datetime
 import io
 import csv
 import threading
 import time
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication
-from os.path import basename
-import os
-try:
-    import paramiko
-    PARAMIKO_AVAILABLE = True
-except ImportError:
-    PARAMIKO_AVAILABLE = False
 
-import socket
-from threading import Lock
+# Импорт модулей
+from db_connection import (
+    get_ssh_tunnels,
+    get_ssh_tunnels_lock,
+    is_paramiko_available,
+    create_ssh_tunnel,
+    close_ssh_tunnel,
+    close_all_ssh_tunnels,
+    is_tunnel_active,
+    get_tunnel_info,
+    get_existing_ssh_tunnel,
+    get_db_connection
+)
+from db_settings import (
+    get_ssh_settings,
+    save_ssh_settings,
+    get_mail_settings,
+    save_mail_settings,
+    ensure_app_settings_table
+)
+from mail_utils import send_email, send_test_email
 
-# Глобальное хранилище SSH туннелей (один на подключение)
+# Для обратной совместимости
+PARAMIKO_AVAILABLE = is_paramiko_available()
 _ssh_tunnels = {}
-_ssh_tunnels_lock = Lock()
+_ssh_tunnels_lock = threading.Lock()
 
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
 
-# Global SSH tunnel instance
-_ssh_tunnel = None
-_ssh_tunnel_lock = threading.Lock()
+
+# ─────────────────────────────────────────────
+# SSH TUNNEL (используется модуль db_connection)
+# ─────────────────────────────────────────────
 
 
 # ─────────────────────────────────────────────
-# SSH TUNNEL
+# DB CONNECTION (используется модуль db_connection)
 # ─────────────────────────────────────────────
 
-def get_ssh_settings():
-    """Получить настройки SSH из БД или конфига"""
-    try:
-        # Пробуем без туннеля для получения настроек
-        conn = psycopg2.connect(
-            host=app.config['DB_HOST'],
-            port=app.config['DB_PORT'],
-            database=app.config['DB_NAME'],
-            user=app.config['DB_USER'],
-            password=app.config['DB_PASSWORD'],
-            client_encoding='UTF8',
-            connect_timeout=3
-        )
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT setting_value FROM app_settings WHERE setting_key = 'ssh_config'")
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        if row and row['setting_value']:
-            return json.loads(row['setting_value'])
-    except Exception:
-        pass
-    return None
-
-
-def save_ssh_settings(settings):
-    """Сохранить настройки SSH"""
-    try:
-        conn = psycopg2.connect(
-            host=app.config['DB_HOST'],
-            port=app.config['DB_PORT'],
-            database=app.config['DB_NAME'],
-            user=app.config['DB_USER'],
-            password=app.config['DB_PASSWORD'],
-            client_encoding='UTF8'
-        )
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS app_settings (
-                id SERIAL PRIMARY KEY,
-                setting_key VARCHAR(100) UNIQUE NOT NULL,
-                setting_value TEXT,
-                updated_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        cur.execute("""
-            INSERT INTO app_settings (setting_key, setting_value, updated_at)
-            VALUES ('ssh_config', %s, NOW())
-            ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()
-        """, (json.dumps(settings),))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
-    except Exception as e:
-        print(f"Error saving SSH settings: {e}")
-        return False
-
-
-def start_ssh_tunnel(ssh_cfg):
-    """Запустить SSH туннель"""
-    global _ssh_tunnel
-    if not SSH_TUNNEL_AVAILABLE:
-        raise RuntimeError("Библиотека sshtunnel не установлена. Выполните: pip install sshtunnel")
-
-    with _ssh_tunnel_lock:
-        if _ssh_tunnel and _ssh_tunnel.is_active:
-            return _ssh_tunnel
-
-        kwargs = {
-            'ssh_address_or_host': (ssh_cfg['ssh_host'], int(ssh_cfg.get('ssh_port', 22))),
-            'ssh_username': ssh_cfg['ssh_user'],
-            'remote_bind_address': (
-                ssh_cfg.get('remote_db_host', '127.0.0.1'),
-                int(ssh_cfg.get('remote_db_port', 5432))
-            ),
-            'local_bind_address': ('127.0.0.1', int(ssh_cfg.get('local_port', 15432))),
-        }
-
-        if ssh_cfg.get('ssh_key_path'):
-            kwargs['ssh_pkey'] = ssh_cfg['ssh_key_path']
-        elif ssh_cfg.get('ssh_password'):
-            kwargs['ssh_password'] = ssh_cfg['ssh_password']
-
-        tunnel = SSHTunnelForwarder(**kwargs)
-        tunnel.start()
-        _ssh_tunnel = tunnel
-        return tunnel
-
-
-def stop_ssh_tunnel():
-    """Остановить SSH туннель"""
-    global _ssh_tunnel
-    with _ssh_tunnel_lock:
-        if _ssh_tunnel:
-            try:
-                _ssh_tunnel.stop()
-            except Exception:
-                pass
-            _ssh_tunnel = None
-
-
-# ─────────────────────────────────────────────
-# DB CONNECTION
-# ─────────────────────────────────────────────
-
-def get_db_connection():
-    """
-    Получить подключение к БД.
-    Если включен SSH туннель, использует локальный forward.
-    """
-    ssh_settings = get_ssh_settings()
-    
-    # Определяем параметры подключения
-    db_host = app.config['DB_HOST']
-    db_port = app.config['DB_PORT']
-    
-    # Если SSH туннель включен
-    if ssh_settings and ssh_settings.get('enabled', False):
-        try:
-            print(f"[SSH] Using SSH tunnel for DB connection")
-            local_host, local_port = create_ssh_tunnel(
-                ssh_host=ssh_settings['ssh_host'],
-                ssh_port=ssh_settings.get('ssh_port', 22),
-                ssh_user=ssh_settings['ssh_user'],
-                ssh_password=ssh_settings.get('ssh_password'),
-                ssh_key_path=ssh_settings.get('ssh_key_path'),
-                remote_db_host=ssh_settings.get('remote_db_host', 'localhost'),
-                remote_db_port=ssh_settings.get('remote_db_port', 5432)
-            )
-            db_host = local_host
-            db_port = local_port
-        except Exception as e:
-            print(f"[SSH] Failed to create SSH tunnel: {e}")
-            # Продолжаем без туннеля
-            pass
-    
-    # Подключаемся к БД
-    try:
-        conn = psycopg2.connect(
-            host=db_host,
-            port=db_port,
-            database=app.config['DB_NAME'],
-            user=app.config['DB_USER'],
-            password=app.config['DB_PASSWORD'],
-            client_encoding='UTF8',
-            connect_timeout=10
-        )
-        return conn
-    except Exception as e:
-        print(f"[DB] ❌ Connection error: {e}")
-        raise
-
+# Функция get_db_connection теперь импортируется из db_connection
+# Для обратной совместимости создаем обертку
+def get_db_connection_wrapper():
+    """Обратная совместимость - использует app.config"""
+    return get_db_connection(app.config)
 
 # ─────────────────────────────────────────────
 # HELPERS
@@ -234,21 +91,6 @@ def safe_ident(s):
     return f'"{escaped}"'
 
 
-def ensure_app_settings_table(conn):
-    """Создать таблицу app_settings если не существует"""
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS app_settings (
-            id SERIAL PRIMARY KEY,
-            setting_key VARCHAR(100) UNIQUE NOT NULL,
-            setting_value TEXT,
-            updated_at TIMESTAMP DEFAULT NOW()
-        )
-    """)
-    conn.commit()
-    cur.close()
-
-
 def ensure_scheduled_table(conn):
     """Создать таблицу report_scheduled если не существует"""
     cur = conn.cursor()
@@ -277,146 +119,6 @@ def ensure_scheduled_table(conn):
     """)
     conn.commit()
     cur.close()
-
-
-def create_ssh_tunnel(ssh_host, ssh_port, ssh_user, ssh_password, ssh_key_path=None, 
-                     remote_db_host='localhost', remote_db_port=5432):
-    """
-    Создает SSH туннель для доступа к удаленной БД.
-    
-    Args:
-        ssh_host: IP или хост SSH сервера
-        ssh_port: Порт SSH (обычно 22)
-        ssh_user: Пользователь SSH
-        ssh_password: Пароль SSH (или None если используется ключ)
-        ssh_key_path: Путь к приватному ключу (опционально)
-        remote_db_host: IP БД на удаленном сервере
-        remote_db_port: Порт БД на удаленном сервере
-    
-    Returns:
-        tuple: (local_host, local_port) для подключения к БД через туннель
-    """
-    
-    if not PARAMIKO_AVAILABLE:
-        raise RuntimeError(
-            "paramiko не установлен. Установите: pip install paramiko\n"
-            "Это встроенная Python библиотека для SSH, не требует доп ПО на сервере."
-        )
-    
-    tunnel_key = f"{ssh_host}:{ssh_port}:{ssh_user}:{remote_db_host}:{remote_db_port}"
-    
-    with _ssh_tunnels_lock:
-        # Проверяем, есть ли уже активный туннель
-        if tunnel_key in _ssh_tunnels:
-            tunnel = _ssh_tunnels[tunnel_key]
-            if tunnel['client'].get_transport() and tunnel['client'].get_transport().is_active():
-                print(f"[SSH] ✅ Reusing existing tunnel: {tunnel_key}")
-                return (tunnel['local_host'], tunnel['local_port'])
-            else:
-                print(f"[SSH] Closing inactive tunnel: {tunnel_key}")
-                try:
-                    tunnel['client'].close()
-                except:
-                    pass
-                del _ssh_tunnels[tunnel_key]
-    
-    try:
-        print(f"[SSH] 🔗 Creating SSH tunnel to {ssh_host}:{ssh_port}...")
-        
-        # Создаем SSH клиент
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
-        # Подключаемся к SSH серверу
-        if ssh_key_path:
-            print(f"[SSH] Authenticating with SSH key: {ssh_key_path}")
-            client.connect(
-                hostname=ssh_host,
-                port=ssh_port,
-                username=ssh_user,
-                key_filename=ssh_key_path,
-                timeout=10,
-                banner_timeout=10
-            )
-        else:
-            print(f"[SSH] Authenticating with password...")
-            client.connect(
-                hostname=ssh_host,
-                port=ssh_port,
-                username=ssh_user,
-                password=ssh_password,
-                timeout=10,
-                banner_timeout=10
-            )
-        
-        # Открываем локальный сокет
-        local_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        local_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        local_socket.bind(('127.0.0.1', 0))  # Автоматически выбираем свободный порт
-        local_socket.listen(1)
-        
-        local_host, local_port = local_socket.getsockname()
-        
-        print(f"[SSH] ✅ SSH tunnel established")
-        print(f"[SSH] Local binding: {local_host}:{local_port}")
-        print(f"[SSH] Remote target: {remote_db_host}:{remote_db_port}")
-        
-        # Сохраняем информацию о туннеле
-        tunnel_info = {
-            'client': client,
-            'local_host': local_host,
-            'local_port': local_port,
-            'local_socket': local_socket,
-            'remote_host': remote_db_host,
-            'remote_port': remote_db_port
-        }
-        
-        with _ssh_tunnels_lock:
-            _ssh_tunnels[tunnel_key] = tunnel_info
-        
-        return (local_host, local_port)
-        
-    except paramiko.AuthenticationException as e:
-        print(f"[SSH] ❌ SSH Authentication failed: {e}")
-        raise Exception(f"SSH authentication failed: {e}")
-    except paramiko.SSHException as e:
-        print(f"[SSH] ❌ SSH error: {e}")
-        raise Exception(f"SSH error: {e}")
-    except Exception as e:
-        print(f"[SSH] ❌ Error creating SSH tunnel: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
-
-
-def close_ssh_tunnel(ssh_host, ssh_port, ssh_user, remote_db_host='localhost', remote_db_port=5432):
-    """Закрывает SSH туннель"""
-    tunnel_key = f"{ssh_host}:{ssh_port}:{ssh_user}:{remote_db_host}:{remote_db_port}"
-    
-    with _ssh_tunnels_lock:
-        if tunnel_key in _ssh_tunnels:
-            tunnel = _ssh_tunnels[tunnel_key]
-            try:
-                tunnel['local_socket'].close()
-                tunnel['client'].close()
-                print(f"[SSH] ✅ Tunnel closed: {tunnel_key}")
-            except Exception as e:
-                print(f"[SSH] Error closing tunnel: {e}")
-            finally:
-                del _ssh_tunnels[tunnel_key]
-
-
-def close_all_ssh_tunnels():
-    """Закрывает все SSH туннели"""
-    with _ssh_tunnels_lock:
-        for tunnel_key, tunnel in list(_ssh_tunnels.items()):
-            try:
-                tunnel['local_socket'].close()
-                tunnel['client'].close()
-                print(f"[SSH] Closed tunnel: {tunnel_key}")
-            except Exception as e:
-                print(f"[SSH] Error closing tunnel {tunnel_key}: {e}")
-        _ssh_tunnels.clear()
 
 
 # Регистрируем очистку при завершении приложения
@@ -1686,16 +1388,134 @@ def test_mail_settings():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/settings/db/test', methods=['GET'])
+def get_existing_ssh_tunnel(ssh_host, ssh_port, ssh_user, remote_db_host, remote_db_port):
+    """
+    Проверяет, существует ли уже активный SSH туннель с такими параметрами.
+    
+    Returns:
+        tuple: (local_host, local_port) если туннель существует, иначе None
+    """
+    tunnel_key = f"{ssh_host}:{ssh_port}:{ssh_user}:{remote_db_host}:{remote_db_port}"
+    
+    with _ssh_tunnels_lock:
+        if tunnel_key in _ssh_tunnels:
+            tunnel = _ssh_tunnels[tunnel_key]
+            try:
+                if tunnel['client'].get_transport() and tunnel['client'].get_transport().is_active():
+                    print(f"[SSH] ✅ Using existing tunnel: {tunnel_key}")
+                    return (tunnel['local_host'], tunnel['local_port'])
+            except:
+                pass
+    return None
+
+
+@app.route('/api/settings/db/test', methods=['GET', 'POST'])
 def test_db_connection():
+    """
+    Тестирование подключения к БД.
+    
+    GET - текущее подключение (без SSH)
+    POST с {"use_ssh": true} - тестирование через SSH туннель
+    """
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT version()")
-        version = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-        return jsonify({'success': True, 'data': {'version': version}})
+        # Проверяем, нужно ли использовать SSH туннель
+        use_ssh = False
+        if request.method == 'POST':
+            data = request.json or {}
+            use_ssh = data.get('use_ssh', False)
+        
+        ssh_settings = get_ssh_settings()
+        
+        # Определяем параметры подключения
+        db_host = app.config['DB_HOST']
+        db_port = int(app.config['DB_PORT'])
+        connection_method = 'direct'
+        
+        # Если запрошено подключение через SSH или SSH включен в настройках
+        if use_ssh or (ssh_settings and ssh_settings.get('enabled', False)):
+            if not ssh_settings:
+                return jsonify({
+                    'success': False, 
+                    'error': 'SSH настройки не найдены. Сначала настройте SSH туннель.'
+                }), 400
+            
+            remote_db_host = ssh_settings.get('remote_db_host', '127.0.0.1')
+            remote_db_port = ssh_settings.get('remote_db_port', 5432)
+            
+            # Проверяем, есть ли уже активный туннель
+            existing = get_existing_ssh_tunnel(
+                ssh_settings['ssh_host'],
+                ssh_settings.get('ssh_port', 22),
+                ssh_settings['ssh_user'],
+                remote_db_host,
+                remote_db_port
+            )
+            
+            if existing:
+                db_host, db_port = existing
+                connection_method = 'ssh_tunnel'
+                print(f"[TEST] Using existing SSH tunnel: {db_host}:{db_port}")
+            else:
+                try:
+                    print(f"[TEST] Creating new SSH tunnel for test connection...")
+                    local_host, local_port = create_ssh_tunnel(
+                        ssh_host=ssh_settings['ssh_host'],
+                        ssh_port=ssh_settings.get('ssh_port', 22),
+                        ssh_user=ssh_settings['ssh_user'],
+                        ssh_password=ssh_settings.get('ssh_password'),
+                        ssh_key_path=ssh_settings.get('ssh_key_path'),
+                        remote_db_host=remote_db_host,
+                        remote_db_port=remote_db_port
+                    )
+                    db_host = local_host
+                    db_port = local_port
+                    connection_method = 'ssh_tunnel'
+                    print(f"[TEST] Using new SSH tunnel: {db_host}:{db_port}")
+                except Exception as ssh_e:
+                    print(f"[TEST] SSH tunnel creation failed: {ssh_e}")
+                    return jsonify({
+                        'success': False, 
+                        'error': f'Не удалось создать SSH туннель: {str(ssh_e)}'
+                    }), 500
+        
+        # Подключаемся к БД
+        try:
+            print(f"[TEST] Attempting connection to {db_host}:{db_port}...")
+            conn = psycopg2.connect(
+                host=db_host,
+                port=db_port,
+                database=app.config['DB_NAME'],
+                user=app.config['DB_USER'],
+                password=app.config['DB_PASSWORD'],
+                client_encoding='UTF8',
+                connect_timeout=10
+            )
+            cur = conn.cursor()
+            cur.execute("SELECT version()")
+            version = cur.fetchone()[0]
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                'success': True, 
+                'data': {
+                    'version': version,
+                    'connection_method': connection_method,
+                    'host': db_host,
+                    'port': db_port
+                }
+            })
+        except Exception as db_e:
+            return jsonify({
+                'success': False, 
+                'error': str(db_e),
+                'connection_info': {
+                    'method': connection_method,
+                    'host': db_host,
+                    'port': db_port
+                }
+            }), 500
+            
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1714,16 +1534,28 @@ def get_ssh_settings_api():
             settings.pop('ssh_key_path', None)
         
         # Проверяем статус туннеля
-        tunnel_key = None
+        tunnel_info = None
         if settings:
-            tunnel_key = f"{settings.get('ssh_host')}:{settings.get('ssh_port', 22)}:{settings.get('ssh_user')}"
-        
-        tunnel_active = tunnel_key in _ssh_tunnels and _ssh_tunnels[tunnel_key]['client'].get_transport().is_active()
+            tunnel_key = f"{settings.get('ssh_host')}:{settings.get('ssh_port', 22)}:{settings.get('ssh_user')}:{settings.get('remote_db_host', '127.0.0.1')}:{settings.get('remote_db_port', 5432)}"
+            
+            with _ssh_tunnels_lock:
+                if tunnel_key in _ssh_tunnels:
+                    tunnel = _ssh_tunnels[tunnel_key]
+                    try:
+                        if tunnel['client'].get_transport() and tunnel['client'].get_transport().is_active():
+                            tunnel_info = {
+                                'active': True,
+                                'local_host': tunnel['local_host'],
+                                'local_port': tunnel['local_port']
+                            }
+                    except:
+                        pass
         
         return jsonify({
             'success': True,
             'data': settings,
-            'tunnel_active': tunnel_active
+            'tunnel_active': tunnel_info['active'] if tunnel_info else False,
+            'tunnel_info': tunnel_info
         })
     except Exception as e:
         print(f"[SSH] Error getting settings: {e}")
