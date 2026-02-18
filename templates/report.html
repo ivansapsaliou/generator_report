@@ -343,220 +343,400 @@
     
     // Глобальная переменная для сети
     let diagramNetwork = null;
+
+function displayDiagram(tableName, data) {
+    const container = document.getElementById('diagramContainer');
+    const stats = document.getElementById('diagramStats');
     
-    function displayDiagram(tableName, data) {
-        const container = document.getElementById('diagramContainer');
-        const stats = document.getElementById('diagramStats');
-        
-        // Очищаем предыдущую сеть
-        if (diagramNetwork) {
-            diagramNetwork.destroy();
-            diagramNetwork = null;
-        }
-        
-        // Убираем старую кнопку
-        const oldToggle = container.querySelector('.network-toggle');
-        if (oldToggle) oldToggle.remove();
-        
-        if (data.data.length === 0) {
-            container.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 40px;">Для таблицы '<strong>${tableName}</strong>' не найдено связей</p>`;
-            stats.innerHTML = `Таблица: <strong>${tableName}</strong> | Найдено связей: <strong>0</strong>`;
-            return;
-        }
-        
-        // Определяем цвета для темной темы
-        const isDark = document.body.classList.contains('dark-theme') || !document.body.classList.contains('light-theme');
-        const primaryNodeColor = isDark ? '#6C5CE7' : '#6C5CE7';
-        const primaryNodeBorder = isDark ? '#a29bfe' : '#5B4BC7';
-        const fkEdgeColor = isDark ? '#F7DC6F' : '#D4A72C';
-        const reverseFkEdgeColor = isDark ? '#4ECDC4' : '#3BA99C';
-        const textColor = isDark ? '#ffffff' : '#333333';
-        
-        // Создаем узлы и ребра
-        const nodes = new vis.DataSet();
-        const edges = new vis.DataSet();
-        
-        // Добавляем исходную таблицу в центр
-        nodes.add({
-            id: tableName,
-            label: tableName,
-            color: {
-                background: primaryNodeColor,
-                border: primaryNodeBorder,
-                highlight: { background: '#5B4BC7', border: '#a29bfe' }
-            },
-            font: { color: '#ffffff', face: 'system-ui', size: 16 },
-            size: 40,
-            shape: 'box',
-            level: 0,  // Центральный уровень
-            title: `<b>${tableName}</b><br><i>Исходная таблица</i>`
-        });
-        
-        // Группируем по уровням
-        const byLevels = data.by_levels;
-        const maxLevel = data.max_level || 1;
-        
-        // Обрабатываем связи по уровням
-        data.data.forEach(rel => {
-            const source = rel.source_table;
-            const target = rel.target_table;
-            const relationType = rel.relation_type;
-            const fkCol = rel.fk_column || '';
-            const pkCol = rel.pk_column || '';
-            const level = rel.level || 1;
-            
-            // Добавляем целевой узел
-            if (!nodes.get(target)) {
-                const isReverse = relationType === 'REVERSE_FK';
-                const nodeColor = isReverse ? '#4ECDC4' : '#F7DC6F';
-                const nodeBorder = isReverse ? '#3BA99C' : '#D4A72C';
-                
-                nodes.add({
-                    id: target,
-                    label: target,
-                    color: {
-                        background: nodeColor,
-                        border: nodeBorder,
-                        highlight: { background: nodeBorder, border: '#ffffff' }
-                    },
-                    font: { color: isDark ? '#ffffff' : '#333333', face: 'system-ui', size: 14 },
-                    size: 30,
-                    shape: 'box',
-                    level: level,
-                    title: `<b>${target}</b><br>Тип: ${relationType}<br>${fkCol} → ${pkCol}`
-                });
+    // Очищаем контейнер полностью
+    container.innerHTML = '';
+    
+    // Очищаем предыдущую сеть
+    if (diagramNetwork) {
+        diagramNetwork.destroy();
+        diagramNetwork = null;
+    }
+    
+    if (data.data.length === 0) {
+        container.innerHTML = `<p style="text-align: center; color: var(--text-3); padding: 40px; font-size: 14px;">
+            ℹ️ Для таблицы <strong>${tableName}</strong> не найдено связей
+        </p>`;
+        stats.innerHTML = `📊 Таблица: <strong>${tableName}</strong> | 🔗 Найдено связей: <strong>0</strong>`;
+        return;
+    }
+    
+    // Определяем цвета в зависимости от темы
+    const isDark = !document.body.classList.contains('light-theme');
+    
+    const colors = {
+        primaryBg: '#6C5CE7',
+        primaryBorder: '#a29bfe',
+        fkBg: '#10B981',      // Зеленый для прямых связей
+        fkBorder: '#059669',
+        reverseBg: '#F59E0B',  // Оранжевый для обратных
+        reverseBorder: '#D97706',
+        fontColor: '#ffffff',
+        edgeFk: '#10B981',
+        edgeReverse: '#F59E0B',
+        edgeHover: '#EF4444'
+    };
+    
+    // Создаем узлы и ребра
+    const nodes = new vis.DataSet();
+    const edges = new vis.DataSet();
+    
+    // ════════════════════════════════════════════════════════
+    // 1. ЦЕНТРАЛЬНЫЙ УЗЕЛ (исходная таблица)
+    // ════════════════════════════════════════════════════════
+    nodes.add({
+        id: tableName,
+        label: tableName,
+        title: createNodeTooltip(tableName, 'Исходная таблица'),
+        color: {
+            background: colors.primaryBg,
+            border: colors.primaryBorder,
+            highlight: { 
+                background: '#5B4BC7', 
+                border: '#ffffff' 
             }
+        },
+        font: { 
+            color: '#ffffff', 
+            face: 'var(--font-ui)', 
+            size: 16,
+            bold: { size: 17 }
+        },
+        size: 55,
+        shape: 'box',
+        borderWidth: 3,
+        shadow: {
+            enabled: true,
+            color: 'rgba(0,0,0,0.5)',
+            size: 10,
+            x: 3,
+            y: 3
+        }
+    });
+    
+    // ════════════════════════════════════════════════════════
+    // 2. СВЯЗАННЫЕ УЗЛЫ
+    // ════════════════════════════════════════════════════════
+    const processedTables = new Set([tableName]);
+    
+    data.data.forEach(rel => {
+        const target = rel.target_table;
+        
+        // Добавляем узел один раз
+        if (!processedTables.has(target)) {
+            processedTables.add(target);
             
-            // Добавляем ребро
-            const isReverse = relationType === 'REVERSE_FK';
-            edges.add({
-                from: source,
-                to: target,
-                color: { color: isReverse ? reverseFkEdgeColor : fkEdgeColor },
-                width: 2,
-                arrows: isReverse ? 'from' : 'to',
-                smooth: { type: 'cubicBezier', roundness: 0.5 },
-                title: `${fkCol} → ${pkCol}`,
-                label: fkCol && pkCol ? `${fkCol} → ${pkCol}` : undefined,
-                font: { color: textColor, size: 10, background: isDark ? '#2a2a4a' : '#ffffff' }
-            });
-        });
-        
-        // Создаем данные для vis.js
-        const visData = {
-            nodes: nodes,
-            edges: edges
-        };
-        
-        // Настройки сети - иерархическая структура
-        const options = {
-            nodes: {
-                borderWidth: 3,
-                borderWidthSelected: 4,
-                shadow: true,
-                font: { multi: false }
-            },
-            edges: {
-                shadow: true,
-                width: 2
-            },
-            layout: {
-                hierarchical: {
-                    enabled: true,
-                    direction: 'DU',  // Down - from top to bottom
-                    sortMethod: 'directed',
-                    levelSeparation: 180,
-                    nodeSpacing: 250,
-                    treeSpacing: 200,
-                    blockShifting: true,
-                    edgeMinimization: true,
-                    parentCentralization: true
+            const isReverse = rel.relation_type === 'REVERSE_FK';
+            const bgColor = isReverse ? colors.reverseBg : colors.fkBg;
+            const borderColor = isReverse ? colors.reverseBorder : colors.fkBorder;
+            
+            nodes.add({
+                id: target,
+                label: target,
+                title: createNodeTooltip(
+                    target, 
+                    isReverse ? '← Обратная связь' : '→ Прямая связь',
+                    `${rel.fk_column} ↔ ${rel.pk_column}`
+                ),
+                color: {
+                    background: bgColor,
+                    border: borderColor,
+                    highlight: { 
+                        background: borderColor, 
+                        border: '#ffffff' 
+                    }
                 },
-                randomSeed: tableName.charCodeAt(0)
-            },
-            physics: {
-                enabled: false  // Отключаем физику для стабильной иерархии
-            },
-            interaction: {
-                hover: true,
-                tooltipDelay: 100,
-                navigationButtons: true,
-                keyboard: true,
-                dragNodes: true,
-                zoomView: true
-            }
-        };
-        
-        // Создаем сеть
-        diagramNetwork = new vis.Network(container, visData, options);
-        
-        // Обработчик наведения на узел - загружаем колонки
-        diagramNetwork.on('hoverNode', async function(params) {
-            const nodeId = params.node;
-            const node = nodes.get(nodeId);
-            if (node && !node._columnsLoaded) {
-                const columns = await getTableColumns(nodeId);
-                if (columns.length > 0) {
-                    const columnsHtml = columns.map(c => 
-                        `<tr><td style="padding:2px 8px;">${c.column_name}</td><td style="padding:2px 8px;color:#888;">${c.data_type}</td></tr>`
-                    ).join('');
-                    node.title = `<div style="max-height:200px;overflow:auto;"><b>${nodeId}</b><br><table style="width:100%;font-size:11px;">${columnsHtml}</table></div>`;
-                    node._columnsLoaded = true;
-                    // Обновляем tooltip
-                    diagramNetwork.canvas.frame.canvas.title = node.title;
+                font: { 
+                    color: '#ffffff', 
+                    face: 'var(--font-ui)', 
+                    size: 13,
+                    bold: { size: 14 }
+                },
+                size: 40,
+                shape: 'box',
+                borderWidth: 2,
+                shadow: {
+                    enabled: true,
+                    color: 'rgba(0,0,0,0.3)',
+                    size: 8,
+                    x: 2,
+                    y: 2
                 }
-            }
+            });
+        }
+    });
+    
+    // ════════════════════════════════════════════════════════
+    // 3. РЕБРА (связи между таблицами)
+    // ════════════════════════════════════════════════════════
+    data.data.forEach((rel, index) => {
+        const isReverse = rel.relation_type === 'REVERSE_FK';
+        const edgeColor = isReverse ? colors.edgeReverse : colors.edgeFk;
+        
+        edges.add({
+            id: `edge-${index}`,
+            from: rel.source_table,
+            to: rel.target_table,
+            color: {
+                color: edgeColor,
+                highlight: colors.edgeHover,
+                hover: edgeColor
+            },
+            width: 2.5,
+            hoverWidth: 3.5,
+            arrows: isReverse ? 'from;to' : 'to',
+            arrowStrikethrough: false,
+            smooth: {
+                type: 'continuous',
+                forceDirection: false,
+                roundness: 0.5
+            },
+            title: createEdgeTooltip(rel),
+            font: {
+                color: 'var(--text)',
+                size: 11,
+                align: 'middle',
+                background: {
+                    enabled: true,
+                    color: isDark ? 'rgba(30,30,50,0.85)' : 'rgba(255,255,255,0.9)',
+                    size: 10
+                }
+            },
+            physics: true
         });
-        
-        // Подсчитываем по типам
-        const fkCount = data.data.filter(r => r.relation_type === 'FOREIGN_KEY').length;
-        const reverseFkCount = data.data.filter(r => r.relation_type === 'REVERSE_FK').length;
-        
-        stats.innerHTML = `
-            <span style="margin-right: 20px;">Таблица: <strong>${tableName}</strong></span>
-            <span style="margin-right: 20px;">Всего связей: <strong>${data.total}</strong></span>
-            <span style="margin-right: 10px;">🔗 Прямых: <strong>${fkCount}</strong></span>
-            <span>🔙 Обратных: <strong>${reverseFkCount}</strong></span>
+    });
+    
+    // ════════════════════════════════════════════════════════
+    // 4. КОНФИГУРАЦИЯ СЕТИ
+    // ════════════════════════════════════════════════════════
+    const visData = {
+        nodes: nodes,
+        edges: edges
+    };
+    
+    const options = {
+        nodes: {
+            borderWidth: 2,
+            borderWidthSelected: 3,
+            shadow: true
+        },
+        edges: {
+            shadow: true
+        },
+        layout: {
+            hierarchical: {
+                enabled: true,
+                direction: 'UD', // Up-Down
+                sortMethod: 'directed',
+                levelSeparation: 220,
+                nodeSpacing: 300,
+                treeSpacing: 280,
+                blockShifting: true,
+                edgeMinimization: false,
+                parentCentralization: true
+            }
+        },
+        physics: {
+            enabled: true,
+            stabilization: {
+                iterations: 400,
+                fit: true,
+                updateInterval: 50
+            },
+            barnesHut: {
+                gravitationalConstant: -18000,
+                centralGravity: 0.35,
+                springLength: 240,
+                springConstant: 0.035,
+                damping: 0.08,
+                avoidOverlap: 0.1
+            },
+            solver: 'barnesHut',
+            maxVelocity: 60,
+            minVelocity: 0.5,
+            timestep: 0.5,
+            adaptiveTimestep: true
+        },
+        interaction: {
+            hover: true,
+            tooltipDelay: 300,
+            navigationButtons: true,
+            keyboard: true,
+            dragNodes: true,
+            dragView: true,
+            zoomView: true,
+            navigationButtonStyle: 'dark'
+        }
+    };
+    
+    // ════════════════════════════════════════════════════════
+    // 5. СОЗДАНИЕ И ИНИЦИАЛИЗАЦИЯ СЕТИ
+    // ════════════════════════════════════════════════════════
+    diagramNetwork = new vis.Network(container, visData, options);
+    
+    // Отключаем физику после стабилизации
+    diagramNetwork.on('stabilizationIterationsDone', () => {
+        diagramNetwork.setOptions({ physics: false });
+    });
+    
+    // ════════════════════════════════════════════════════════
+    // 6. СТАТИСТИКА
+    // ════════════════════════════════════════════════════════
+    const fkCount = data.data.filter(r => r.relation_type === 'FOREIGN_KEY').length;
+    const reverseFkCount = data.data.filter(r => r.relation_type === 'REVERSE_FK').length;
+    
+    stats.innerHTML = `
+        <span style="margin-right: 25px; display: inline-flex; align-items: center; gap: 6px;">
+            <span style="font-size: 16px;">📊</span>
+            <span>Таблица: <strong style="color: #6C5CE7;">${tableName}</strong></span>
+        </span>
+        <span style="margin-right: 25px; display: inline-flex; align-items: center; gap: 6px;">
+            <span style="font-size: 16px;">🔗</span>
+            <span>Всего: <strong>${data.total}</strong></span>
+        </span>
+        <span style="margin-right: 15px; display: inline-flex; align-items: center; gap: 6px;">
+            <span style="color: #10B981; font-size: 12px;">●●●</span>
+            <span>Прямых: <strong>${fkCount}</strong></span>
+        </span>
+        <span style="display: inline-flex; align-items: center; gap: 6px;">
+            <span style="color: #F59E0B; font-size: 12px;">●●●</span>
+            <span>Обратных: <strong>${reverseFkCount}</strong></span>
+        </span>
+    `;
+    
+    // ════════════════════════════════════════════════════════
+    // 7. УПРАВЛЯЮЩИЕ КНОПКИ
+    // ════════════════════════════════════════════════════════
+    addDiagramControls(container, diagramNetwork);
+}
+
+// ═══════════════════════════════════════════════════════════
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ═══════════════════════════════════════════════════════════
+
+function createNodeTooltip(tableName, type, details = '') {
+    const isDark = !document.body.classList.contains('light-theme');
+    return `<div style="
+        background: var(--bg); 
+        padding: 10px 12px; 
+        border-radius: 6px;
+        border-left: 3px solid #6C5CE7;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        min-width: 200px;
+    ">
+        <strong style="color: #6C5CE7; font-size: 14px;">${tableName}</strong><br>
+        <span style="color: var(--text-3); font-size: 11px;">📋 ${type}</span>
+        ${details ? '<br><code style="font-size: 10px; color: #888; word-break: break-all;">' + details + '</code>' : ''}
+    </div>`;
+}
+
+function createEdgeTooltip(rel) {
+    const isReverse = rel.relation_type === 'REVERSE_FK';
+    const isDark = !document.body.classList.contains('light-theme');
+    return `<div style="
+        background: var(--bg); 
+        padding: 8px 10px; 
+        border-radius: 4px;
+        border-left: 3px solid ${isReverse ? '#F59E0B' : '#10B981'};
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    ">
+        <strong style="color: ${isReverse ? '#F59E0B' : '#10B981'};">
+            ${rel.source_table} → ${rel.target_table}
+        </strong><br>
+        <code style="font-size: 10px; color: #888;">
+            ${rel.fk_column} = ${rel.pk_column}
+        </code><br>
+        <span style="font-size: 9px; color: var(--text-3);">
+            ${isReverse ? '🔙 Обратная связь' : '➡️ Прямая связь'}
+        </span>
+    </div>`;
+}
+
+function addDiagramControls(container, network) {
+    const isDark = !document.body.classList.contains('light-theme');
+    
+    const controlsDiv = document.createElement('div');
+    controlsDiv.style.cssText = `
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        z-index: 100;
+        display: flex;
+        gap: 8px;
+        background: var(--bg-2);
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        backdrop-filter: blur(4px);
+    `;
+    
+    const buttons = [
+        {
+            icon: 'bi-arrow-expand',
+            title: 'Перестроить (физика на 3с)',
+            action: () => {
+                network.setOptions({ physics: true });
+                setTimeout(() => network.setOptions({ physics: false }), 3000);
+            }
+        },
+        {
+            icon: 'bi-zoom-in',
+            title: 'Приблизить',
+            action: () => network.zoom(1.3)
+        },
+        {
+            icon: 'bi-zoom-out',
+            title: 'Отдалить',
+            action: () => network.zoom(0.77)
+        },
+        {
+            icon: 'bi-aspect-ratio',
+            title: 'Вписать в экран',
+            action: () => network.fit({ animation: true })
+        }
+    ];
+    
+    buttons.forEach(btn => {
+        const button = document.createElement('button');
+        button.innerHTML = `<i class="bi ${btn.icon}"></i>`;
+        button.title = btn.title;
+        button.style.cssText = `
+            padding: 8px 10px;
+            border: 1px solid var(--line);
+            background: var(--bg);
+            color: var(--text-2);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         `;
         
-        // Кнопка для переключения физики
-        const toggleBtn = document.createElement('button');
-        toggleBtn.className = 'network-toggle';
-        toggleBtn.innerHTML = '🔄 Подвинуть';
-        toggleBtn.style.cssText = 'position: absolute; top: 60px; right: 20px; z-index: 100; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text-color); cursor: pointer; font-size: 12px;';
-        toggleBtn.onclick = function() {
-            if (options.physics.enabled) {
-                options.physics.enabled = false;
-                toggleBtn.innerHTML = '🔄 Подвинуть';
-                diagramNetwork.setOptions({ physics: false });
-            } else {
-                options.physics.enabled = true;
-                toggleBtn.innerHTML = '📌 Закрепить';
-                diagramNetwork.setOptions({ physics: true });
-                // Через 3 секунды отключаем физику
-                setTimeout(() => {
-                    options.physics.enabled = false;
-                    toggleBtn.innerHTML = '🔄 Подвинуть';
-                    diagramNetwork.setOptions({ physics: false });
-                }, 3000);
-            }
+        button.onmouseover = () => {
+            button.style.background = 'var(--bg-3)';
+            button.style.color = 'var(--amber)';
+            button.style.transform = 'scale(1.05)';
         };
-        container.style.position = 'relative';
-        container.appendChild(toggleBtn);
+        button.onmouseout = () => {
+            button.style.background = 'var(--bg)';
+            button.style.color = 'var(--text-2)';
+            button.style.transform = 'scale(1)';
+        };
+        button.onclick = btn.action;
         
-        // Кнопка масштабирования
-        const zoomInBtn = document.createElement('button');
-        zoomInBtn.innerHTML = '🔍+';
-        zoomInBtn.style.cssText = 'position: absolute; top: 60px; right: 130px; z-index: 100; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text-color); cursor: pointer;';
-        zoomInBtn.onclick = () => diagramNetwork.zoom(1.2);
-        container.appendChild(zoomInBtn);
-        
-        const zoomOutBtn = document.createElement('button');
-        zoomOutBtn.innerHTML = '🔍-';
-        zoomOutBtn.style.cssText = 'position: absolute; top: 60px; right: 170px; z-index: 100; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text-color); cursor: pointer;';
-        zoomOutBtn.onclick = () => diagramNetwork.zoom(0.8);
-        container.appendChild(zoomOutBtn);
-    }
+        controlsDiv.appendChild(button);
+    });
+    
+    container.style.position = 'relative';
+    container.appendChild(controlsDiv);
+}
 </script>
 
 <!-- ── MODAL: JOIN ────────────────────────────────────────── -->
