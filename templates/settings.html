@@ -6,13 +6,13 @@
 <div class="page-header">
     <div>
         <div class="page-title">Системные <span>настройки</span></div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:.04em;">NEWLAND TECHNOLOGY &nbsp;·&nbsp; ПОДКЛЮЧЕНИЕ И ПОЧТА</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:.04em;">NEWLAND TECHNOLOGY &nbsp;·&nbsp; ПОДКЛЮЧЕНИЕ, SSH И ПОЧТА</div>
     </div>
 </div>
 
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:16px;">
 
-    <!-- Настройки подключения к БД -->
+    <!-- ── БД ПОДКЛЮЧЕНИЕ ── -->
     <div class="card">
         <div class="card-header no-indicator">
             <div class="header-left"><i class="bi bi-database"></i> Подключение к базе данных</div>
@@ -21,136 +21,323 @@
             <div style="display:flex;flex-direction:column;gap:12px;">
                 <div>
                     <label class="form-label">Хост</label>
-                    <input type="text" id="dbHost" class="form-control" value="{{ config.DB_HOST }}" readonly>
-                    <small style="color:var(--text-3);">Редактируется в файле config.py</small>
+                    <input type="text" class="form-control" value="{{ config.DB_HOST }}" readonly>
+                    <div style="font-size:10px;color:var(--text-3);margin-top:3px;">Редактируется в config.py или .env</div>
                 </div>
-                <div>
-                    <label class="form-label">Порт</label>
-                    <input type="text" id="dbPort" class="form-control" value="{{ config.DB_PORT }}" readonly>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div>
+                        <label class="form-label">Порт</label>
+                        <input type="text" class="form-control" value="{{ config.DB_PORT }}" readonly>
+                    </div>
+                    <div>
+                        <label class="form-label">База данных</label>
+                        <input type="text" class="form-control" value="{{ config.DB_NAME }}" readonly>
+                    </div>
                 </div>
-                <div>
-                    <label class="form-label">База данных</label>
-                    <input type="text" id="dbName" class="form-control" value="{{ config.DB_NAME }}" readonly>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div>
+                        <label class="form-label">Пользователь</label>
+                        <input type="text" class="form-control" value="{{ config.DB_USER }}" readonly>
+                    </div>
+                    <div>
+                        <label class="form-label">Пароль</label>
+                        <input type="password" class="form-control" value="••••••••" readonly>
+                    </div>
                 </div>
-                <div>
-                    <label class="form-label">Пользователь</label>
-                    <input type="text" id="dbUser" class="form-control" value="{{ config.DB_USER }}" readonly>
-                </div>
-                <div>
-                    <label class="form-label">Пароль</label>
-                    <input type="password" id="dbPassword" class="form-control" value="********" readonly>
-                </div>
-                <div style="margin-top:8px;">
-                    <button class="btn btn-secondary btn-sm" onclick="openConfigHelp()">
-                        <i class="bi bi-info-circle"></i> Инструкция по изменению
+                <div style="display:flex;gap:8px;margin-top:4px;">
+                    <button class="btn btn-secondary btn-sm" onclick="testDbConnection()">
+                        <i class="bi bi-plug"></i> Проверить
                     </button>
-                    <button class="btn btn-secondary btn-sm" style="margin-left:8px;" onclick="testDbConnection()">
-                        <i class="bi bi-plug"></i> Проверить подключение
+                    <button class="btn btn-secondary btn-sm" onclick="showConfigHelp()">
+                        <i class="bi bi-info-circle"></i> Как изменить
                     </button>
                 </div>
-                <div id="dbTestResult" style="display:none;margin-top:8px;"></div>
+                <div id="dbTestResult" style="display:none;margin-top:4px;"></div>
             </div>
         </div>
     </div>
 
-    <!-- Настройки почтового сервера -->
+    <!-- ── SSH ТУННЕЛЬ ── -->
     <div class="card">
         <div class="card-header no-indicator">
-            <div class="header-left"><i class="bi bi-envelope"></i> Почтовый сервер</div>
+            <div class="header-left">
+                <i class="bi bi-shield-lock"></i> SSH Туннель
+                <span id="sshStatusBadge" class="badge badge-red" style="margin-left:6px;">Неактивен</span>
+            </div>
             <div class="header-right">
-                <button class="btn btn-secondary btn-sm" onclick="loadMailSettings()"><i class="bi bi-arrow-clockwise"></i></button>
+                <button class="btn btn-secondary btn-sm" onclick="checkSshStatus()"><i class="bi bi-arrow-clockwise"></i></button>
             </div>
         </div>
         <div class="card-body">
-            <form id="mailSettingsForm" onsubmit="saveMailSettings(event)">
-                <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+
+                <div style="background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:10px;font-size:11px;color:var(--text-2);">
+                    <i class="bi bi-info-circle" style="color:var(--amber);"></i>
+                    SSH туннель позволяет подключиться к удалённому PostgreSQL через промежуточный SSH-сервер.
+                    Трафик шифруется. Требуется <code>pip install sshtunnel</code>.
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;">
                     <div>
-                        <label class="form-label">SMTP хост</label>
-                        <input type="text" id="smtpHost" name="smtp_host" class="form-control" placeholder="smtp.gmail.com">
+                        <label class="form-label">SSH Хост</label>
+                        <input type="text" id="sshHost" class="form-control" placeholder="example.com">
                     </div>
                     <div>
-                        <label class="form-label">SMTP порт</label>
-                        <input type="number" id="smtpPort" name="smtp_port" class="form-control" placeholder="587">
-                    </div>
-                    <div>
-                        <label class="form-label">Имя пользователя (email)</label>
-                        <input type="email" id="smtpUser" name="smtp_user" class="form-control" placeholder="your-email@gmail.com">
-                    </div>
-                    <div>
-                        <label class="form-label">Пароль / App Password</label>
-                        <input type="password" id="smtpPassword" name="smtp_password" class="form-control" placeholder="xxxxxxxxxxxxxxxx">
-                    </div>
-                    <div>
-                        <label class="form-label">Использовать TLS</label>
-                        <select id="smtpTls" name="smtp_tls" class="form-select">
-                            <option value="true">Да</option>
-                            <option value="false">Нет</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label">Имя отправителя</label>
-                        <input type="text" id="fromName" name="from_name" class="form-control" placeholder="Report Builder">
-                    </div>
-                    <div style="margin-top:8px;">
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="testMailSettings()">
-                            <i class="bi bi-envelope"></i> Проверить отправку
-                        </button>
-                        <button type="submit" class="btn btn-primary btn-sm" style="margin-left:8px;">
-                            <i class="bi bi-check"></i> Сохранить
-                        </button>
+                        <label class="form-label">SSH Порт</label>
+                        <input type="number" id="sshPort" class="form-control" value="22">
                     </div>
                 </div>
-            </form>
+                <div>
+                    <label class="form-label">SSH Пользователь</label>
+                    <input type="text" id="sshUser" class="form-control" placeholder="ubuntu">
+                </div>
+                <div>
+                    <label class="form-label">SSH Пароль</label>
+                    <input type="password" id="sshPassword" class="form-control" placeholder="Оставьте пустым если используется ключ">
+                </div>
+                <div>
+                    <label class="form-label">Путь к SSH ключу (.pem / id_rsa)</label>
+                    <input type="text" id="sshKeyPath" class="form-control" placeholder="/home/user/.ssh/id_rsa">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 100px 80px;gap:8px;">
+                    <div>
+                        <label class="form-label">Хост БД (на удалённом сервере)</label>
+                        <input type="text" id="remoteDbHost" class="form-control" value="127.0.0.1">
+                    </div>
+                    <div>
+                        <label class="form-label">Порт БД</label>
+                        <input type="number" id="remoteDbPort" class="form-control" value="5432">
+                    </div>
+                    <div>
+                        <label class="form-label">Локальный порт</label>
+                        <input type="number" id="localPort" class="form-control" value="15432">
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
+                    <button class="btn btn-secondary btn-sm" onclick="saveSshSettings()">
+                        <i class="bi bi-save"></i> Сохранить
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="sshStartBtn" onclick="startSshTunnel()">
+                        <i class="bi bi-play-fill"></i> Запустить туннель
+                    </button>
+                    <button class="btn btn-danger btn-sm" id="sshStopBtn" onclick="stopSshTunnel()" style="border:1px solid rgba(224,82,82,.4);">
+                        <i class="bi bi-stop-fill"></i> Остановить
+                    </button>
+                </div>
+                <div id="sshResult" style="display:none;margin-top:4px;"></div>
+            </div>
         </div>
     </div>
 
-    <!-- Тестовая отправка -->
-    <div class="card" style="grid-column: 1 / -1;">
+    <!-- ── ПОЧТОВЫЙ СЕРВЕР ── -->
+    <div class="card">
         <div class="card-header no-indicator">
-            <div class="header-left"><i class="bi bi-send-check"></i> Тестовая отправка</div>
+            <div class="header-left"><i class="bi bi-envelope"></i> Почтовый сервер (SMTP)</div>
+            <div class="header-right">
+                <button class="btn btn-secondary btn-sm" onclick="loadMailSettings()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
         </div>
         <div class="card-body">
-            <div style="display:flex;gap:12px;align-items:flex-end;">
-                <div style="flex:1;">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label class="form-label">SMTP хост</label>
+                    <input type="text" id="smtpHost" class="form-control" placeholder="smtp.gmail.com">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div>
+                        <label class="form-label">Порт</label>
+                        <input type="number" id="smtpPort" class="form-control" placeholder="587">
+                    </div>
+                    <div>
+                        <label class="form-label">TLS</label>
+                        <select id="smtpTls" class="form-select">
+                            <option value="true">Включён</option>
+                            <option value="false">Выключен</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label">Email (логин)</label>
+                    <input type="email" id="smtpUser" class="form-control" placeholder="your@gmail.com">
+                </div>
+                <div>
+                    <label class="form-label">Пароль / App Password</label>
+                    <input type="password" id="smtpPassword" class="form-control" placeholder="••••••••">
+                </div>
+                <div>
+                    <label class="form-label">Имя отправителя</label>
+                    <input type="text" id="fromName" class="form-control" placeholder="Report Builder">
+                </div>
+                <div style="display:flex;gap:8px;margin-top:4px;">
+                    <button class="btn btn-secondary btn-sm" onclick="saveMailSettings()">
+                        <i class="bi bi-save"></i> Сохранить
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="testMailSettings()">
+                        <i class="bi bi-envelope-check"></i> Тест отправки
+                    </button>
+                </div>
+                <div id="mailResult" style="display:none;margin-top:4px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── ТЕСТОВАЯ ОТПРАВКА ── -->
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left"><i class="bi bi-send-check"></i> Тестовое письмо</div>
+        </div>
+        <div class="card-body">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
                     <label class="form-label">Email получателя</label>
                     <input type="email" id="testEmail" class="form-control" placeholder="test@example.com">
                 </div>
                 <button class="btn btn-primary" onclick="sendTestEmail()">
                     <i class="bi bi-send"></i> Отправить тестовое письмо
                 </button>
+                <div id="testMailResult" style="display:none;"></div>
             </div>
-            <div id="testMailResult" style="display:none;margin-top:12px;"></div>
         </div>
     </div>
 
 </div>
 
 <script>
-function esc(s) {
-    var d = document.createElement('div');
-    d.textContent = s || '';
-    return d.innerHTML;
+function esc(s){var d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML;}
+
+function showResult(elId, ok, msg) {
+    var el = document.getElementById(elId);
+    el.style.display = 'flex';
+    el.className = 'alert alert-' + (ok ? 'success' : 'danger');
+    el.innerHTML = '<i class="bi bi-' + (ok ? 'check-circle' : 'exclamation-triangle') + '"></i>&nbsp;' + esc(msg);
 }
+
+// ── DB ──────────────────────────────────────────────
+
+async function testDbConnection() {
+    showResult('dbTestResult', true, 'Проверка...');
+    try {
+        var r = await fetch('/api/settings/db/test');
+        var d = await r.json();
+        showResult('dbTestResult', d.success, d.success ? 'Подключение успешно: ' + d.data.version : d.error);
+    } catch(e) { showResult('dbTestResult', false, e.message); }
+}
+
+function showConfigHelp() {
+    alert('Для изменения настроек подключения к БД:\n\n1. Отредактируйте файл .env в корне проекта:\n   DB_HOST=...\n   DB_PORT=5432\n   DB_NAME=...\n   DB_USER=...\n   DB_PASSWORD=...\n\n2. Или файл config.py напрямую.\n\n3. После изменений перезапустите приложение.');
+}
+
+// ── SSH ──────────────────────────────────────────────
+
+async function loadSshSettings() {
+    try {
+        var r = await fetch('/api/settings/ssh');
+        var d = await r.json();
+        if (d.data) {
+            document.getElementById('sshHost').value = d.data.ssh_host || '';
+            document.getElementById('sshPort').value = d.data.ssh_port || 22;
+            document.getElementById('sshUser').value = d.data.ssh_user || '';
+            document.getElementById('sshKeyPath').value = d.data.ssh_key_path || '';
+            document.getElementById('remoteDbHost').value = d.data.remote_db_host || '127.0.0.1';
+            document.getElementById('remoteDbPort').value = d.data.remote_db_port || 5432;
+            document.getElementById('localPort').value = d.data.local_port || 15432;
+        }
+        updateSshStatusBadge(d.tunnel_active);
+    } catch(e) { console.error('SSH settings load error', e); }
+}
+
+async function saveSshSettings() {
+    var payload = {
+        ssh_host: document.getElementById('sshHost').value.trim(),
+        ssh_port: parseInt(document.getElementById('sshPort').value) || 22,
+        ssh_user: document.getElementById('sshUser').value.trim(),
+        ssh_password: document.getElementById('sshPassword').value,
+        ssh_key_path: document.getElementById('sshKeyPath').value.trim(),
+        remote_db_host: document.getElementById('remoteDbHost').value.trim() || '127.0.0.1',
+        remote_db_port: parseInt(document.getElementById('remoteDbPort').value) || 5432,
+        local_port: parseInt(document.getElementById('localPort').value) || 15432,
+    };
+    try {
+        var r = await fetch('/api/settings/ssh', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+        var d = await r.json();
+        showResult('sshResult', d.success, d.success ? 'Настройки SSH сохранены' : d.error);
+    } catch(e) { showResult('sshResult', false, e.message); }
+}
+
+async function startSshTunnel() {
+    var btn = document.getElementById('sshStartBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading"></span> Запуск...';
+    var payload = {
+        ssh_host: document.getElementById('sshHost').value.trim(),
+        ssh_port: parseInt(document.getElementById('sshPort').value) || 22,
+        ssh_user: document.getElementById('sshUser').value.trim(),
+        ssh_password: document.getElementById('sshPassword').value,
+        ssh_key_path: document.getElementById('sshKeyPath').value.trim(),
+        remote_db_host: document.getElementById('remoteDbHost').value.trim() || '127.0.0.1',
+        remote_db_port: parseInt(document.getElementById('remoteDbPort').value) || 5432,
+        local_port: parseInt(document.getElementById('localPort').value) || 15432,
+    };
+    try {
+        var r = await fetch('/api/settings/ssh/start', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+        var d = await r.json();
+        showResult('sshResult', d.success, d.success ? d.message : d.error);
+        if (d.success) updateSshStatusBadge(true);
+    } catch(e) { showResult('sshResult', false, e.message); }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-fill"></i> Запустить туннель';
+}
+
+async function stopSshTunnel() {
+    try {
+        var r = await fetch('/api/settings/ssh/stop', {method:'POST'});
+        var d = await r.json();
+        showResult('sshResult', d.success, d.success ? 'SSH туннель остановлен' : d.error);
+        if (d.success) updateSshStatusBadge(false);
+    } catch(e) { showResult('sshResult', false, e.message); }
+}
+
+async function checkSshStatus() {
+    try {
+        var r = await fetch('/api/settings/ssh/status');
+        var d = await r.json();
+        updateSshStatusBadge(d.active);
+        var msg = d.active ? 'Туннель активен на порту '+d.local_port : 'Туннель неактивен';
+        showResult('sshResult', d.active, msg);
+    } catch(e) { showResult('sshResult', false, e.message); }
+}
+
+function updateSshStatusBadge(active) {
+    var badge = document.getElementById('sshStatusBadge');
+    if (active) {
+        badge.className = 'badge badge-green';
+        badge.textContent = 'Активен';
+    } else {
+        badge.className = 'badge badge-red';
+        badge.textContent = 'Неактивен';
+    }
+}
+
+// ── MAIL ─────────────────────────────────────────────
 
 async function loadMailSettings() {
     try {
         var r = await fetch('/api/settings/mail');
         var d = await r.json();
-        if (d.success && d.data) {
+        if (d.data) {
             document.getElementById('smtpHost').value = d.data.smtp_host || '';
-            document.getElementById('smtpPort').value = d.data.smtp_port || '587';
+            document.getElementById('smtpPort').value = d.data.smtp_port || 587;
             document.getElementById('smtpUser').value = d.data.smtp_user || '';
-            document.getElementById('smtpPassword').value = d.data.smtp_password || '';
             document.getElementById('smtpTls').value = d.data.smtp_tls !== false ? 'true' : 'false';
             document.getElementById('fromName').value = d.data.from_name || '';
         }
-    } catch(e) {
-        console.error('Error loading mail settings:', e);
-    }
+    } catch(e) { console.error('Mail settings load error', e); }
 }
 
-async function saveMailSettings(e) {
-    e.preventDefault();
+async function saveMailSettings() {
     var payload = {
         smtp_host: document.getElementById('smtpHost').value,
         smtp_port: parseInt(document.getElementById('smtpPort').value) || 587,
@@ -159,124 +346,36 @@ async function saveMailSettings(e) {
         smtp_tls: document.getElementById('smtpTls').value === 'true',
         from_name: document.getElementById('fromName').value
     };
-    
     try {
-        var r = await fetch('/api/settings/mail', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        var r = await fetch('/api/settings/mail', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
         var d = await r.json();
-        if (d.success) {
-            showToast('Настройки сохранены', 'success');
-        } else {
-            showToast('Ошибка: ' + d.error, 'danger');
-        }
-    } catch(e) {
-        showToast('Ошибка: ' + e, 'danger');
-    }
+        showResult('mailResult', d.success, d.success ? 'Настройки почты сохранены' : d.error);
+    } catch(e) { showResult('mailResult', false, e.message); }
 }
 
 async function testMailSettings() {
-    var btn = event.target;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="loading"></span> Отправка...';
-    
     try {
-        var r = await fetch('/api/settings/mail/test', { method: 'POST' });
+        var r = await fetch('/api/settings/mail/test', {method:'POST'});
         var d = await r.json();
-        if (d.success) {
-            showToast('Тестовое письмо отправлено!', 'success');
-        } else {
-            showToast('Ошибка: ' + d.error, 'danger');
-        }
-    } catch(e) {
-        showToast('Ошибка: ' + e, 'danger');
-    }
-    
-    btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-envelope"></i> Проверить отправку';
+        showResult('mailResult', d.success, d.success ? 'Тестовое письмо отправлено' : d.error);
+    } catch(e) { showResult('mailResult', false, e.message); }
 }
 
 async function sendTestEmail() {
-    var email = document.getElementById('testEmail').value;
-    if (!email) {
-        alert('Введите email');
-        return;
-    }
-    
-    var btn = event.target;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="loading"></span>';
-    
+    var email = document.getElementById('testEmail').value.trim();
+    if (!email) { alert('Введите email'); return; }
     try {
         var r = await fetch('/api/settings/mail/test', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ test_email: email })
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({test_email: email})
         });
         var d = await r.json();
-        var resultDiv = document.getElementById('testMailResult');
-        resultDiv.style.display = 'block';
-        if (d.success) {
-            resultDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> Письмо отправлено на ' + esc(email) + '</div>';
-        } else {
-            resultDiv.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Ошибка: ' + esc(d.error) + '</div>';
-        }
-    } catch(e) {
-        var resultDiv = document.getElementById('testMailResult');
-        resultDiv.style.display = 'block';
-        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Ошибка: ' + esc(e) + '</div>';
-    }
-    
-    btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-send"></i> Отправить тестовое письмо';
+        showResult('testMailResult', d.success, d.success ? 'Письмо отправлено на ' + email : d.error);
+    } catch(e) { showResult('testMailResult', false, e.message); }
 }
 
-async function testDbConnection() {
-    var resultDiv = document.getElementById('dbTestResult');
-    resultDiv.style.display = 'block';
-    resultDiv.innerHTML = '<span class="loading"></span> Проверка...';
-    
-    try {
-        var r = await fetch('/api/settings/db/test');
-        var d = await r.json();
-        if (d.success) {
-            resultDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> Подключение успешно! Версия: ' + esc(d.data.version) + '</div>';
-        } else {
-            resultDiv.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Ошибка: ' + esc(d.error) + '</div>';
-        }
-    } catch(e) {
-        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Ошибка: ' + esc(e) + '</div>';
-    }
-}
-
-function openConfigHelp() {
-    alert('Для изменения настроек подключения к БД отредактируйте файл config.py:\n\n' +
-          'DB_HOST - адрес сервера PostgreSQL\n' +
-          'DB_PORT - порт (по умолчанию 5432)\n' +
-          'DB_NAME - имя базы данных\n' +
-          'DB_USER - имя пользователя\n' +
-          'DB_PASSWORD - пароль\n\n' +
-          'После изменения перезапустите приложение.');
-}
-
-function showToast(message, type) {
-    var toast = document.createElement('div');
-    toast.className = 'alert alert-' + type;
-    toast.innerHTML = '<i class="bi bi-' + (type === 'success' ? 'check-circle' : 'exclamation-triangle') + '"></i> ' + message;
-    toast.style.position = 'fixed';
-    toast.style.top = '20px';
-    toast.style.right = '20px';
-    toast.style.zIndex = '9999';
-    toast.style.animation = 'fadeIn 0.3s';
-    document.body.appendChild(toast);
-    setTimeout(function() {
-        toast.remove();
-    }, 3000);
-}
-
+// Init
+loadSshSettings();
 loadMailSettings();
 </script>
-
 {% endblock %}

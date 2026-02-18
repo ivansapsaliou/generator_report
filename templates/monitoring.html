@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+{% block title %}Мониторинг — Report Builder{% endblock %}
+{% block topbar_title %}Мониторинг{% endblock %}
+{% block topbar_actions %}
+<span id="lastUpdateTime" style="font-size:10px;color:var(--text-3);letter-spacing:.04em;margin-right:8px;"></span>
+<button class="btn btn-secondary btn-sm" onclick="loadStats()" id="refreshBtn">
+    <i class="bi bi-arrow-clockwise"></i> Обновить
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Мониторинг <span>системы</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:.04em;">
+            NEWLAND TECHNOLOGY &nbsp;·&nbsp; СЕРВЕР И POSTGRESQL &nbsp;·&nbsp;
+            <span id="nextUpdate" style="color:var(--amber);"></span>
+        </div>
+    </div>
+    <div id="pgVersionBadge" style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);align-self:center;"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     ТОП-КАРТОЧКИ  (CPU / RAM / DISK / DB SIZE / CONNECTIONS)
+     ══════════════════════════════════════════════════════ -->
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;">
+
+    <div class="mc" id="mc-cpu">
+        <div class="mc-label"><i class="bi bi-cpu"></i> Загрузка CPU</div>
+        <div class="mc-val" id="v-cpu">—</div>
+        <div class="mc-sub" id="s-cpu">нагрузка процессора</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-cpu"></div></div>
+    </div>
+
+    <div class="mc" id="mc-ram">
+        <div class="mc-label"><i class="bi bi-memory"></i> Оперативная память</div>
+        <div class="mc-val" id="v-ram">—</div>
+        <div class="mc-sub" id="s-ram">использовано / всего</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-ram"></div></div>
+    </div>
+
+    <div class="mc" id="mc-disk">
+        <div class="mc-label"><i class="bi bi-hdd"></i> Диск (корневой раздел)</div>
+        <div class="mc-val" id="v-disk">—</div>
+        <div class="mc-sub" id="s-disk">использовано / всего (ГБ)</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-disk"></div></div>
+    </div>
+
+    <div class="mc" id="mc-dbsize">
+        <div class="mc-label"><i class="bi bi-database"></i> Размер базы данных</div>
+        <div class="mc-val" id="v-dbsize">—</div>
+        <div class="mc-sub" id="s-dbsize">текущая БД · uptime: —</div>
+    </div>
+
+    <div class="mc" id="mc-conn">
+        <div class="mc-label"><i class="bi bi-plug"></i> Подключения к БД</div>
+        <div class="mc-val" id="v-conn">—</div>
+        <div class="mc-sub" id="s-conn">активных / всего / максимум</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-conn"></div></div>
+    </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     БЛОК 1: Подключения  +  Транзакции
+     ══════════════════════════════════════════════════════ -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left">
+                <i class="bi bi-plug"></i> Подключения PostgreSQL
+                <span class="blk-hint">— кто и как использует соединения с БД</span>
+            </div>
+        </div>
+        <div class="card-body" id="blk-connections"><div class="empty-state"><span class="loading"></span></div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left">
+                <i class="bi bi-arrow-left-right"></i> Транзакции и операции с данными
+                <span class="blk-hint">— накопленная статистика с момента сброса pg_stat_reset()</span>
+            </div>
+        </div>
+        <div class="card-body" id="blk-transactions"><div class="empty-state"><span class="loading"></span></div></div>
+    </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     БЛОК 2: Кэш  +  Сеть  +  BGWriter
+     ══════════════════════════════════════════════════════ -->
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left">
+                <i class="bi bi-lightning-charge"></i> Кэш страниц (shared_buffers)
+                <span class="blk-hint">— % страниц, прочитанных из RAM, а не с диска</span>
+            </div>
+        </div>
+        <div class="card-body" id="blk-cache"><div class="empty-state"><span class="loading"></span></div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left">
+                <i class="bi bi-ethernet"></i> Сетевой трафик
+                <span class="blk-hint">— суммарно за всё время работы ОС (из /proc/net/dev)</span>
+            </div>
+        </div>
+        <div class="card-body" id="blk-network"><div class="empty-state"><span class="loading"></span></div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left">
+                <i class="bi bi-hdd-stack"></i> Фоновый записчик (bgwriter)
+                <span class="blk-hint">— как PG пишет dirty-страницы на диск</span>
+            </div>
+        </div>
+        <div class="card-body" id="blk-bgwriter"><div class="empty-state"><span class="loading"></span></div></div>
+    </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     БЛОК 3: Медленные запросы (текущие > 1 сек)
+     ══════════════════════════════════════════════════════ -->
+<div class="card" style="margin-bottom:12px;">
+    <div class="card-header no-indicator">
+        <div class="header-left">
+            <i class="bi bi-clock-history"></i> Медленные запросы прямо сейчас
+            <span class="blk-hint">— запросы из pg_stat_activity, выполняющиеся дольше 1 секунды</span>
+        </div>
+        <div id="slowCount" style="font-size:11px;color:var(--text-3);"></div>
+    </div>
+    <div id="blk-slow"><div class="empty-state" style="padding:20px;"><span class="loading"></span></div></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     БЛОК 4: Статистика таблиц
+     ══════════════════════════════════════════════════════ -->
+<div class="card" style="margin-bottom:12px;">
+    <div class="card-header no-indicator">
+        <div class="header-left">
+            <i class="bi bi-table"></i> Статистика таблиц (схема public)
+            <span class="blk-hint">— из pg_stat_user_tables: размеры, операции, vacuum</span>
+        </div>
+    </div>
+    <div id="blk-tables" style="overflow-x:auto;">
+        <div class="empty-state" style="padding:20px;"><span class="loading"></span></div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     БЛОК 5: Топ запросов по времени (pg_stat_statements)
+     ══════════════════════════════════════════════════════ -->
+<div class="card">
+    <div class="card-header no-indicator">
+        <div class="header-left">
+            <i class="bi bi-graph-up"></i> Топ запросов по суммарному времени
+            <span class="blk-hint">— из pg_stat_statements (нужно расширение)</span>
+        </div>
+    </div>
+    <div id="blk-topqueries" style="overflow-x:auto;">
+        <div class="empty-state" style="padding:20px;"><span class="loading"></span></div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════  СТИЛИ  -->
+<style>
+/* ── Metric card ── */
+.mc { background:var(--bg-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:14px 16px 12px;display:flex;flex-direction:column;gap:4px;transition:border-color .2s; }
+.mc.warn { border-color:rgba(240,168,67,.5); }
+.mc.crit { border-color:rgba(224,82,82,.5); }
+.mc-label { font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:5px; }
+.mc-label i { color:var(--amber);font-size:11px; }
+.mc-val { font-family:var(--font-ui);font-size:28px;font-weight:800;color:var(--text);line-height:1.1; }
+.mc-sub { font-size:10px;color:var(--text-3);min-height:14px; }
+.mc-bar { height:3px;background:var(--bg-4);border-radius:2px;overflow:hidden;margin-top:6px; }
+.mc-fill { height:100%;background:var(--green);border-radius:2px;transition:width .6s ease,background .3s;width:0%; }
+.mc-fill.warn { background:var(--amber); }
+.mc-fill.crit { background:var(--red); }
+
+/* ── Stat row ── */
+.sr { display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;gap:8px; }
+.sr:last-child { border-bottom:none; }
+.sr-left { flex:1;display:flex;flex-direction:column;gap:2px; }
+.sr-label { color:var(--text);display:flex;align-items:center;gap:6px;font-weight:500; }
+.sr-desc  { font-size:10px;color:var(--text-3);line-height:1.3; }
+.sr-val   { font-family:var(--font-ui);font-weight:700;color:var(--text);white-space:nowrap;padding-top:1px; }
+.sr-val.warn { color:var(--amber); }
+.sr-val.crit { color:var(--red); }
+.sr-val.good { color:var(--green); }
+
+/* ── Dot ── */
+.dot { width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0; }
+.dot-g { background:var(--green); }
+.dot-a { background:var(--amber); }
+.dot-r { background:var(--red);   }
+.dot-d { background:var(--text-3);}
+
+/* ── Block hint ── */
+.blk-hint { font-size:10px;color:var(--text-3);font-weight:400;margin-left:4px; }
+
+/* ── Monitor table ── */
+.mt { width:100%;border-collapse:collapse;font-size:11px;font-family:var(--font-mono); }
+.mt th { background:var(--bg-3);color:var(--text-3);padding:7px 12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap; }
+.mt th small { display:block;font-size:8px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-3);opacity:.7;margin-top:1px; }
+.mt td { padding:7px 12px;border-bottom:1px solid var(--line);color:var(--text);vertical-align:middle; }
+.mt tbody tr:last-child td { border-bottom:none; }
+.mt tbody tr:hover td { background:var(--bg-2); }
+
+/* ── Cache block ── */
+.cache-big { text-align:center;padding:8px 0 10px; }
+.cache-pct { font-family:var(--font-ui);font-size:52px;font-weight:800;line-height:1; }
+.cache-msg { font-size:11px;margin-top:4px; }
+.cache-bar-wrap { margin:10px 0 4px;height:6px;background:var(--bg-4);border-radius:3px;overflow:hidden; }
+.cache-bar-fill { height:100%;border-radius:3px;transition:width .7s ease; }
+.cache-foot { font-size:10px;color:var(--text-3);display:flex;justify-content:space-between;margin-top:2px; }
+</style>
+
+<!-- ══════════════════════════════════════════════════════  СКРИПТ  -->
+<script>
+var _countdown = 60, _iv = null;
+
+function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = (s == null || s === '') ? '—' : String(s);
+    return d.innerHTML;
+}
+function fmt(n) { return Number(n||0).toLocaleString('ru-RU'); }
+function pct(v) { return Math.max(0,Math.min(100, parseFloat(v)||0)); }
+
+/* metric card updater */
+function setMC(id, val, barPct, sub) {
+    var card = document.getElementById('mc-'+id);
+    document.getElementById('v-'+id).textContent = val;
+    if (sub != null) document.getElementById('s-'+id).textContent = sub;
+    var fill = document.getElementById('b-'+id);
+    if (fill) {
+        var p = pct(barPct);
+        fill.style.width = p+'%';
+        var cls = p>=85 ? 'crit' : p>=65 ? 'warn' : '';
+        fill.className = 'mc-fill' + (cls?' '+cls:'');
+        card.className = 'mc'      + (cls?' '+cls:'');
+    }
+}
+
+/* stat row builder — label + description + value */
+function sr(label, desc, val, dotCls, valCls) {
+    var dot  = dotCls  ? '<span class="dot '+dotCls+'"></span>' : '';
+    var vcls = valCls  ? ' '+valCls : '';
+    return '<div class="sr">'
+        +'<div class="sr-left">'
+        +'<div class="sr-label">'+dot+esc(label)+'</div>'
+        +(desc ? '<div class="sr-desc">'+esc(desc)+'</div>' : '')
+        +'</div>'
+        +'<div class="sr-val'+vcls+'">'+esc(val)+'</div>'
+        +'</div>';
+}
+
+/* ─────────────────── RENDER FUNCTIONS ─────────────────── */
+
+function renderConnections(pg) {
+    var c   = pg.connections;
+    var usedPct = c.max_connections ? Math.round(c.total / c.max_connections * 100) : 0;
+    var wl  = pg.waiting_locks || 0;
+    document.getElementById('blk-connections').innerHTML =
+        sr('Активных сессий',          'Прямо сейчас выполняют SQL-запрос',                     c.active,      'dot-g') +
+        sr('Idle (ждут команды)',       'Держат соединение открытым, но ничего не делают',        c.idle,        'dot-d') +
+        sr('Idle in transaction',       'Открытая транзакция без активности — потенциальная проблема', c.idle_in_tx, c.idle_in_tx>0?'dot-a':'dot-d', c.idle_in_tx>0?'warn':'') +
+        sr('Всего подключений',         'Открытых соединений с этой БД',                          c.total,       '') +
+        sr('Максимум (max_connections)','Лимит параллельных подключений (postgresql.conf)',       c.max_connections, '') +
+        sr('Загрузка слотов',           usedPct+'% от max_connections',                          usedPct+'%',   '', usedPct>=85?'crit':usedPct>=65?'warn':'') +
+        sr('Ожидают блокировки',        'Запросы, заблокированные другими транзакциями',          wl,            wl>0?'dot-r':'dot-g', wl>0?'crit':'good') +
+        sr('Uptime PostgreSQL',         'Время работы сервера с последнего запуска',              pg.uptime,     '');
+}
+
+function renderTransactions(pg) {
+    var s = pg.db_stats;
+    document.getElementById('blk-transactions').innerHTML =
+        sr('COMMIT (успешных транзакций)',   'Транзакции, завершившиеся успешно', fmt(s.commits),       'dot-g') +
+        sr('ROLLBACK (откатов)',             'Транзакции, отменённые явно или из-за ошибки', fmt(s.rollbacks), s.rollbacks>0?'dot-a':'dot-d', s.rollbacks>0?'warn':'') +
+        sr('Deadlock (взаимные блокировки)', 'Критическая ситуация: две транзакции ждут друг друга', fmt(s.deadlocks), s.deadlocks>0?'dot-r':'dot-g', s.deadlocks>0?'crit':'good') +
+        sr('Конфликты (hot standby)',        'Возникают при репликации на standby-сервере',     fmt(s.conflicts),  '') +
+        sr('INSERT (вставок строк)',         'Суммарно с момента последнего pg_stat_reset()',   fmt(s.rows_inserted), '') +
+        sr('UPDATE (обновлений)',            'Суммарно с момента последнего pg_stat_reset()',   fmt(s.rows_updated),  '') +
+        sr('DELETE (удалений)',              'Суммарно с момента последнего pg_stat_reset()',   fmt(s.rows_deleted),  '') +
+        sr('SELECT (строк возвращено)',       'Строк отдано клиентам через fetch',              fmt(s.rows_fetched),  '');
+}
+
+function renderCache(pg) {
+    var ratio  = pg.cache_hit_ratio;
+    var ratioN = parseFloat(ratio) || 0;
+    var color  = ratioN>=95 ? 'var(--green)' : ratioN>=80 ? 'var(--amber)' : 'var(--red)';
+    var msg    = ratioN>=95 ? '✓ Отлично — данные читаются из RAM' :
+                 ratioN>=80 ? '⚠ Нормально — часть запросов идёт на диск' :
+                              '✗ Плохо — много дисковых чтений, увеличьте shared_buffers';
+    var s = pg.db_stats;
+    document.getElementById('blk-cache').innerHTML =
+        '<div class="cache-big">'
+        +'<div class="cache-pct" style="color:'+color+'">'+(ratio!=null?ratioN.toFixed(1):'N/A')+'<span style="font-size:22px;font-weight:400">%</span></div>'
+        +'<div class="cache-msg" style="color:'+color+'">'+esc(msg)+'</div>'
+        +'<div style="font-size:10px;color:var(--text-3);margin-top:4px;">Heap Cache Hit Ratio = кэш / (кэш + диск)</div>'
+        +'</div>'
+        +'<div class="cache-bar-wrap"><div class="cache-bar-fill" style="width:'+ratioN+'%;background:'+color+'"></div></div>'
+        +'<div class="cache-foot"><span>Из кэша (RAM): '+fmt(s.cache_reads)+' блоков</span><span>С диска: '+fmt(s.disk_reads)+' блоков</span></div>';
+}
+
+function renderNetwork(sys) {
+    var el = document.getElementById('blk-network');
+    if (!sys || sys.net_recv_mb == null) {
+        el.innerHTML = '<div class="empty-state" style="color:var(--text-3);font-size:11px;">Данные /proc/net/dev недоступны.<br>Возможно Flask запущен не на Linux.</div>';
+        return;
+    }
+    el.innerHTML =
+        sr('Получено (RX)', 'Суммарно принято по всем сетевым интерфейсам (кроме lo) с момента загрузки ОС', sys.net_recv_mb+' МБ', '') +
+        sr('Отправлено (TX)', 'Суммарно отправлено по всем сетевым интерфейсам (кроме lo) с момента загрузки ОС', sys.net_sent_mb+' МБ', '');
+}
+
+function renderBgwriter(bgw) {
+    var el = document.getElementById('blk-bgwriter');
+    if (!bgw || Object.keys(bgw).length===0) {
+        el.innerHTML = '<div class="empty-state" style="color:var(--text-3);">Данные bgwriter недоступны</div>';
+        return;
+    }
+    var reqBad = (bgw.checkpoints_req||0) > 10;
+    var beBad  = (bgw.buffers_backend||0) > (bgw.buffers_checkpoint||1);
+    el.innerHTML =
+        sr('Чекпоинты по расписанию', 'Плановые — по истечении checkpoint_timeout (норма)', fmt(bgw.checkpoints_timed), 'dot-g') +
+        sr('Чекпоинты по требованию', 'Внеплановые — буферы переполнились; если много — увеличьте shared_buffers', fmt(bgw.checkpoints_req), reqBad?'dot-a':'dot-d', reqBad?'warn':'') +
+        sr('Буферов записано (checkpoint)', 'Dirty-страниц сброшено на диск в ходе чекпоинтов', fmt(bgw.buffers_checkpoint), '') +
+        sr('Буферов очищено (bgwriter)',    'Фоновая запись dirty-страниц между чекпоинтами',    fmt(bgw.buffers_clean),     '') +
+        sr('Буферов записано бэкендами',   'Бэкенды сами пишут — признак нехватки буферов',      fmt(bgw.buffers_backend),   beBad?'dot-a':'dot-d', beBad?'warn':'') +
+        sr('Буферов выделено (всего)',      'Всего выделений из пула shared_buffers',             fmt(bgw.buffers_alloc),     '');
+}
+
+function renderSlowQueries(queries) {
+    var el = document.getElementById('blk-slow');
+    document.getElementById('slowCount').textContent = queries && queries.length ? queries.length+' запр.' : '';
+    if (!queries || queries.length===0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;"><i class="bi bi-check-circle" style="color:var(--green);margin-right:6px;"></i>Медленных запросов нет — всё выполняется быстро</div>';
+        return;
+    }
+    var rows = queries.map(function(q) {
+        var color = q.duration_sec>60?'var(--red)':q.duration_sec>10?'var(--amber)':'var(--text-2)';
+        return '<tr>'
+            +'<td>'+esc(q.pid)+'</td>'
+            +'<td>'+esc(q.user||'—')+'</td>'
+            +'<td style="font-size:10px;color:var(--text-3);">'+esc(q.app||'—')+'</td>'
+            +'<td style="color:'+color+';font-weight:700;">'+esc(q.duration)+'</td>'
+            +'<td><span style="background:var(--bg-3);padding:1px 6px;border-radius:2px;font-size:9px;">'+esc(q.state)+'</span></td>'
+            +'<td style="max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(q.query)+'">'+esc(q.query)+'</td>'
+            +'</tr>';
+    }).join('');
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        +'<th>PID<small>id процесса</small></th>'
+        +'<th>Пользователь<small>роль PostgreSQL</small></th>'
+        +'<th>Приложение<small>application_name</small></th>'
+        +'<th>Длительность<small>время выполнения</small></th>'
+        +'<th>Состояние<small>state</small></th>'
+        +'<th>SQL-запрос<small>первые 200 символов</small></th>'
+        +'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function renderTableStats(tables) {
+    var el = document.getElementById('blk-tables');
+    if (!tables || tables.length===0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;">Таблицы в схеме public не найдены</div>';
+        return;
+    }
+    var rows = tables.map(function(t) {
+        var deadCls = t.dead_rows>5000?'style="color:var(--red)"':t.dead_rows>1000?'style="color:var(--amber)"':'';
+        var total   = t.idx_scans + t.seq_scans;
+        var idxPct  = total>0 ? Math.round(t.idx_scans/total*100) : 0;
+        var idxClr  = idxPct>=80?'var(--green)':idxPct>=50?'var(--amber)':'var(--red)';
+        return '<tr>'
+            +'<td style="font-weight:600;white-space:nowrap;">'+esc(t.table)+'</td>'
+            +'<td style="text-align:right;">'+fmt(t.live_rows)+'</td>'
+            +'<td style="text-align:right;" '+deadCls+'>'+fmt(t.dead_rows)+'</td>'
+            +'<td style="text-align:right;">'+esc(t.total_size)+'</td>'
+            +'<td style="text-align:right;color:var(--text-3);font-size:10px;">'+esc(t.table_size)+'</td>'
+            +'<td style="text-align:right;color:var(--text-3);font-size:10px;">'+esc(t.index_size)+'</td>'
+            +'<td style="text-align:right;">'+fmt(t.inserts)+'</td>'
+            +'<td style="text-align:right;">'+fmt(t.updates)+'</td>'
+            +'<td style="text-align:right;">'+fmt(t.deletes)+'</td>'
+            +'<td style="text-align:right;"><span style="color:'+idxClr+';">'+idxPct+'%</span></td>'
+            +'<td style="font-size:10px;color:var(--text-3);white-space:nowrap;">'+esc(t.last_autovacuum)+'</td>'
+            +'<td style="font-size:10px;color:var(--text-3);white-space:nowrap;">'+esc(t.last_autoanalyze)+'</td>'
+            +'</tr>';
+    }).join('');
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        +'<th>Таблица<small>имя в схеме public</small></th>'
+        +'<th style="text-align:right">Живые строки<small>n_live_tup</small></th>'
+        +'<th style="text-align:right">Мёртвые строки<small>нужен VACUUM</small></th>'
+        +'<th style="text-align:right">Размер (всего)<small>таблица + индексы</small></th>'
+        +'<th style="text-align:right">Только таблица<small>без индексов</small></th>'
+        +'<th style="text-align:right">Индексы<small>суммарный размер</small></th>'
+        +'<th style="text-align:right">INSERT<small>накоплено</small></th>'
+        +'<th style="text-align:right">UPDATE<small>накоплено</small></th>'
+        +'<th style="text-align:right">DELETE<small>накоплено</small></th>'
+        +'<th style="text-align:right">Index scan %<small>идеально >80%</small></th>'
+        +'<th>Последний VACUUM<small>autovacuum</small></th>'
+        +'<th>Последний ANALYZE<small>autoanalyze</small></th>'
+        +'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function renderTopQueries(queries) {
+    var el = document.getElementById('blk-topqueries');
+    if (!queries || queries.length===0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;color:var(--text-3);">Расширение pg_stat_statements не установлено или пусто.<br><small>Добавьте: CREATE EXTENSION IF NOT EXISTS pg_stat_statements;</small></div>';
+        return;
+    }
+    var rows = queries.map(function(q) {
+        return '<tr>'
+            +'<td style="max-width:380px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(q.query)+'">'+esc(q.query)+'</td>'
+            +'<td style="text-align:right;">'+fmt(q.calls)+'</td>'
+            +'<td style="text-align:right;color:var(--amber);font-weight:600;">'+esc(q.total_ms)+' мс</td>'
+            +'<td style="text-align:right;">'+esc(q.mean_ms)+' мс</td>'
+            +'<td style="text-align:right;">'+fmt(q.rows)+'</td>'
+            +'</tr>';
+    }).join('');
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        +'<th>SQL-запрос<small>первые 150 символов</small></th>'
+        +'<th style="text-align:right">Вызовов<small>кол-во выполнений</small></th>'
+        +'<th style="text-align:right">Суммарно<small>total_exec_time</small></th>'
+        +'<th style="text-align:right">Среднее<small>mean_exec_time</small></th>'
+        +'<th style="text-align:right">Строк<small>суммарно</small></th>'
+        +'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+/* ─────────────────── MAIN LOAD ─────────────────── */
+async function loadStats() {
+    var btn = document.getElementById('refreshBtn');
+    btn.innerHTML = '<span class="loading"></span>';
+    btn.disabled  = true;
+
+    try {
+        var r = await fetch('/api/monitoring/stats');
+        var d = await r.json();
+        if (!d.success) throw new Error(d.error||'Ошибка сервера');
+
+        var data = d.data;
+        var sys  = data.system  || {};
+        var pg   = data.postgres;
+        var ts   = new Date(data.timestamp).toLocaleTimeString('ru-RU');
+        document.getElementById('lastUpdateTime').textContent = 'Обновлено: '+ts;
+
+        /* ── Системные карточки ── */
+        if (sys.cpu_percent != null) {
+            setMC('cpu', sys.cpu_percent.toFixed(1)+'%', sys.cpu_percent,
+                  sys.load_avg_1m!=null
+                    ? 'LA 1м/5м/15м: '+sys.load_avg_1m+' / '+sys.load_avg_5m+' / '+sys.load_avg_15m
+                    : 'нагрузка процессора');
+        } else {
+            document.getElementById('v-cpu').textContent = '—';
+            document.getElementById('s-cpu').textContent = sys.proc_error ? 'Только Linux: /proc недоступен' : 'нет данных';
+        }
+        if (sys.memory_percent != null) {
+            setMC('ram', sys.memory_percent.toFixed(1)+'%', sys.memory_percent,
+                  sys.memory_used_gb+' / '+sys.memory_total_gb+' ГБ · своб. '+sys.memory_avail_gb+' ГБ');
+        } else {
+            document.getElementById('v-ram').textContent = '—';
+            document.getElementById('s-ram').textContent = 'Данные /proc/meminfo недоступны';
+        }
+        if (sys.disk_percent != null) {
+            setMC('disk', sys.disk_percent.toFixed(1)+'%', sys.disk_percent,
+                  sys.disk_used_gb+' / '+sys.disk_total_gb+' ГБ · своб. '+sys.disk_free_gb+' ГБ');
+        } else {
+            document.getElementById('v-disk').textContent = '—';
+            document.getElementById('s-disk').textContent = 'statvfs недоступен';
+        }
+
+        /* ── PostgreSQL карточки ── */
+        if (pg && !pg.error) {
+            document.getElementById('pgVersionBadge').textContent = pg.version;
+            setMC('dbsize', pg.db_size, 0, 'uptime: '+pg.uptime);
+
+            var c = pg.connections;
+            var connPct = c.max_connections ? Math.round(c.total/c.max_connections*100) : 0;
+            setMC('conn', c.active+' / '+c.max_connections, connPct,
+                  'Всего: '+c.total+' · Idle: '+c.idle+' · '+connPct+'% от макс.');
+
+            renderConnections(pg);
+            renderTransactions(pg);
+            renderCache(pg);
+            renderNetwork(sys);
+            renderBgwriter(pg.bgwriter);
+            renderSlowQueries(pg.slow_queries);
+            renderTableStats(pg.table_stats);
+            renderTopQueries(pg.top_queries);
+
+        } else {
+            var msg = pg && pg.error ? pg.error : 'Ошибка подключения к PostgreSQL';
+            ['blk-connections','blk-transactions','blk-cache','blk-network','blk-bgwriter','blk-slow','blk-tables','blk-topqueries'].forEach(function(id){
+                var el = document.getElementById(id);
+                if (el) el.innerHTML = '<div class="empty-state" style="padding:16px;color:var(--red);">'+esc(msg)+'</div>';
+            });
+            ['v-dbsize','v-conn'].forEach(function(id){ document.getElementById(id).textContent='—'; });
+        }
+
+    } catch(e) {
+        document.getElementById('lastUpdateTime').textContent = 'Ошибка: '+e.message;
+    }
+
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Обновить';
+    btn.disabled  = false;
+    _countdown = 60;
+}
+
+function startCountdown() {
+    _countdown = 60;
+    if (_iv) clearInterval(_iv);
+    _iv = setInterval(function() {
+        _countdown--;
+        document.getElementById('nextUpdate').textContent = 'обновление через '+_countdown+' с';
+        if (_countdown<=0) { loadStats(); _countdown=60; }
+    }, 1000);
+}
+
+loadStats();
+startCountdown();
+</script>
+{% endblock %}

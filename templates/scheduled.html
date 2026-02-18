@@ -2,7 +2,7 @@
 {% block title %}Запланированные отчёты — Report Builder{% endblock %}
 {% block topbar_title %}Запланированные отчёты{% endblock %}
 {% block topbar_actions %}
-<button class="btn btn-primary btn-sm" onclick="openScheduledModal()">
+<button class="btn btn-primary btn-sm" id="addScheduledBtn">
     <i class="bi bi-plus"></i> Добавить
 </button>
 {% endblock %}
@@ -17,9 +17,14 @@
 
 <div class="card">
     <div class="card-header no-indicator">
-        <div class="header-left"><i class="bi bi-clock"></i> Список запланированных отчётов <span class="badge badge-blue" id="scheduledCount">—</span></div>
+        <div class="header-left">
+            <i class="bi bi-clock"></i> Список запланированных отчётов
+            <span class="badge badge-blue" id="scheduledCount">—</span>
+        </div>
         <div class="header-right">
-            <button class="btn btn-secondary btn-sm" onclick="loadScheduled()" title="Обновить"><i class="bi bi-arrow-clockwise"></i></button>
+            <button class="btn btn-secondary btn-sm" onclick="loadScheduled()">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
         </div>
     </div>
     <div class="card-body" style="padding:0;">
@@ -44,237 +49,24 @@
     </div>
 </div>
 
-<script>
-function getScheduleTypeLabel(s) {
-    if (s.schedule_type === 'manual') return 'Вручную';
-    if (s.schedule_type === 'daily') return 'Ежедневно в ' + (s.schedule_time || '09:00');
-    if (s.schedule_type === 'weekly') return 'Еженедельно в ' + (s.schedule_time || '09:00');
-    if (s.schedule_type === 'monthly') return 'Ежемесячно ' + (s.schedule_day || '1') + ' числа';
-    return s.schedule_type;
-}
-
-function getStatusBadge(status) {
-    var colors = { 'success': 'badge-green', 'failed': 'badge-red', 'running': 'badge-amber' };
-    return colors[status] || 'badge-gray';
-}
-
-function esc(s) {
-    var d = document.createElement('div');
-    d.textContent = s || '';
-    return d.innerHTML;
-}
-
-async function loadScheduled() {
-    var tbody = document.getElementById('scheduledBody');
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="loading"></span></div></td></tr>';
-    try {
-        var r = await fetch('/api/scheduled'), d = await r.json();
-        if (d.success && d.data.length > 0) {
-            document.getElementById('scheduledCount').textContent = d.data.length;
-            tbody.innerHTML = d.data.map(function(s) {
-                var lastRun = s.last_run_at ? new Date(s.last_run_at).toLocaleString('ru-RU') : 'Никогда';
-                var status = s.last_status || 'never';
-                var recipients = s.recipients ? s.recipients.split(',').map(function(e) { return e.trim(); }).slice(0, 2).join(', ') + (s.recipients.split(',').length > 2 ? '...' : '') : '—';
-                return '<tr>' +
-                    '<td><span class="table-name">' + esc(s.name) + '</span></td>' +
-                    '<td><span class="table-comment">' + esc(s.template_name || '—') + '</span></td>' +
-                    '<td><span class="table-comment">' + getScheduleTypeLabel(s) + '</span></td>' +
-                    '<td><span class="table-comment">' + recipients + '</span></td>' +
-                    '<td><span class="badge ' + getStatusBadge(status) + '">' + (status === 'never' ? 'Не запущен' : status) + '</span></td>' +
-                    '<td><span class="table-comment">' + lastRun + '</span></td>' +
-                    '<td style="text-align:right;">' +
-                        '<button class="btn btn-secondary btn-sm" onclick="runScheduled(' + s.id + ')" title="Запустить"><i class="bi bi-play-fill"></i></button>' +
-                        '<button class="btn btn-secondary btn-sm" style="margin-left:4px;" onclick="editScheduled(' + s.id + ')" title="Редактировать"><i class="bi bi-pencil"></i></button>' +
-                        '<button class="btn btn-secondary btn-sm" style="margin-left:4px;" onclick="deleteScheduled(' + s.id + ')" title="Удалить"><i class="bi bi-trash"></i></button>' +
-                    '</td>' +
-                '</tr>';
-            }).join('');
-        } else {
-            document.getElementById('scheduledCount').textContent = '0';
-            tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Нет запланированных отчётов</div></td></tr>';
-        }
-    } catch(e) {
-        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state" style="color:var(--red);">Ошибка загрузки</div></td></tr>';
-    }
-}
-
-async function runScheduled(id) {
-    try {
-        var r = await fetch('/api/scheduled/' + id + '/run', { method: 'POST' });
-        var d = await r.json();
-        if (d.success) {
-            alert('Отчёт выполнен! Строк: ' + d.data.total + '\nОтправлен получателям: ' + (d.data.sent_count || 0));
-            loadScheduled();
-        } else {
-            alert('Ошибка: ' + d.error);
-        }
-    } catch(e) {
-        alert('Ошибка: ' + e);
-    }
-}
-
-async function deleteScheduled(id) {
-    if (!confirm('Удалить запланированный отчёт?')) return;
-    try {
-        var r = await fetch('/api/scheduled/' + id, { method: 'DELETE' });
-        var d = await r.json();
-        if (d.success) {
-            loadScheduled();
-        } else {
-            alert('Ошибка: ' + d.error);
-        }
-    } catch(e) {
-        alert('Ошибка: ' + e);
-    }
-}
-
-var editingId = null;
-
-function openScheduledModal() {
-    editingId = null;
-    document.getElementById('scheduledModalTitle').innerHTML = '<i class="bi bi-clock"></i> Запланировать отчёт';
-    document.getElementById('scheduledName').value = '';
-    document.getElementById('recipients').value = '';
-    document.getElementById('scheduleType').value = 'manual';
-    document.getElementById('scheduleTime').style.display = 'none';
-    document.getElementById('scheduleDay').style.display = 'none';
-    document.getElementById('exportFormat').value = 'xlsx';
-    
-    // Загружаем список шаблонов
-    fetch('/api/templates').then(r => r.json()).then(d => {
-        if (d.success && d.data.length > 0) {
-            var select = document.getElementById('scheduledTemplate');
-            select.innerHTML = d.data.map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('');
-        } else {
-            document.getElementById('scheduledTemplate').innerHTML = '<option value="">Нет шаблонов</option>';
-        }
-    });
-    
-    document.getElementById('scheduledModal').style.display = 'flex';
-}
-
-function editScheduled(id) {
-    fetch('/api/scheduled/' + id).then(r => r.json()).then(d => {
-        if (d.success) {
-            editingId = id;
-            var s = d.data;
-            document.getElementById('scheduledModalTitle').innerHTML = '<i class="bi bi-pencil"></i> Редактировать отчёт';
-            document.getElementById('scheduledName').value = s.name || '';
-            document.getElementById('recipients').value = s.recipients || '';
-            document.getElementById('scheduleType').value = s.schedule_type || 'manual';
-            document.getElementById('scheduleTimeInput').value = s.schedule_time || '09:00';
-            document.getElementById('scheduleDayInput').value = s.schedule_day || '1';
-            document.getElementById('exportFormat').value = s.export_format || 'xlsx';
-            
-            // Показать/скрыть время/день
-            document.getElementById('scheduleTime').style.display = s.schedule_type === 'daily' || s.schedule_type === 'weekly' ? 'block' : 'none';
-            document.getElementById('scheduleDay').style.display = s.schedule_type === 'monthly' ? 'block' : 'none';
-            
-            // Загружаем шаблоны
-            fetch('/api/templates').then(r => r.json()).then(function(td) {
-                if (td.success && td.data.length > 0) {
-                    var select = document.getElementById('scheduledTemplate');
-                    select.innerHTML = td.data.map(function(t) {
-                        return '<option value="' + t.id + '"' + (t.id === s.template_id ? ' selected' : '') + '>' + esc(t.name) + '</option>';
-                    }).join('');
-                }
-            });
-            
-            document.getElementById('scheduledModal').style.display = 'flex';
-        }
-    });
-}
-
-// Показать/скрыть время при изменении типа
-document.getElementById('scheduleType').onchange = function() {
-    document.getElementById('scheduleTime').style.display = (this.value === 'daily' || this.value === 'weekly') ? 'block' : 'none';
-    document.getElementById('scheduleDay').style.display = this.value === 'monthly' ? 'block' : 'none';
-};
-
-async function createScheduledReport() {
-    var name = document.getElementById('scheduledName').value;
-    var templateId = document.getElementById('scheduledTemplate').value;
-    var scheduleType = document.getElementById('scheduleType').value;
-    var scheduleTime = document.getElementById('scheduleTimeInput').value;
-    var scheduleDay = document.getElementById('scheduleDayInput').value;
-    var exportFormat = document.getElementById('exportFormat').value;
-    var recipients = document.getElementById('recipients').value;
-    
-    if (!name) {
-        alert('Введите название');
-        return;
-    }
-    
-    if (!templateId) {
-        alert('Выберите шаблон');
-        return;
-    }
-    
-    // Получаем конфиг шаблона
-    var config = {};
-    try {
-        var r = await fetch('/api/load-report/' + templateId);
-        var d = await r.json();
-        if (d.success) {
-            config = d.data.config;
-        }
-    } catch(e) {}
-    
-    var payload = {
-        name: name,
-        template_id: parseInt(templateId),
-        config: config,
-        schedule_type: scheduleType,
-        schedule_time: scheduleType === 'daily' || scheduleType === 'weekly' ? scheduleTime : null,
-        schedule_day: scheduleType === 'monthly' ? scheduleDay : null,
-        export_format: exportFormat,
-        recipients: recipients
-    };
-    
-    var url = '/api/scheduled';
-    var method = 'POST';
-    if (editingId) {
-        url = '/api/scheduled/' + editingId;
-        method = 'PUT';
-    }
-    
-    try {
-        var res = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        var result = await res.json();
-        if (result.success) {
-            document.getElementById('scheduledModal').style.display = 'none';
-            loadScheduled();
-        } else {
-            alert('Ошибка: ' + result.error);
-        }
-    } catch(e) {
-        alert('Ошибка: ' + e);
-    }
-}
-
-loadScheduled();
-</script>
-
-<!-- MODAL: CREATE/EDIT SCHEDULED REPORT -->
-<div id="scheduledModal" class="modal">
+<!-- ── MODAL: CREATE/EDIT ─────────────────────────── -->
+<div id="scheduledModal" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:480px;">
         <div class="modal-header">
             <h5 id="scheduledModalTitle"><i class="bi bi-clock"></i> Запланировать отчёт</h5>
-            <button class="close-modal" style="background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;line-height:1;padding:0;">×</button>
+            <button type="button" id="closeScheduledModal" style="background:none;border:none;color:var(--text-3);font-size:20px;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;">×</button>
         </div>
         <div class="modal-body">
             <div style="display:flex;flex-direction:column;gap:12px;">
                 <div>
-                    <label class="form-label">Название</label>
+                    <label class="form-label">Название <span style="color:var(--red);">*</span></label>
                     <input type="text" id="scheduledName" class="form-control" placeholder="Название отчёта">
                 </div>
                 <div>
-                    <label class="form-label">Шаблон</label>
-                    <select id="scheduledTemplate" class="form-select"></select>
+                    <label class="form-label">Шаблон <span style="color:var(--red);">*</span></label>
+                    <select id="scheduledTemplate" class="form-select">
+                        <option value="">— Загрузка... —</option>
+                    </select>
                 </div>
                 <div>
                     <label class="form-label">Расписание</label>
@@ -285,18 +77,18 @@ loadScheduled();
                         <option value="monthly">Ежемесячно</option>
                     </select>
                 </div>
-                <div id="scheduleTime" style="display:none;">
-                    <label class="form-label">Время</label>
+                <div id="scheduleTimeBlock" style="display:none;">
+                    <label class="form-label">Время запуска</label>
                     <input type="time" id="scheduleTimeInput" class="form-control" value="09:00">
                 </div>
-                <div id="scheduleDay" style="display:none;">
+                <div id="scheduleDayBlock" style="display:none;">
                     <label class="form-label">День месяца</label>
                     <input type="number" id="scheduleDayInput" class="form-control" value="1" min="1" max="28">
                 </div>
                 <div>
-                    <label class="form-label">Формат</label>
+                    <label class="form-label">Формат экспорта</label>
                     <select id="exportFormat" class="form-select">
-                        <option value="xlsx">Excel (xlsx)</option>
+                        <option value="xlsx">Excel (.xlsx)</option>
                         <option value="csv">CSV</option>
                         <option value="json">JSON</option>
                     </select>
@@ -305,13 +97,273 @@ loadScheduled();
                     <label class="form-label">Получатели (email через запятую)</label>
                     <input type="text" id="recipients" class="form-control" placeholder="email1@test.com, email2@test.com">
                 </div>
+                <div id="formError" style="display:none;" class="alert alert-danger"></div>
             </div>
         </div>
         <div class="modal-footer">
-            <button class="btn btn-secondary close-modal">Отмена</button>
-            <button class="btn btn-primary" onclick="createScheduledReport()">Сохранить</button>
+            <button type="button" id="cancelScheduledBtn" class="btn btn-secondary">Отмена</button>
+            <button type="button" id="saveScheduledBtn" class="btn btn-primary">
+                <i class="bi bi-check"></i> Сохранить
+            </button>
         </div>
     </div>
 </div>
 
+<script>
+var editingId = null;
+
+function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = String(s || '');
+    return d.innerHTML;
+}
+
+function getScheduleLabel(s) {
+    if (s.schedule_type === 'daily') return 'Ежедневно в ' + (s.schedule_time || '09:00');
+    if (s.schedule_type === 'weekly') return 'Еженедельно в ' + (s.schedule_time || '09:00');
+    if (s.schedule_type === 'monthly') return 'Ежемесячно ' + (s.schedule_day || '1') + ' числа';
+    return 'Вручную';
+}
+
+function getStatusBadge(status) {
+    var map = { 'success': 'badge-green', 'failed': 'badge-red', 'running': 'badge-amber' };
+    return map[status] || 'badge-blue';
+}
+
+// ── LOAD LIST ─────────────────────────────────────────
+
+async function loadScheduled() {
+    var tbody = document.getElementById('scheduledBody');
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="loading"></span></div></td></tr>';
+    try {
+        var r = await fetch('/api/scheduled');
+        var d = await r.json();
+        if (!d.success) throw new Error(d.error);
+
+        document.getElementById('scheduledCount').textContent = d.data.length;
+
+        if (d.data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Нет запланированных отчётов. Нажмите «Добавить».</div></td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = d.data.map(function(s) {
+            var lastRun = s.last_run_at ? new Date(s.last_run_at).toLocaleString('ru-RU') : 'Не запускался';
+            var status = s.last_status || 'never';
+            var statusLabel = status === 'never' ? 'Не запускался' : status;
+            var recips = s.recipients ? s.recipients.split(',').map(function(e){return e.trim();}).slice(0,2).join(', ') + (s.recipients.split(',').length>2?'…':'') : '—';
+            return '<tr>' +
+                '<td><span class="table-name">' + esc(s.name) + '</span></td>' +
+                '<td><span class="table-comment">' + esc(s.template_name || '—') + '</span></td>' +
+                '<td><span class="table-comment">' + esc(getScheduleLabel(s)) + '</span></td>' +
+                '<td><span class="table-comment" style="font-size:10px;">' + esc(recips) + '</span></td>' +
+                '<td><span class="badge ' + getStatusBadge(status) + '">' + esc(statusLabel) + '</span></td>' +
+                '<td><span class="table-comment">' + esc(lastRun) + '</span></td>' +
+                '<td style="text-align:right;">' +
+                    '<button class="btn btn-secondary btn-sm" onclick="runScheduled('+s.id+')" title="Запустить"><i class="bi bi-play-fill"></i></button>' +
+                    '<button class="btn btn-secondary btn-sm" style="margin-left:4px;" onclick="editScheduled('+s.id+')" title="Редактировать"><i class="bi bi-pencil"></i></button>' +
+                    '<button class="btn btn-secondary btn-sm" style="margin-left:4px;" onclick="deleteScheduled('+s.id+')" title="Удалить"><i class="bi bi-trash"></i></button>' +
+                '</td>' +
+            '</tr>';
+        }).join('');
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state" style="color:var(--red);">Ошибка: ' + esc(e.message) + '</div></td></tr>';
+    }
+}
+
+// ── MODAL OPEN/CLOSE ───────────────────────────────────
+
+async function openModal(id) {
+    editingId = id || null;
+
+    // Загружаем шаблоны
+    var sel = document.getElementById('scheduledTemplate');
+    sel.innerHTML = '<option value="">— Загрузка... —</option>';
+    try {
+        var r = await fetch('/api/templates');
+        var d = await r.json();
+        if (d.success && d.data.length > 0) {
+            sel.innerHTML = d.data.map(function(t){
+                return '<option value="'+t.id+'">'+esc(t.name)+'</option>';
+            }).join('');
+        } else {
+            sel.innerHTML = '<option value="">Нет доступных шаблонов</option>';
+        }
+    } catch(e) {
+        sel.innerHTML = '<option value="">Ошибка загрузки</option>';
+    }
+
+    if (editingId) {
+        // Режим редактирования
+        document.getElementById('scheduledModalTitle').innerHTML = '<i class="bi bi-pencil"></i> Редактировать отчёт';
+        try {
+            var r2 = await fetch('/api/scheduled/' + editingId);
+            var d2 = await r2.json();
+            if (d2.success) {
+                var s = d2.data;
+                document.getElementById('scheduledName').value = s.name || '';
+                document.getElementById('recipients').value = s.recipients || '';
+                document.getElementById('scheduleType').value = s.schedule_type || 'manual';
+                document.getElementById('scheduleTimeInput').value = s.schedule_time || '09:00';
+                document.getElementById('scheduleDayInput').value = s.schedule_day || '1';
+                document.getElementById('exportFormat').value = s.export_format || 'xlsx';
+                // Выбираем шаблон
+                if (s.template_id) {
+                    var opt = sel.querySelector('option[value="'+s.template_id+'"]');
+                    if (opt) opt.selected = true;
+                }
+                updateScheduleVisibility();
+            }
+        } catch(e) {
+            console.error('Error loading scheduled report', e);
+        }
+    } else {
+        // Режим создания
+        document.getElementById('scheduledModalTitle').innerHTML = '<i class="bi bi-clock"></i> Запланировать отчёт';
+        document.getElementById('scheduledName').value = '';
+        document.getElementById('recipients').value = '';
+        document.getElementById('scheduleType').value = 'manual';
+        document.getElementById('scheduleTimeInput').value = '09:00';
+        document.getElementById('scheduleDayInput').value = '1';
+        document.getElementById('exportFormat').value = 'xlsx';
+        updateScheduleVisibility();
+    }
+
+    document.getElementById('formError').style.display = 'none';
+    document.getElementById('scheduledModal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('scheduledModal').style.display = 'none';
+    editingId = null;
+}
+
+function updateScheduleVisibility() {
+    var type = document.getElementById('scheduleType').value;
+    document.getElementById('scheduleTimeBlock').style.display = (type==='daily'||type==='weekly') ? 'block' : 'none';
+    document.getElementById('scheduleDayBlock').style.display = type==='monthly' ? 'block' : 'none';
+}
+
+// ── SAVE ──────────────────────────────────────────────
+
+async function saveScheduled() {
+    var name = document.getElementById('scheduledName').value.trim();
+    var templateId = document.getElementById('scheduledTemplate').value;
+    var errDiv = document.getElementById('formError');
+
+    errDiv.style.display = 'none';
+
+    if (!name) {
+        errDiv.textContent = 'Введите название отчёта';
+        errDiv.style.display = 'flex';
+        return;
+    }
+    if (!templateId) {
+        errDiv.textContent = 'Выберите шаблон';
+        errDiv.style.display = 'flex';
+        return;
+    }
+
+    var saveBtn = document.getElementById('saveScheduledBtn');
+    saveBtn.innerHTML = '<span class="loading"></span> Сохранение...';
+    saveBtn.disabled = true;
+
+    // Получаем конфиг шаблона
+    var config = {};
+    try {
+        var rc = await fetch('/api/load-report/' + templateId);
+        var dc = await rc.json();
+        if (dc.success) config = dc.data.config || {};
+    } catch(e) {}
+
+    var payload = {
+        name: name,
+        template_id: parseInt(templateId),
+        config: config,
+        schedule_type: document.getElementById('scheduleType').value,
+        schedule_time: document.getElementById('scheduleType').value !== 'manual' ? document.getElementById('scheduleTimeInput').value : null,
+        schedule_day: document.getElementById('scheduleType').value === 'monthly' ? document.getElementById('scheduleDayInput').value : null,
+        export_format: document.getElementById('exportFormat').value,
+        recipients: document.getElementById('recipients').value.trim()
+    };
+
+    var url = editingId ? '/api/scheduled/' + editingId : '/api/scheduled';
+    var method = editingId ? 'PUT' : 'POST';
+
+    try {
+        var res = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        var result = await res.json();
+        if (result.success) {
+            closeModal();
+            loadScheduled();
+        } else {
+            errDiv.textContent = 'Ошибка: ' + (result.error || 'Неизвестная ошибка');
+            errDiv.style.display = 'flex';
+        }
+    } catch(e) {
+        errDiv.textContent = 'Ошибка подключения: ' + e.message;
+        errDiv.style.display = 'flex';
+    }
+
+    saveBtn.innerHTML = '<i class="bi bi-check"></i> Сохранить';
+    saveBtn.disabled = false;
+}
+
+// ── RUN / EDIT / DELETE ───────────────────────────────
+
+async function runScheduled(id) {
+    if (!confirm('Запустить отчёт сейчас?')) return;
+    try {
+        var r = await fetch('/api/scheduled/' + id + '/run', { method: 'POST' });
+        var d = await r.json();
+        if (d.success) {
+            alert('Готово! Строк: ' + d.data.total + '\nОтправлено получателям: ' + (d.data.sent_count || 0));
+            loadScheduled();
+        } else {
+            alert('Ошибка: ' + (d.error || 'Неизвестная ошибка'));
+        }
+    } catch(e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+function editScheduled(id) {
+    openModal(id);
+}
+
+async function deleteScheduled(id) {
+    if (!confirm('Удалить этот запланированный отчёт?')) return;
+    try {
+        var r = await fetch('/api/scheduled/' + id, { method: 'DELETE' });
+        var d = await r.json();
+        if (d.success) {
+            loadScheduled();
+        } else {
+            alert('Ошибка: ' + (d.error || 'Неизвестная ошибка'));
+        }
+    } catch(e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+// ── EVENT LISTENERS ───────────────────────────────────
+
+document.getElementById('addScheduledBtn').addEventListener('click', function() { openModal(null); });
+document.getElementById('closeScheduledModal').addEventListener('click', closeModal);
+document.getElementById('cancelScheduledBtn').addEventListener('click', closeModal);
+document.getElementById('saveScheduledBtn').addEventListener('click', saveScheduled);
+document.getElementById('scheduleType').addEventListener('change', updateScheduleVisibility);
+
+// Закрытие по клику вне модала
+document.getElementById('scheduledModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
+// Запуск
+loadScheduled();
+</script>
 {% endblock %}
