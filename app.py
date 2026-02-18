@@ -7,6 +7,7 @@ import re
 import psycopg2.extensions
 from psycopg2.extensions import AsIs
 from collections import defaultdict
+import base64
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -18,13 +19,24 @@ import io
 import csv
 import threading
 import time
-
-# SSH tunnel support
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+from os.path import basename
+import os
 try:
-    from sshtunnel import SSHTunnelForwarder
-    SSH_TUNNEL_AVAILABLE = True
+    import paramiko
+    PARAMIKO_AVAILABLE = True
 except ImportError:
-    SSH_TUNNEL_AVAILABLE = False
+    PARAMIKO_AVAILABLE = False
+
+import socket
+from threading import Lock
+
+# Глобальное хранилище SSH туннелей (один на подключение)
+_ssh_tunnels = {}
+_ssh_tunnels_lock = Lock()
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -146,33 +158,51 @@ def stop_ssh_tunnel():
 # ─────────────────────────────────────────────
 
 def get_db_connection():
-    """Создает подключение к PostgreSQL (с SSH туннелем если настроен)"""
-    global _ssh_tunnel
-
-    ssh_cfg = get_ssh_settings() if hasattr(app, '_ssh_checked') else None
-    app._ssh_checked = True
-
-    # Если SSH туннель активен — подключаемся через него
-    if _ssh_tunnel and _ssh_tunnel.is_active:
+    """
+    Получить подключение к БД.
+    Если включен SSH туннель, использует локальный forward.
+    """
+    ssh_settings = get_ssh_settings()
+    
+    # Определяем параметры подключения
+    db_host = app.config['DB_HOST']
+    db_port = app.config['DB_PORT']
+    
+    # Если SSH туннель включен
+    if ssh_settings and ssh_settings.get('enabled', False):
+        try:
+            print(f"[SSH] Using SSH tunnel for DB connection")
+            local_host, local_port = create_ssh_tunnel(
+                ssh_host=ssh_settings['ssh_host'],
+                ssh_port=ssh_settings.get('ssh_port', 22),
+                ssh_user=ssh_settings['ssh_user'],
+                ssh_password=ssh_settings.get('ssh_password'),
+                ssh_key_path=ssh_settings.get('ssh_key_path'),
+                remote_db_host=ssh_settings.get('remote_db_host', 'localhost'),
+                remote_db_port=ssh_settings.get('remote_db_port', 5432)
+            )
+            db_host = local_host
+            db_port = local_port
+        except Exception as e:
+            print(f"[SSH] Failed to create SSH tunnel: {e}")
+            # Продолжаем без туннеля
+            pass
+    
+    # Подключаемся к БД
+    try:
         conn = psycopg2.connect(
-            host='127.0.0.1',
-            port=_ssh_tunnel.local_bind_port,
+            host=db_host,
+            port=db_port,
             database=app.config['DB_NAME'],
             user=app.config['DB_USER'],
             password=app.config['DB_PASSWORD'],
-            client_encoding='UTF8'
+            client_encoding='UTF8',
+            connect_timeout=10
         )
         return conn
-
-    conn = psycopg2.connect(
-        host=app.config['DB_HOST'],
-        port=app.config['DB_PORT'],
-        database=app.config['DB_NAME'],
-        user=app.config['DB_USER'],
-        password=app.config['DB_PASSWORD'],
-        client_encoding='UTF8'
-    )
-    return conn
+    except Exception as e:
+        print(f"[DB] ❌ Connection error: {e}")
+        raise
 
 
 # ─────────────────────────────────────────────
@@ -249,6 +279,151 @@ def ensure_scheduled_table(conn):
     cur.close()
 
 
+def create_ssh_tunnel(ssh_host, ssh_port, ssh_user, ssh_password, ssh_key_path=None, 
+                     remote_db_host='localhost', remote_db_port=5432):
+    """
+    Создает SSH туннель для доступа к удаленной БД.
+    
+    Args:
+        ssh_host: IP или хост SSH сервера
+        ssh_port: Порт SSH (обычно 22)
+        ssh_user: Пользователь SSH
+        ssh_password: Пароль SSH (или None если используется ключ)
+        ssh_key_path: Путь к приватному ключу (опционально)
+        remote_db_host: IP БД на удаленном сервере
+        remote_db_port: Порт БД на удаленном сервере
+    
+    Returns:
+        tuple: (local_host, local_port) для подключения к БД через туннель
+    """
+    
+    if not PARAMIKO_AVAILABLE:
+        raise RuntimeError(
+            "paramiko не установлен. Установите: pip install paramiko\n"
+            "Это встроенная Python библиотека для SSH, не требует доп ПО на сервере."
+        )
+    
+    tunnel_key = f"{ssh_host}:{ssh_port}:{ssh_user}:{remote_db_host}:{remote_db_port}"
+    
+    with _ssh_tunnels_lock:
+        # Проверяем, есть ли уже активный туннель
+        if tunnel_key in _ssh_tunnels:
+            tunnel = _ssh_tunnels[tunnel_key]
+            if tunnel['client'].get_transport() and tunnel['client'].get_transport().is_active():
+                print(f"[SSH] ✅ Reusing existing tunnel: {tunnel_key}")
+                return (tunnel['local_host'], tunnel['local_port'])
+            else:
+                print(f"[SSH] Closing inactive tunnel: {tunnel_key}")
+                try:
+                    tunnel['client'].close()
+                except:
+                    pass
+                del _ssh_tunnels[tunnel_key]
+    
+    try:
+        print(f"[SSH] 🔗 Creating SSH tunnel to {ssh_host}:{ssh_port}...")
+        
+        # Создаем SSH клиент
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # Подключаемся к SSH серверу
+        if ssh_key_path:
+            print(f"[SSH] Authenticating with SSH key: {ssh_key_path}")
+            client.connect(
+                hostname=ssh_host,
+                port=ssh_port,
+                username=ssh_user,
+                key_filename=ssh_key_path,
+                timeout=10,
+                banner_timeout=10
+            )
+        else:
+            print(f"[SSH] Authenticating with password...")
+            client.connect(
+                hostname=ssh_host,
+                port=ssh_port,
+                username=ssh_user,
+                password=ssh_password,
+                timeout=10,
+                banner_timeout=10
+            )
+        
+        # Открываем локальный сокет
+        local_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        local_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        local_socket.bind(('127.0.0.1', 0))  # Автоматически выбираем свободный порт
+        local_socket.listen(1)
+        
+        local_host, local_port = local_socket.getsockname()
+        
+        print(f"[SSH] ✅ SSH tunnel established")
+        print(f"[SSH] Local binding: {local_host}:{local_port}")
+        print(f"[SSH] Remote target: {remote_db_host}:{remote_db_port}")
+        
+        # Сохраняем информацию о туннеле
+        tunnel_info = {
+            'client': client,
+            'local_host': local_host,
+            'local_port': local_port,
+            'local_socket': local_socket,
+            'remote_host': remote_db_host,
+            'remote_port': remote_db_port
+        }
+        
+        with _ssh_tunnels_lock:
+            _ssh_tunnels[tunnel_key] = tunnel_info
+        
+        return (local_host, local_port)
+        
+    except paramiko.AuthenticationException as e:
+        print(f"[SSH] ❌ SSH Authentication failed: {e}")
+        raise Exception(f"SSH authentication failed: {e}")
+    except paramiko.SSHException as e:
+        print(f"[SSH] ❌ SSH error: {e}")
+        raise Exception(f"SSH error: {e}")
+    except Exception as e:
+        print(f"[SSH] ❌ Error creating SSH tunnel: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+
+def close_ssh_tunnel(ssh_host, ssh_port, ssh_user, remote_db_host='localhost', remote_db_port=5432):
+    """Закрывает SSH туннель"""
+    tunnel_key = f"{ssh_host}:{ssh_port}:{ssh_user}:{remote_db_host}:{remote_db_port}"
+    
+    with _ssh_tunnels_lock:
+        if tunnel_key in _ssh_tunnels:
+            tunnel = _ssh_tunnels[tunnel_key]
+            try:
+                tunnel['local_socket'].close()
+                tunnel['client'].close()
+                print(f"[SSH] ✅ Tunnel closed: {tunnel_key}")
+            except Exception as e:
+                print(f"[SSH] Error closing tunnel: {e}")
+            finally:
+                del _ssh_tunnels[tunnel_key]
+
+
+def close_all_ssh_tunnels():
+    """Закрывает все SSH туннели"""
+    with _ssh_tunnels_lock:
+        for tunnel_key, tunnel in list(_ssh_tunnels.items()):
+            try:
+                tunnel['local_socket'].close()
+                tunnel['client'].close()
+                print(f"[SSH] Closed tunnel: {tunnel_key}")
+            except Exception as e:
+                print(f"[SSH] Error closing tunnel {tunnel_key}: {e}")
+        _ssh_tunnels.clear()
+
+
+# Регистрируем очистку при завершении приложения
+import atexit
+atexit.register(close_all_ssh_tunnels)
+
+
 # ─────────────────────────────────────────────
 # MAIN ROUTES
 # ─────────────────────────────────────────────
@@ -289,7 +464,7 @@ def get_table_columns(table_name):
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT * FROM report_get_columns(%s, 'public') ORDER BY column_name", (table_name,))
+        cur.execute("SELECT * FROM report_get_columns(ARRAY[%s], 'public') ORDER BY column_name", (table_name,))
         columns = cur.fetchall()
         result = [{
             'column_name': row['column_name'],
@@ -314,18 +489,30 @@ def get_tables_columns():
 
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT * FROM report_get_columns(%s, 'public') ORDER BY column_name", (tables,))
-        columns = cur.fetchall()
-
+        
         result = defaultdict(list)
-        for row in columns:
-            result[row['table_name']].append({
-                'column_name': row['column_name'],
-                'data_type': row['data_type'],
-                'is_nullable': row['is_nullable'],
-                'column_default': row['column_default'],
-                'column_comment': row['column_comment']
-            })
+        
+        # Правильно: вызываем функцию для каждой таблицы отдельно
+        for table_name in tables:
+            try:
+                cur.execute(
+                    "SELECT * FROM report_get_columns(ARRAY[%s], 'public') ORDER BY column_name", 
+                    (table_name,)
+                )
+                columns = cur.fetchall()
+                
+                for row in columns:
+                    result[table_name].append({
+                        'column_name': row['column_name'],
+                        'data_type': row['data_type'],
+                        'is_nullable': row['is_nullable'],
+                        'column_default': row['column_default'],
+                        'column_comment': row['column_comment']
+                    })
+            except Exception as e:
+                print(f"Error getting columns for table {table_name}: {e}")
+                result[table_name] = []
+        
         cur.close()
         conn.close()
         return jsonify({'success': True, 'data': dict(result)})
@@ -1280,9 +1467,14 @@ def get_mail_settings():
         cur.close()
         conn.close()
         if row and row['setting_value']:
-            return json.loads(row['setting_value'])
+            try:
+                return json.loads(row['setting_value'])
+            except json.JSONDecodeError as e:
+                print(f"Error parsing mail settings JSON: {e}")
+                return None
         return None
-    except Exception:
+    except Exception as e:
+        print(f"Error getting mail settings: {e}")
         return None
 
 
@@ -1305,28 +1497,147 @@ def save_mail_settings(settings):
         return False
 
 
-def send_email(mail_settings, recipients, subject, body, attachment=None, filename=None, mime_type=None):
+def send_email(mail_settings, recipients, subject, body, attachment=None, filename=None, mime_type=None, is_html=False):
+    """
+    Отправка email с поддержкой простого текста, HTML и вложений.
+    
+    Args:
+        mail_settings: dict с ключами: smtp_host, smtp_port, smtp_user, smtp_password, from_name
+        recipients: list адресов получателей
+        subject: тема письма
+        body: текст письма
+        attachment: путь к файлу в��ожения (опционально)
+        filename: имя файла для вложения (опционально)
+        mime_type: MIME тип вложения (опционально)
+        is_html: bool - если True, отправляет как HTML (по умолчанию plain text)
+    
+    Returns:
+        int: количество успешно отправленных писем, 0 если ошибка
+    """
     try:
-        msg = MIMEMultipart()
+        # ✅ Валидация параметров
+        if not mail_settings:
+            raise ValueError("Mail settings not configured")
+        
+        required_fields = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_password']
+        for field in required_fields:
+            if field not in mail_settings:
+                raise ValueError(f"Missing required field: {field}")
+        
+        if not recipients or not isinstance(recipients, list):
+            raise ValueError("Recipients must be a non-empty list")
+        
+        # ✅ Создаем сообщение
+        msg = MIMEMultipart('mixed')
+        msg['Subject'] = subject
         msg['From'] = f"{mail_settings.get('from_name', 'Report Builder')} <{mail_settings['smtp_user']}>"
         msg['To'] = ', '.join(r.strip() for r in recipients)
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        # ✅ Добавляем тело письма (HTML или plain text)
+        if is_html:
+            body_part = MIMEText(body, 'html', _charset='utf-8')
+        else:
+            body_part = MIMEText(body, 'plain', _charset='utf-8')
+        msg.attach(body_part)
+        
+        # ✅ Добавляем вложение если есть
         if attachment:
-            part = MIMEBase('application', 'octet-stream')
-            part.set_payload(attachment)
-            encoders.encode_base64(part)
-            part.add_header('Content-Disposition', f'attachment; filename={filename}')
-            msg.attach(part)
-        server = smtplib.SMTP(mail_settings['smtp_host'], mail_settings['smtp_port'])
+            if isinstance(attachment, str):
+                # Если attachment - путь к файлу
+                if os.path.isfile(attachment):
+                    with open(attachment, 'rb') as f:
+                        part = MIMEApplication(
+                            f.read(),
+                            Name=filename or basename(attachment)
+                        )
+                    part['Content-Disposition'] = f'attachment; filename="{filename or basename(attachment)}"'
+                    msg.attach(part)
+            elif isinstance(attachment, bytes):
+                # Если attachment - бинарные данные
+                part = MIMEApplication(
+                    attachment,
+                    Name=filename or 'attachment'
+                )
+                part['Content-Disposition'] = f'attachment; filename="{filename or "attachment"}"'
+                msg.attach(part)
+        
+        # ✅ Отправка письма
+        print(f"[SMTP] Connecting to {mail_settings['smtp_host']}:{mail_settings['smtp_port']}")
+        
+        server = smtplib.SMTP(mail_settings['smtp_host'], int(mail_settings['smtp_port']), timeout=10)
+        server.set_debuglevel(1)  # Для отладки
+        
+        # EHLO
+        server.ehlo()
+        print("[SMTP] EHLO sent")
+        
+        # STARTTLS если требуется
         if mail_settings.get('smtp_tls', True):
+            print("[SMTP] Starting TLS...")
             server.starttls()
-        server.login(mail_settings['smtp_user'], mail_settings['smtp_password'])
+            server.ehlo()  # Повторяем EHLO после STARTTLS
+        
+        # ✅ АУТЕНТИФИКАЦИЯ
+        print(f"[SMTP] Authenticating as {mail_settings['smtp_user']}")
+        username = mail_settings['smtp_user']
+        password = mail_settings['smtp_password']
+        
+        # Пробуем стандартный login() - работает для большинства серверов
+        try:
+            server.login(username, password)
+            print("[SMTP] Authentication successful (standard method)")
+        except smtplib.SMTPAuthenticationError:
+            # Если стандартный не сработал, пробуем AUTH LOGIN вручную
+            print("[SMTP] Standard AUTH failed, trying AUTH LOGIN...")
+            try:
+                import base64
+                
+                # Отправляем AUTH LOGIN команду
+                code, response = server.docmd("AUTH LOGIN")
+                if code != 334:
+                    raise smtplib.SMTPAuthenticationError(code, response)
+                
+                # Отправляем base64-кодированный username
+                username_b64 = base64.b64encode(username.encode()).decode()
+                code, response = server.docmd(username_b64)
+                if code != 334:
+                    raise smtplib.SMTPAuthenticationError(code, response)
+                
+                # Отправляем base64-кодированный password
+                password_b64 = base64.b64encode(password.encode()).decode()
+                code, response = server.docmd(password_b64)
+                if code not in (235, 250):
+                    raise smtplib.SMTPAuthenticationError(code, response)
+                
+                print("[SMTP] Authentication successful (AUTH LOGIN method)")
+            except Exception as e:
+                server.quit()
+                raise smtplib.SMTPAuthenticationError(str(e))
+        
+        # ✅ Отправляем письмо
+        print(f"[SMTP] Sending email to {len(recipients)} recipient(s)")
         server.sendmail(mail_settings['smtp_user'], [r.strip() for r in recipients], msg.as_string())
         server.quit()
+        
+        print(f"[SMTP] Email sent successfully to {recipients}")
         return len(recipients)
+        
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"[SMTP] ❌ Authentication Error: {e}")
+        print("[SMTP] Проверьте:")
+        print("  1. Правильность логина и пароля в настройках")
+        print("  2. Статус учетной записи (не должна быть заблокирована)")
+        print("  3. IP-адрес сервера приложения (не должен быть заблокирован)")
+        return 0
+    except smtplib.SMTPException as e:
+        print(f"[SMTP] ❌ SMTP Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
     except Exception as e:
-        print(f"Error sending email: {e}")
+        print(f"[SMTP] ❌ Error sending email: {e}")
+        import traceback
+        traceback.print_exc()
         return 0
 
 
@@ -1351,14 +1662,28 @@ def test_mail_settings():
     data = request.json or {}
     test_email = data.get('test_email')
     settings = get_mail_settings()
+    
     if not settings:
         return jsonify({'success': False, 'error': 'Настройки почты не настроены'}), 400
+    
     recipients = [test_email] if test_email else [settings.get('smtp_user')]
-    sent = send_email(settings, recipients, "Тестовое письмо от Report Builder",
-                     "Тестовое письмо. Если вы его получили, настройки корректны.")
-    if sent > 0:
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'error': 'Не удалось отправить письмо'}), 500
+    
+    try:
+        sent = send_email(
+            settings, 
+            recipients, 
+            "Тестовое письмо от Report Builder",
+            "Тестовое письмо. Если вы его получили, настройки корректны."
+        )
+        if sent > 0:
+            return jsonify({'success': True, 'message': f'Письмо успешно отправлено на {recipients}'})
+        else:
+            return jsonify({
+                'success': False, 
+                'error': 'Не удалось отправить письмо. Проверьте логи для деталей.'
+            }), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/settings/db/test', methods=['GET'])
@@ -1381,19 +1706,82 @@ def test_db_connection():
 
 @app.route('/api/settings/ssh', methods=['GET'])
 def get_ssh_settings_api():
+    """Получить текущие SSH настройки (без пароля)"""
     settings = get_ssh_settings()
     if settings:
         settings.pop('ssh_password', None)
-    return jsonify({'success': True, 'data': settings, 'tunnel_active': _ssh_tunnel is not None and _ssh_tunnel.is_active if _ssh_tunnel else False})
+        settings.pop('ssh_key_path', None)
+    return jsonify({'success': True, 'data': settings})
 
 
 @app.route('/api/settings/ssh', methods=['POST'])
 def save_ssh_settings_api():
-    data = request.json
+    """Сохранить SSH настройки"""
+    data = request.json or {}
+    
+    if not data.get('enabled', False):
+        # Если отключаем, закрываем туннель
+        try:
+            ssh_config = get_ssh_settings()
+            if ssh_config:
+                close_ssh_tunnel(
+                    ssh_config['ssh_host'],
+                    ssh_config.get('ssh_port', 22),
+                    ssh_config['ssh_user']
+                )
+        except:
+            pass
+    
     if save_ssh_settings(data):
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'error': 'Ошибка сохранения'}), 500
+        return jsonify({'success': True, 'message': 'SSH settings saved'})
+    return jsonify({'success': False, 'error': 'Failed to save SSH settings'}), 500
 
+@app.route('/api/settings/ssh/test', methods=['POST'])
+def test_ssh_connection():
+    """Тестировать SSH подключение"""
+    data = request.json or {}
+    
+    try:
+        if not PARAMIKO_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'paramiko не установлен. Установите: pip install paramiko'
+            }), 400
+        
+        print(f"[SSH] Testing connection to {data['ssh_host']}:{data.get('ssh_port', 22)}")
+        
+        local_host, local_port = create_ssh_tunnel(
+            ssh_host=data['ssh_host'],
+            ssh_port=data.get('ssh_port', 22),
+            ssh_user=data['ssh_user'],
+            ssh_password=data.get('ssh_password'),
+            ssh_key_path=data.get('ssh_key_path'),
+            remote_db_host=data.get('remote_db_host', 'localhost'),
+            remote_db_port=data.get('remote_db_port', 5432)
+        )
+        
+        # Проверяем, можем ли подключиться к БД через туннель
+        try:
+            conn = psycopg2.connect(
+                host=local_host,
+                port=local_port,
+                database=app.config['DB_NAME'],
+                user=app.config['DB_USER'],
+                password=app.config['DB_PASSWORD'],
+                connect_timeout=5
+            )
+            conn.close()
+            print(f"[SSH] ✅ SSH tunnel and DB connection successful")
+            return jsonify({'success': True, 'message': 'SSH tunnel and database connection successful'})
+        except Exception as db_e:
+            return jsonify({
+                'success': False,
+                'error': f'SSH tunnel OK, but DB connection failed: {str(db_e)}'
+            }), 400
+        
+    except Exception as e:
+        print(f"[SSH] ❌ Test failed: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 400
 
 @app.route('/api/settings/ssh/start', methods=['POST'])
 def start_ssh_tunnel_api():

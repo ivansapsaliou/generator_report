@@ -117,6 +117,18 @@ class ReportBuilder {
     async loadTemplate(id) {
         try {
             const response = await fetch(`/api/load-report/${id}`);
+        
+            // Проверяем статус ответа
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            // Проверяем Content-Type перед парсингом JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Invalid response format: expected JSON');
+            }
+
             const result = await response.json();
 
             if (result.success) {
@@ -180,10 +192,8 @@ class ReportBuilder {
                 this.loadPossibleJoins();
             }
         } catch (error) {
-            console.error(error);
-            this.showError('Ошибка подключения при загрузке шаблона');
-            this.loadColumns([this.mainTable]);
-            this.loadPossibleJoins();
+            console.error('Error loading template:', error);
+            this.showError('Ошибка загрузки шаблона');
         }
     }
 
