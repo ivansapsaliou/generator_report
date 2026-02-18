@@ -1714,6 +1714,226 @@ def get_network_info():
             'error': str(e)
         }), 500
 
+# ═════════════════════════════════════════════════════════════════════════════
+# TABLE RELATIONS - Построение схемы связей таблиц
+# ═════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/table/<table_name>/relations', methods=['GET'])
+def get_table_relations(table_name):
+    """
+    Получить схему связей таблицы с использованием функции report_get_possible_joins.
+    Поддерживает несколько уровней через итеративные вызовы.
+    
+    Query параметры:
+        levels: количество уровней для отображения (1-5, по умолчанию 2)
+    
+    Returns:
+        JSON с деревом связанных таблиц
+    """
+    try:
+        levels = request.args.get('levels', 2, type=int)
+        
+        # Ограничиваем уровни для производительности
+        if levels < 1:
+            levels = 1
+        elif levels > 5:
+            levels = 5
+        
+        table_name = table_name.strip().lower()
+        
+        if not table_name or not table_name.replace('_', '').isalnum():
+            return jsonify({
+                'success': False,
+                'error': 'Invalid table name'
+            }), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Собираем все связи итеративно (быстрее чем рекурсивный SQL)
+        all_relations = []
+        visited = {table_name}
+        current_tables = [table_name]
+        
+        for level in range(1, levels + 1):
+            if not current_tables:
+                break
+                
+            # Создаем массив для SQL
+            tables_array = '{' + ','.join(f'"{t}"' for t in current_tables) + '}'
+            
+            query = """
+                SELECT 
+                    target_table,
+                    target_schema,
+                    join_type,
+                    source_column,
+                    target_column,
+                    constraint_name,
+                    match_confidence,
+                    join_suggestion
+                FROM report_get_possible_joins(%s::text, 'public'::text, %s::text[], true)
+            """
+            
+            cur.execute(query, (table_name, tables_array))
+            rows = cur.fetchall()
+            
+            if not rows:
+                break
+            
+            # Собираем таблицы для следующего уровня
+            next_tables = []
+            
+            for row in rows:
+                target = row['target_table']
+                
+                # Пропускаем уже посещенные
+                if target in visited:
+                    continue
+                
+                visited.add(target)
+                
+                # Преобразуем к формату фронтенда
+                relation = {
+                    'source_table': table_name if level == 1 else current_tables[0],
+                    'target_table': target,
+                    'relation_type': row['join_type'],
+                    'fk_column': row['source_column'],
+                    'pk_column': row['target_column'],
+                    'level': level,
+                    'path': [table_name, target],
+                    'path_str': f"{table_name} -> {target}"
+                }
+                
+                # Для REVERSE_FK инвертируем направление
+                if row['join_type'] == 'REVERSE_FK':
+                    relation['source_table'] = target
+                    relation['target_table'] = table_name
+                    relation['fk_column'] = row['target_column']
+                    relation['pk_column'] = row['source_column']
+                    relation['path'] = [target, table_name]
+                    relation['path_str'] = f"{target} <- {table_name}"
+                
+                all_relations.append(relation)
+                
+                if level < levels:
+                    next_tables.append(target)
+            
+            current_tables = next_tables
+        
+        cur.close()
+        conn.close()
+        
+        # Группируем по уровням
+        levels_data = {}
+        for item in all_relations:
+            level = item['level']
+            if level not in levels_data:
+                levels_data[level] = []
+            levels_data[level].append(item)
+        
+        max_level = max([item['level'] for item in all_relations], default=1)
+        
+        print(f"[RELATIONS] ✅ Found {len(all_relations)} relations in {max_level} levels (FOREIGN_KEY: {len([r for r in all_relations if r['relation_type'] == 'FOREIGN_KEY'])}, REVERSE_FK: {len([r for r in all_relations if r['relation_type'] == 'REVERSE_FK'])})")
+        
+        return jsonify({
+            'success': True,
+            'data': all_relations,
+            'by_levels': levels_data,
+            'total': len(all_relations),
+            'max_level': max_level
+        })
+        
+    except Exception as e:
+        print(f"[RELATIONS] ❌ Error fetching relations: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/table/<table_name>/columns-with-relations', methods=['GET'])
+def get_table_columns_with_relations(table_name):
+    """
+    Получить колонки таблицы вместе с информацией о связях.
+    
+    Returns:
+        JSON с колонками и их связями с другими таблицами
+    """
+    try:
+        table_name = table_name.strip().lower()
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Получаем колонки с информацией о foreign key
+        query = """
+            SELECT 
+                c.column_name,
+                c.data_type,
+                (c.is_nullable = 'YES') AS is_nullable,
+                c.column_default,
+                kcu.constraint_name,
+                rc.referenced_table_name,
+                kcu2.column_name AS referenced_column_name,
+                tc.constraint_type
+            FROM information_schema.columns c
+            LEFT JOIN information_schema.key_column_usage kcu
+                ON c.table_name = kcu.table_name 
+                AND c.column_name = kcu.column_name
+            LEFT JOIN information_schema.referential_constraints rc
+                ON kcu.constraint_name = rc.constraint_name
+            LEFT JOIN information_schema.key_column_usage kcu2
+                ON rc.unique_constraint_name = kcu2.constraint_name
+            LEFT JOIN information_schema.table_constraints tc
+                ON kcu.constraint_name = tc.constraint_name
+            WHERE c.table_schema = 'public'
+                AND c.table_name = %s
+            ORDER BY c.ordinal_position
+        """
+        
+        cur.execute(query, (table_name,))
+        rows = cur.fetchall()
+        
+        result = []
+        for row in rows:
+            col_info = {
+                'column_name': row['column_name'],
+                'data_type': row['data_type'],
+                'is_nullable': row['is_nullable'],
+                'column_default': row['column_default'],
+                'is_foreign_key': row['constraint_name'] is not None,
+                'is_primary_key': row['constraint_type'] == 'PRIMARY KEY'
+            }
+            
+            if row['constraint_name']:
+                col_info['foreign_key'] = {
+                    'constraint_name': row['constraint_name'],
+                    'referenced_table': row['referenced_table_name'],
+                    'referenced_column': row['referenced_column_name']
+                }
+            
+            result.append(col_info)
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'table_name': table_name,
+            'columns': result,
+            'total': len(result)
+        })
+        
+    except Exception as e:
+        print(f"[RELATIONS] Error getting columns with relations: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+        
 # ─────────────────────────────────────────────
 # SSH SETTINGS API
 # ─────────────────────────────────────────────

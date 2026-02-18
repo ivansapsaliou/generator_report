@@ -131,10 +131,433 @@
             <button id="openChartBtn" class="btn btn-secondary" style="margin-left:8px;">
                 <i class="bi bi-bar-chart-line"></i> График
             </button>
+            <button id="openDiagramBtn" class="btn btn-info" style="margin-left:8px;" onclick="openDiagramModal()">
+                <i class="bi bi-diagram-3"></i> Диаграмма связей
+            </button>
         </div>
     </div>
 
 </div>
+
+<!-- ── MODAL: DIAGRAM ─────────────────────────────────────────── -->
+<div id="diagramModal" class="modal" style="display:none; z-index: 9999;">
+    <div class="modal-content" style="width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; border-radius: 0;">
+        <div class="modal-header" style="padding: 12px 20px; background: var(--primary); color: white;">
+            <span style="display: flex; align-items: center; gap: 10px;">
+                <i class="bi bi-diagram-3" style="font-size: 20px;"></i> 
+                Диаграмма связей таблиц
+            </span>
+            <button class="close-modal" onclick="closeDiagramModal()" style="color: white; font-size: 28px;">×</button>
+        </div>
+        <div class="modal-body" style="padding: 0; height: calc(100vh - 120px); display: flex; flex-direction: column;">
+            <!-- Панель управления -->
+            <div style="padding: 12px 20px; background: var(--bg); border-bottom: 1px solid var(--border); display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 250px; max-width: 400px;">
+                    <label class="form-label" style="margin-bottom: 4px;"><i class="bi bi-diagram-3"></i> Таблица</label>
+                    <select id="diagramTableSelect" class="form-control" style="width: 100%;">
+                        <option value="">-- Загрузка... --</option>
+                    </select>
+                </div>
+                <div style="width: 100px;">
+                    <label class="form-label" style="margin-bottom: 4px;">Уровней</label>
+                    <input type="number" id="diagramLevels" class="form-control" min="1" max="5" value="2">
+                </div>
+                <button class="btn btn-info" onclick="buildTableDiagram()" style="margin-top: 20px;">
+                    <i class="bi bi-diagram-3"></i> Показать
+                </button>
+                <div style="flex: 1;"></div>
+                <div id="diagramStats" style="font-size: 13px; color: var(--text-muted);"></div>
+            </div>
+            
+            <!-- Контейнер диаграммы vis.js -->
+            <div id="diagramContainer" style="flex: 1; width: 100%; overflow: hidden;"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+    #diagramContainer {
+        background: var(--bg);
+    }
+    
+    #diagramContainer .vis-network {
+        background: var(--bg) !important;
+    }
+</style>
+
+<style>
+    .relation-node {
+        padding: 12px 16px;
+        margin: 8px;
+        background: var(--bg);
+        border: 2px solid var(--primary);
+        border-radius: 6px;
+        display: inline-block;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .relation-node:hover {
+        background: var(--primary);
+        color: white;
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    
+    .relation-node.referenced {
+        border-color: #4ECDC4;
+        background: rgba(78, 205, 196, 0.1);
+    }
+    
+    .relation-node.referencing {
+        border-color: #F7DC6F;
+        background: rgba(247, 220, 111, 0.1);
+    }
+    
+    .relation-node.primary {
+        border-color: #6C5CE7;
+        background: linear-gradient(135deg, #6C5CE7 0%, #a29bfe 100%);
+        color: white;
+    }
+    
+    .relation-node.primary:hover {
+        background: linear-gradient(135deg, #5B4BC7 0%, #9281fe 100%);
+    }
+    
+    .relation-level {
+        margin: 20px 0;
+        padding: 16px;
+        background: var(--card-bg);
+        border-left: 4px solid var(--primary);
+        border-radius: 4px;
+    }
+    
+    .relation-level h5 {
+        margin: 0 0 12px 0;
+        color: var(--primary);
+    }
+    
+    .relation-arrow {
+        text-align: center;
+        font-size: 24px;
+        margin: 12px 0;
+        color: var(--primary);
+    }
+</style>
+
+<script>
+    // Загрузка таблиц при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        loadAvailableTablesForDiagram();
+    });
+
+    function openDiagramModal() {
+        document.getElementById('diagramModal').style.display = 'block';
+    }
+    
+    function closeDiagramModal() {
+        document.getElementById('diagramModal').style.display = 'none';
+    }
+
+    async function loadAvailableTablesForDiagram() {
+        try {
+            const response = await fetch('/api/get-tables');
+            const data = await response.json();
+            
+            if (data.success && data.data) {
+                const select = document.getElementById('diagramTableSelect');
+                select.innerHTML = '<option value="">-- Выберите таблицу --</option>';
+                
+                data.data.forEach(table => {
+                    const option = document.createElement('option');
+                    option.value = table.table_name;
+                    option.textContent = `${table.table_name}${table.table_comment ? ' (' + table.table_comment + ')' : ''}`;
+                    select.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading tables:', error);
+        }
+    }
+
+    async function buildTableDiagram() {
+        const tableName = document.getElementById('diagramTableSelect').value;
+        const levels = parseInt(document.getElementById('diagramLevels').value) || 2;
+        
+        if (!tableName) {
+            alert('Пожалуйста, выберите таблицу');
+            return;
+        }
+        
+        if (levels < 1 || levels > 10) {
+            alert('Количество уровней должно быть от 1 до 10');
+            return;
+        }
+        
+        const container = document.getElementById('diagramContainer');
+        container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 40px;"><p><i class="bi bi-hourglass-split" style="font-size: 48px;"></i></p><p>Загрузка...</p></div>';
+        
+        try {
+            console.log(`[DIAGRAM] Loading relations for table '${tableName}' with ${levels} levels`);
+            
+            const response = await fetch(`/api/table/${tableName}/relations?levels=${levels}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                alert('Ошибка: ' + (data.error || 'Unknown error'));
+                return;
+            }
+            
+            displayDiagram(tableName, data);
+            
+        } catch (error) {
+            console.error('Error building diagram:', error);
+            container.innerHTML = `<p style="text-align: center; color: var(--text-muted);">Ошибка: ${error.message}</p>`;
+        }
+    }
+
+    // Кэш для колонок таблиц
+    const tableColumnsCache = {};
+    
+    // Функция получения колонок таблицы
+    async function getTableColumns(tableName) {
+        if (tableColumnsCache[tableName]) {
+            return tableColumnsCache[tableName];
+        }
+        try {
+            const response = await fetch(`/api/table/${tableName}/columns`);
+            const data = await response.json();
+            if (data.success && data.data) {
+                tableColumnsCache[tableName] = data.data;
+                return data.data;
+            }
+        } catch (e) {
+            console.error('Error fetching columns:', e);
+        }
+        return [];
+    }
+    
+    // Глобальная переменная для сети
+    let diagramNetwork = null;
+    
+    function displayDiagram(tableName, data) {
+        const container = document.getElementById('diagramContainer');
+        const stats = document.getElementById('diagramStats');
+        
+        // Очищаем предыдущую сеть
+        if (diagramNetwork) {
+            diagramNetwork.destroy();
+            diagramNetwork = null;
+        }
+        
+        // Убираем старую кнопку
+        const oldToggle = container.querySelector('.network-toggle');
+        if (oldToggle) oldToggle.remove();
+        
+        if (data.data.length === 0) {
+            container.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 40px;">Для таблицы '<strong>${tableName}</strong>' не найдено связей</p>`;
+            stats.innerHTML = `Таблица: <strong>${tableName}</strong> | Найдено связей: <strong>0</strong>`;
+            return;
+        }
+        
+        // Определяем цвета для темной темы
+        const isDark = document.body.classList.contains('dark-theme') || !document.body.classList.contains('light-theme');
+        const primaryNodeColor = isDark ? '#6C5CE7' : '#6C5CE7';
+        const primaryNodeBorder = isDark ? '#a29bfe' : '#5B4BC7';
+        const fkEdgeColor = isDark ? '#F7DC6F' : '#D4A72C';
+        const reverseFkEdgeColor = isDark ? '#4ECDC4' : '#3BA99C';
+        const textColor = isDark ? '#ffffff' : '#333333';
+        
+        // Создаем узлы и ребра
+        const nodes = new vis.DataSet();
+        const edges = new vis.DataSet();
+        
+        // Добавляем исходную таблицу в центр
+        nodes.add({
+            id: tableName,
+            label: tableName,
+            color: {
+                background: primaryNodeColor,
+                border: primaryNodeBorder,
+                highlight: { background: '#5B4BC7', border: '#a29bfe' }
+            },
+            font: { color: '#ffffff', face: 'system-ui', size: 16 },
+            size: 40,
+            shape: 'box',
+            level: 0,  // Центральный уровень
+            title: `<b>${tableName}</b><br><i>Исходная таблица</i>`
+        });
+        
+        // Группируем по уровням
+        const byLevels = data.by_levels;
+        const maxLevel = data.max_level || 1;
+        
+        // Обрабатываем связи по уровням
+        data.data.forEach(rel => {
+            const source = rel.source_table;
+            const target = rel.target_table;
+            const relationType = rel.relation_type;
+            const fkCol = rel.fk_column || '';
+            const pkCol = rel.pk_column || '';
+            const level = rel.level || 1;
+            
+            // Добавляем целевой узел
+            if (!nodes.get(target)) {
+                const isReverse = relationType === 'REVERSE_FK';
+                const nodeColor = isReverse ? '#4ECDC4' : '#F7DC6F';
+                const nodeBorder = isReverse ? '#3BA99C' : '#D4A72C';
+                
+                nodes.add({
+                    id: target,
+                    label: target,
+                    color: {
+                        background: nodeColor,
+                        border: nodeBorder,
+                        highlight: { background: nodeBorder, border: '#ffffff' }
+                    },
+                    font: { color: isDark ? '#ffffff' : '#333333', face: 'system-ui', size: 14 },
+                    size: 30,
+                    shape: 'box',
+                    level: level,
+                    title: `<b>${target}</b><br>Тип: ${relationType}<br>${fkCol} → ${pkCol}`
+                });
+            }
+            
+            // Добавляем ребро
+            const isReverse = relationType === 'REVERSE_FK';
+            edges.add({
+                from: source,
+                to: target,
+                color: { color: isReverse ? reverseFkEdgeColor : fkEdgeColor },
+                width: 2,
+                arrows: isReverse ? 'from' : 'to',
+                smooth: { type: 'cubicBezier', roundness: 0.5 },
+                title: `${fkCol} → ${pkCol}`,
+                label: fkCol && pkCol ? `${fkCol} → ${pkCol}` : undefined,
+                font: { color: textColor, size: 10, background: isDark ? '#2a2a4a' : '#ffffff' }
+            });
+        });
+        
+        // Создаем данные для vis.js
+        const visData = {
+            nodes: nodes,
+            edges: edges
+        };
+        
+        // Настройки сети - иерархическая структура
+        const options = {
+            nodes: {
+                borderWidth: 3,
+                borderWidthSelected: 4,
+                shadow: true,
+                font: { multi: false }
+            },
+            edges: {
+                shadow: true,
+                width: 2
+            },
+            layout: {
+                hierarchical: {
+                    enabled: true,
+                    direction: 'DU',  // Down - from top to bottom
+                    sortMethod: 'directed',
+                    levelSeparation: 180,
+                    nodeSpacing: 250,
+                    treeSpacing: 200,
+                    blockShifting: true,
+                    edgeMinimization: true,
+                    parentCentralization: true
+                },
+                randomSeed: tableName.charCodeAt(0)
+            },
+            physics: {
+                enabled: false  // Отключаем физику для стабильной иерархии
+            },
+            interaction: {
+                hover: true,
+                tooltipDelay: 100,
+                navigationButtons: true,
+                keyboard: true,
+                dragNodes: true,
+                zoomView: true
+            }
+        };
+        
+        // Создаем сеть
+        diagramNetwork = new vis.Network(container, visData, options);
+        
+        // Обработчик наведения на узел - загружаем колонки
+        diagramNetwork.on('hoverNode', async function(params) {
+            const nodeId = params.node;
+            const node = nodes.get(nodeId);
+            if (node && !node._columnsLoaded) {
+                const columns = await getTableColumns(nodeId);
+                if (columns.length > 0) {
+                    const columnsHtml = columns.map(c => 
+                        `<tr><td style="padding:2px 8px;">${c.column_name}</td><td style="padding:2px 8px;color:#888;">${c.data_type}</td></tr>`
+                    ).join('');
+                    node.title = `<div style="max-height:200px;overflow:auto;"><b>${nodeId}</b><br><table style="width:100%;font-size:11px;">${columnsHtml}</table></div>`;
+                    node._columnsLoaded = true;
+                    // Обновляем tooltip
+                    diagramNetwork.canvas.frame.canvas.title = node.title;
+                }
+            }
+        });
+        
+        // Подсчитываем по типам
+        const fkCount = data.data.filter(r => r.relation_type === 'FOREIGN_KEY').length;
+        const reverseFkCount = data.data.filter(r => r.relation_type === 'REVERSE_FK').length;
+        
+        stats.innerHTML = `
+            <span style="margin-right: 20px;">Таблица: <strong>${tableName}</strong></span>
+            <span style="margin-right: 20px;">Всего связей: <strong>${data.total}</strong></span>
+            <span style="margin-right: 10px;">🔗 Прямых: <strong>${fkCount}</strong></span>
+            <span>🔙 Обратных: <strong>${reverseFkCount}</strong></span>
+        `;
+        
+        // Кнопка для переключения физики
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'network-toggle';
+        toggleBtn.innerHTML = '🔄 Подвинуть';
+        toggleBtn.style.cssText = 'position: absolute; top: 60px; right: 20px; z-index: 100; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text-color); cursor: pointer; font-size: 12px;';
+        toggleBtn.onclick = function() {
+            if (options.physics.enabled) {
+                options.physics.enabled = false;
+                toggleBtn.innerHTML = '🔄 Подвинуть';
+                diagramNetwork.setOptions({ physics: false });
+            } else {
+                options.physics.enabled = true;
+                toggleBtn.innerHTML = '📌 Закрепить';
+                diagramNetwork.setOptions({ physics: true });
+                // Через 3 секунды отключаем физику
+                setTimeout(() => {
+                    options.physics.enabled = false;
+                    toggleBtn.innerHTML = '🔄 Подвинуть';
+                    diagramNetwork.setOptions({ physics: false });
+                }, 3000);
+            }
+        };
+        container.style.position = 'relative';
+        container.appendChild(toggleBtn);
+        
+        // Кнопка масштабирования
+        const zoomInBtn = document.createElement('button');
+        zoomInBtn.innerHTML = '🔍+';
+        zoomInBtn.style.cssText = 'position: absolute; top: 60px; right: 130px; z-index: 100; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text-color); cursor: pointer;';
+        zoomInBtn.onclick = () => diagramNetwork.zoom(1.2);
+        container.appendChild(zoomInBtn);
+        
+        const zoomOutBtn = document.createElement('button');
+        zoomOutBtn.innerHTML = '🔍-';
+        zoomOutBtn.style.cssText = 'position: absolute; top: 60px; right: 170px; z-index: 100; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text-color); cursor: pointer;';
+        zoomOutBtn.onclick = () => diagramNetwork.zoom(0.8);
+        container.appendChild(zoomOutBtn);
+    }
+</script>
 
 <!-- ── MODAL: JOIN ────────────────────────────────────────── -->
 <div id="joinModal" class="modal">
