@@ -342,7 +342,11 @@
     }
     
     // Глобальная переменная для сети
-    let diagramNetwork = null;
+// ═══════════════════════════════════════════════════════════════════════════════
+// ИСПРАВЛЕННАЯ ФУНКЦИЯ displayDiagram - Диаграмма связей таблиц
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let diagramNetwork = null;
 
 function displayDiagram(tableName, data) {
     const container = document.getElementById('diagramContainer');
@@ -365,21 +369,8 @@ function displayDiagram(tableName, data) {
         return;
     }
     
-    // Определяем цвета в зависимости от темы
+    // Определяем тему
     const isDark = !document.body.classList.contains('light-theme');
-    
-    const colors = {
-        primaryBg: '#6C5CE7',
-        primaryBorder: '#a29bfe',
-        fkBg: '#10B981',      // Зеленый для прямых связей
-        fkBorder: '#059669',
-        reverseBg: '#F59E0B',  // Оранжевый для обратных
-        reverseBorder: '#D97706',
-        fontColor: '#ffffff',
-        edgeFk: '#10B981',
-        edgeReverse: '#F59E0B',
-        edgeHover: '#EF4444'
-    };
     
     // Создаем узлы и ребра
     const nodes = new vis.DataSet();
@@ -391,10 +382,13 @@ function displayDiagram(tableName, data) {
     nodes.add({
         id: tableName,
         label: tableName,
-        title: createNodeTooltip(tableName, 'Исходная таблица'),
+        title: `<div style="background: var(--bg); padding: 10px 12px; border-radius: 6px; border-left: 3px solid #6C5CE7;">
+            <strong style="color: #6C5CE7; font-size: 14px;">${tableName}</strong><br>
+            <span style="color: var(--text-3); font-size: 11px;">📋 Исходная таблица</span>
+        </div>`,
         color: {
-            background: colors.primaryBg,
-            border: colors.primaryBorder,
+            background: '#6C5CE7',
+            border: '#a29bfe',
             highlight: { 
                 background: '#5B4BC7', 
                 border: '#ffffff' 
@@ -406,7 +400,7 @@ function displayDiagram(tableName, data) {
             size: 16,
             bold: { size: 17 }
         },
-        size: 55,
+        size: 50,
         shape: 'box',
         borderWidth: 3,
         shadow: {
@@ -415,13 +409,15 @@ function displayDiagram(tableName, data) {
             size: 10,
             x: 3,
             y: 3
-        }
+        },
+        physics: true
     });
     
     // ════════════════════════════════════════════════════════
     // 2. СВЯЗАННЫЕ УЗЛЫ
     // ════════════════════════════════════════════════════════
     const processedTables = new Set([tableName]);
+    const tableColors = {}; // Сохраняем цвета для каждой таблицы
     
     data.data.forEach(rel => {
         const target = rel.target_table;
@@ -431,17 +427,20 @@ function displayDiagram(tableName, data) {
             processedTables.add(target);
             
             const isReverse = rel.relation_type === 'REVERSE_FK';
-            const bgColor = isReverse ? colors.reverseBg : colors.fkBg;
-            const borderColor = isReverse ? colors.reverseBorder : colors.fkBorder;
+            const bgColor = isReverse ? '#F59E0B' : '#10B981';
+            const borderColor = isReverse ? '#D97706' : '#059669';
+            
+            tableColors[target] = { bg: bgColor, border: borderColor, isReverse };
             
             nodes.add({
                 id: target,
                 label: target,
-                title: createNodeTooltip(
-                    target, 
-                    isReverse ? '← Обратная связь' : '→ Прямая связь',
-                    `${rel.fk_column} ↔ ${rel.pk_column}`
-                ),
+                title: `<div style="background: var(--bg); padding: 10px 12px; border-radius: 6px; border-left: 3px solid ${bgColor};">
+                    <strong style="color: ${bgColor}; font-size: 14px;">${target}</strong><br>
+                    <span style="color: var(--text-3); font-size: 11px;">
+                        ${isReverse ? '🔙 Обратная связь' : '➡️ Прямая связь'}
+                    </span>
+                </div>`,
                 color: {
                     background: bgColor,
                     border: borderColor,
@@ -465,7 +464,8 @@ function displayDiagram(tableName, data) {
                     size: 8,
                     x: 2,
                     y: 2
-                }
+                },
+                physics: true
             });
         }
     });
@@ -473,9 +473,18 @@ function displayDiagram(tableName, data) {
     // ════════════════════════════════════════════════════════
     // 3. РЕБРА (связи между таблицами)
     // ════════════════════════════════════════════════════════
+    const edgeMap = new Map(); // Для избежания дублей
+    
     data.data.forEach((rel, index) => {
         const isReverse = rel.relation_type === 'REVERSE_FK';
-        const edgeColor = isReverse ? colors.edgeReverse : colors.edgeFk;
+        const edgeColor = isReverse ? '#F59E0B' : '#10B981';
+        const edgeKey = `${rel.source_table}-${rel.target_table}`;
+        
+        // Пропускаем дубли
+        if (edgeMap.has(edgeKey)) {
+            return;
+        }
+        edgeMap.set(edgeKey, true);
         
         edges.add({
             id: `edge-${index}`,
@@ -483,19 +492,36 @@ function displayDiagram(tableName, data) {
             to: rel.target_table,
             color: {
                 color: edgeColor,
-                highlight: colors.edgeHover,
+                highlight: '#EF4444',
                 hover: edgeColor
             },
-            width: 2.5,
-            hoverWidth: 3.5,
-            arrows: isReverse ? 'from;to' : 'to',
-            arrowStrikethrough: false,
-            smooth: {
-                type: 'continuous',
-                forceDirection: false,
-                roundness: 0.5
+            width: 3,
+            hoverWidth: 4,
+            arrows: {
+                to: {
+                    enabled: true,
+                    scaleFactor: 1.5,
+                    type: 'arrow'
+                },
+                from: isReverse ? {
+                    enabled: true,
+                    scaleFactor: 1.5,
+                    type: 'arrow'
+                } : false
             },
-            title: createEdgeTooltip(rel),
+            smooth: {
+                type: 'cubicBezier',
+                forceDirection: 'vertical'
+            },
+            title: `<div style="background: var(--bg); padding: 10px 12px; border-radius: 6px; border-left: 3px solid ${edgeColor};">
+                <strong style="color: ${edgeColor};">${rel.source_table} → ${rel.target_table}</strong><br>
+                <code style="font-size: 10px; color: #888; display: block; margin-top: 4px;">
+                    ${rel.fk_column} = ${rel.pk_column}
+                </code><br>
+                <span style="font-size: 9px; color: var(--text-3);">
+                    ${isReverse ? '🔙 Обратная связь' : '➡️ Прямая связь'}
+                </span>
+            </div>`,
             font: {
                 color: 'var(--text)',
                 size: 11,
@@ -522,48 +548,52 @@ function displayDiagram(tableName, data) {
         nodes: {
             borderWidth: 2,
             borderWidthSelected: 3,
-            shadow: true
+            shadow: true,
+            widthConstraint: {
+                maximum: 200
+            }
         },
         edges: {
-            shadow: true
+            shadow: true,
+            smooth: {
+                type: 'continuous',
+                forceDirection: 'vertical'
+            },
+            scaling: {
+                label: {
+                    enabled: true,
+                    min: 8,
+                    max: 14
+                }
+            }
         },
         layout: {
-            hierarchical: {
-                enabled: true,
-                direction: 'UD', // Up-Down
-                sortMethod: 'directed',
-                levelSeparation: 220,
-                nodeSpacing: 300,
-                treeSpacing: 280,
-                blockShifting: true,
-                edgeMinimization: false,
-                parentCentralization: true
-            }
+            randomSeed: 42
         },
         physics: {
             enabled: true,
             stabilization: {
-                iterations: 400,
-                fit: true,
-                updateInterval: 50
+                iterations: 500,
+                updateInterval: 50,
+                fit: true
             },
             barnesHut: {
-                gravitationalConstant: -18000,
-                centralGravity: 0.35,
-                springLength: 240,
-                springConstant: 0.035,
-                damping: 0.08,
-                avoidOverlap: 0.1
+                gravitationalConstant: -25000,
+                centralGravity: 0.5,
+                springLength: 300,
+                springConstant: 0.025,
+                damping: 0.1,
+                avoidOverlap: 0.15
             },
             solver: 'barnesHut',
-            maxVelocity: 60,
-            minVelocity: 0.5,
+            maxVelocity: 80,
+            minVelocity: 0.3,
             timestep: 0.5,
             adaptiveTimestep: true
         },
         interaction: {
             hover: true,
-            tooltipDelay: 300,
+            tooltipDelay: 200,
             navigationButtons: true,
             keyboard: true,
             dragNodes: true,
@@ -576,10 +606,13 @@ function displayDiagram(tableName, data) {
     // ════════════════════════════════════════════════════════
     // 5. СОЗДАНИЕ И ИНИЦИАЛИЗАЦИЯ СЕТИ
     // ════════════════════════════════════════════════════════
+    console.log('[DIAGRAM] Nodes:', nodes.length, 'Edges:', edges.length);
+    
     diagramNetwork = new vis.Network(container, visData, options);
     
-    // Отключаем физику после стабилизации
+    // События для отладки и завершения стабилизации
     diagramNetwork.on('stabilizationIterationsDone', () => {
+        console.log('[DIAGRAM] Stabilization done');
         diagramNetwork.setOptions({ physics: false });
     });
     
@@ -590,20 +623,20 @@ function displayDiagram(tableName, data) {
     const reverseFkCount = data.data.filter(r => r.relation_type === 'REVERSE_FK').length;
     
     stats.innerHTML = `
-        <span style="margin-right: 25px; display: inline-flex; align-items: center; gap: 6px;">
-            <span style="font-size: 16px;">📊</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px; margin-right: 25px;">
+            <span style="font-size: 18px;">📊</span>
             <span>Таблица: <strong style="color: #6C5CE7;">${tableName}</strong></span>
         </span>
-        <span style="margin-right: 25px; display: inline-flex; align-items: center; gap: 6px;">
-            <span style="font-size: 16px;">🔗</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px; margin-right: 25px;">
+            <span style="font-size: 18px;">🔗</span>
             <span>Всего: <strong>${data.total}</strong></span>
         </span>
-        <span style="margin-right: 15px; display: inline-flex; align-items: center; gap: 6px;">
-            <span style="color: #10B981; font-size: 12px;">●●●</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px; margin-right: 15px;">
+            <span style="color: #10B981; font-size: 14px;">●●●</span>
             <span>Прямых: <strong>${fkCount}</strong></span>
         </span>
-        <span style="display: inline-flex; align-items: center; gap: 6px;">
-            <span style="color: #F59E0B; font-size: 12px;">●●●</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px;">
+            <span style="color: #F59E0B; font-size: 14px;">●●●</span>
             <span>Обратных: <strong>${reverseFkCount}</strong></span>
         </span>
     `;
@@ -612,6 +645,94 @@ function displayDiagram(tableName, data) {
     // 7. УПРАВЛЯЮЩИЕ КНОПКИ
     // ════════════════════════════════════════════════════════
     addDiagramControls(container, diagramNetwork);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ - Кнопки управления
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function addDiagramControls(container, network) {
+    const controlsDiv = document.createElement('div');
+    controlsDiv.style.cssText = `
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        z-index: 100;
+        display: flex;
+        gap: 8px;
+        background: var(--bg-2);
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        backdrop-filter: blur(4px);
+    `;
+    
+    const buttons = [
+        {
+            icon: 'bi-arrow-expand',
+            title: 'Перестроить (физика)',
+            action: () => {
+                network.setOptions({ physics: { enabled: true } });
+                setTimeout(() => network.setOptions({ physics: { enabled: false } }), 4000);
+            }
+        },
+        {
+            icon: 'bi-zoom-in',
+            title: 'Приблизить',
+            action: () => network.zoom(1.4)
+        },
+        {
+            icon: 'bi-zoom-out',
+            title: 'Отдалить',
+            action: () => network.zoom(0.7)
+        },
+        {
+            icon: 'bi-aspect-ratio',
+            title: 'Вписать в экран',
+            action: () => network.fit({ animation: { duration: 500 } })
+        }
+    ];
+    
+    buttons.forEach(btn => {
+        const button = document.createElement('button');
+        button.innerHTML = `<i class="bi ${btn.icon}"></i>`;
+        button.title = btn.title;
+        button.style.cssText = `
+            padding: 8px 10px;
+            border: 1px solid var(--line);
+            background: var(--bg);
+            color: var(--text-2);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 38px;
+            height: 38px;
+        `;
+        
+        button.onmouseover = () => {
+            button.style.background = 'var(--bg-3)';
+            button.style.color = '#6C5CE7';
+            button.style.borderColor = '#6C5CE7';
+            button.style.transform = 'scale(1.08)';
+        };
+        button.onmouseout = () => {
+            button.style.background = 'var(--bg)';
+            button.style.color = 'var(--text-2)';
+            button.style.borderColor = 'var(--line)';
+            button.style.transform = 'scale(1)';
+        };
+        button.onclick = btn.action;
+        
+        controlsDiv.appendChild(button);
+    });
+    
+    container.style.position = 'relative';
+    container.appendChild(controlsDiv);
 }
 
 // ═══════════════════════════════════════════════════════════
