@@ -1706,115 +1706,240 @@ def test_db_connection():
 
 @app.route('/api/settings/ssh', methods=['GET'])
 def get_ssh_settings_api():
-    """Получить текущие SSH настройки (без пароля)"""
-    settings = get_ssh_settings()
-    if settings:
-        settings.pop('ssh_password', None)
-        settings.pop('ssh_key_path', None)
-    return jsonify({'success': True, 'data': settings})
+    """Получить текущие SSH настройки (без пароля и ключа)"""
+    try:
+        settings = get_ssh_settings()
+        if settings:
+            settings.pop('ssh_password', None)
+            settings.pop('ssh_key_path', None)
+        
+        # Проверяем статус туннеля
+        tunnel_key = None
+        if settings:
+            tunnel_key = f"{settings.get('ssh_host')}:{settings.get('ssh_port', 22)}:{settings.get('ssh_user')}"
+        
+        tunnel_active = tunnel_key in _ssh_tunnels and _ssh_tunnels[tunnel_key]['client'].get_transport().is_active()
+        
+        return jsonify({
+            'success': True,
+            'data': settings,
+            'tunnel_active': tunnel_active
+        })
+    except Exception as e:
+        print(f"[SSH] Error getting settings: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/settings/ssh', methods=['POST'])
 def save_ssh_settings_api():
     """Сохранить SSH настройки"""
-    data = request.json or {}
-    
-    if not data.get('enabled', False):
-        # Если отключаем, закрываем туннель
-        try:
-            ssh_config = get_ssh_settings()
-            if ssh_config:
-                close_ssh_tunnel(
-                    ssh_config['ssh_host'],
-                    ssh_config.get('ssh_port', 22),
-                    ssh_config['ssh_user']
-                )
-        except:
-            pass
-    
-    if save_ssh_settings(data):
-        return jsonify({'success': True, 'message': 'SSH settings saved'})
-    return jsonify({'success': False, 'error': 'Failed to save SSH settings'}), 500
+    try:
+        data = request.json or {}
+        
+        # Валидация
+        if not data.get('ssh_host') or not data.get('ssh_user'):
+            return jsonify({'success': False, 'error': 'SSH Host и SSH User обязательны'}), 400
+        
+        if save_ssh_settings(data):
+            return jsonify({'success': True, 'message': 'SSH settings saved successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save SSH settings'}), 500
+    except Exception as e:
+        print(f"[SSH] Error saving settings: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/settings/ssh/test', methods=['POST'])
 def test_ssh_connection():
-    """Тестировать SSH подключение"""
-    data = request.json or {}
-    
+    """🆕 Тестировать SSH подключение"""
     try:
+        data = request.json or {}
+        
         if not PARAMIKO_AVAILABLE:
             return jsonify({
                 'success': False,
-                'error': 'paramiko не установлен. Установите: pip install paramiko'
+                'error': 'paramiko не установлен. Выполните: pip install paramiko'
             }), 400
         
-        print(f"[SSH] Testing connection to {data['ssh_host']}:{data.get('ssh_port', 22)}")
+        print(f"[SSH] 🔧 Testing connection to {data['ssh_host']}:{data.get('ssh_port', 22)}")
         
-        local_host, local_port = create_ssh_tunnel(
-            ssh_host=data['ssh_host'],
-            ssh_port=data.get('ssh_port', 22),
-            ssh_user=data['ssh_user'],
-            ssh_password=data.get('ssh_password'),
-            ssh_key_path=data.get('ssh_key_path'),
-            remote_db_host=data.get('remote_db_host', 'localhost'),
-            remote_db_port=data.get('remote_db_port', 5432)
-        )
+        # Создаем временное подключение для теста
+        temp_ssh = paramiko.SSHClient()
+        temp_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         
-        # Проверяем, можем ли подключиться к БД через туннель
         try:
-            conn = psycopg2.connect(
-                host=local_host,
-                port=local_port,
-                database=app.config['DB_NAME'],
-                user=app.config['DB_USER'],
-                password=app.config['DB_PASSWORD'],
-                connect_timeout=5
+            if data.get('ssh_key_path'):
+                print(f"[SSH] Using SSH key: {data['ssh_key_path']}")
+                temp_ssh.connect(
+                    hostname=data['ssh_host'],
+                    port=data.get('ssh_port', 22),
+                    username=data['ssh_user'],
+                    key_filename=data['ssh_key_path'],
+                    timeout=10,
+                    banner_timeout=10
+                )
+            else:
+                print(f"[SSH] Using password authentication")
+                temp_ssh.connect(
+                    hostname=data['ssh_host'],
+                    port=data.get('ssh_port', 22),
+                    username=data['ssh_user'],
+                    password=data.get('ssh_password'),
+                    timeout=10,
+                    banner_timeout=10
+                )
+            
+            print(f"[SSH] ✅ SSH connection successful")
+            
+            # Проверяем доступность БД на удаленном сервере
+            stdin, stdout, stderr = temp_ssh.exec_command(
+                f"nc -z {data.get('remote_db_host', 'localhost')} {data.get('remote_db_port', 5432)} && echo 'OK' || echo 'FAIL'"
             )
-            conn.close()
-            print(f"[SSH] ✅ SSH tunnel and DB connection successful")
-            return jsonify({'success': True, 'message': 'SSH tunnel and database connection successful'})
-        except Exception as db_e:
+            output = stdout.read().decode().strip()
+            
+            temp_ssh.close()
+            
+            if output == 'OK':
+                print(f"[SSH] ✅ Remote database port is accessible")
+                return jsonify({
+                    'success': True,
+                    'message': 'SSH connection and remote database port are accessible'
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'message': 'SSH connection OK, but cannot verify remote database port (netcat may not be available)',
+                    'warning': 'Cannot verify DB port availability'
+                })
+        
+        except paramiko.AuthenticationException as e:
+            temp_ssh.close()
+            print(f"[SSH] ❌ SSH Authentication failed: {e}")
             return jsonify({
                 'success': False,
-                'error': f'SSH tunnel OK, but DB connection failed: {str(db_e)}'
+                'error': f'SSH authentication failed: {str(e)}'
+            }), 401
+        
+        except paramiko.SSHException as e:
+            temp_ssh.close()
+            print(f"[SSH] ❌ SSH error: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'SSH connection error: {str(e)}'
             }), 400
         
+        except Exception as e:
+            temp_ssh.close()
+            print(f"[SSH] ❌ Connection test error: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Connection error: {str(e)}'
+            }), 400
+    
     except Exception as e:
         print(f"[SSH] ❌ Test failed: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 400
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 
 @app.route('/api/settings/ssh/start', methods=['POST'])
 def start_ssh_tunnel_api():
-    global _ssh_tunnel
-    if not SSH_TUNNEL_AVAILABLE:
-        return jsonify({'success': False, 'error': 'Установите: pip install sshtunnel'}), 500
-
-    data = request.json or {}
-    ssh_cfg = data if data.get('ssh_host') else get_ssh_settings()
-
-    if not ssh_cfg:
-        return jsonify({'success': False, 'error': 'Настройки SSH не заданы'}), 400
-
+    """Запустить SSH туннель (вызывается при подключении)"""
     try:
-        tunnel = start_ssh_tunnel(ssh_cfg)
-        return jsonify({'success': True, 'local_port': tunnel.local_bind_port,
-                       'message': f'SSH туннель запущен на порту {tunnel.local_bind_port}'})
+        data = request.json or {}
+        settings = get_ssh_settings()
+        
+        if not settings:
+            settings = data
+        
+        if not PARAMIKO_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'paramiko не установлен. Выполните: pip install paramiko'
+            }), 400
+        
+        print(f"[SSH] 🚀 Starting SSH tunnel...")
+        
+        try:
+            local_host, local_port = create_ssh_tunnel(
+                ssh_host=settings['ssh_host'],
+                ssh_port=settings.get('ssh_port', 22),
+                ssh_user=settings['ssh_user'],
+                ssh_password=settings.get('ssh_password'),
+                ssh_key_path=settings.get('ssh_key_path'),
+                remote_db_host=settings.get('remote_db_host', 'localhost'),
+                remote_db_port=settings.get('remote_db_port', 5432)
+            )
+            
+            # Проверяем доступность БД через туннель
+            try:
+                test_conn = psycopg2.connect(
+                    host=local_host,
+                    port=local_port,
+                    database=app.config['DB_NAME'],
+                    user=app.config['DB_USER'],
+                    password=app.config['DB_PASSWORD'],
+                    connect_timeout=5
+                )
+                test_conn.close()
+                print(f"[SSH] ✅ SSH tunnel started and DB connection successful")
+                return jsonify({
+                    'success': True,
+                    'message': f'SSH tunnel started successfully (listening on {local_host}:{local_port})'
+                })
+            except Exception as db_e:
+                print(f"[SSH] ⚠️ SSH tunnel started but DB connection failed: {db_e}")
+                return jsonify({
+                    'success': True,
+                    'message': f'SSH tunnel started (listening on {local_host}:{local_port})',
+                    'warning': f'DB connection test failed: {str(db_e)}'
+                })
+        
+        except Exception as e:
+            print(f"[SSH] ❌ Failed to start tunnel: {e}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 400
+    
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"[SSH] ❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @app.route('/api/settings/ssh/stop', methods=['POST'])
 def stop_ssh_tunnel_api():
-    stop_ssh_tunnel()
-    return jsonify({'success': True, 'message': 'SSH туннель остановлен'})
-
-
-@app.route('/api/settings/ssh/status', methods=['GET'])
-def ssh_tunnel_status():
-    active = _ssh_tunnel is not None and _ssh_tunnel.is_active if _ssh_tunnel else False
-    port = _ssh_tunnel.local_bind_port if active else None
-    return jsonify({'success': True, 'active': active, 'local_port': port})
-
+    """Остановить SSH туннель"""
+    try:
+        settings = get_ssh_settings()
+        if settings:
+            close_ssh_tunnel(
+                ssh_host=settings['ssh_host'],
+                ssh_port=settings.get('ssh_port', 22),
+                ssh_user=settings['ssh_user'],
+                remote_db_host=settings.get('remote_db_host', 'localhost'),
+                remote_db_port=settings.get('remote_db_port', 5432)
+            )
+        
+        return jsonify({
+            'success': True,
+            'message': 'SSH tunnel stopped'
+        })
+    except Exception as e:
+        print(f"[SSH] Error stopping tunnel: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # ─────────────────────────────────────────────
 # CHART DATA

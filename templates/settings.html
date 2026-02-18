@@ -99,7 +99,7 @@
                     <label class="form-label">Путь к SSH ключу (.pem / id_rsa)</label>
                     <input type="text" id="sshKeyPath" class="form-control" placeholder="/home/user/.ssh/id_rsa">
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 100px 80px;gap:8px;">
+                <div style="display:grid;grid-template-columns:1fr 100px;gap:8px;">
                     <div>
                         <label class="form-label">Хост БД (на удалённом сервере)</label>
                         <input type="text" id="remoteDbHost" class="form-control" value="127.0.0.1">
@@ -108,24 +108,17 @@
                         <label class="form-label">Порт БД</label>
                         <input type="number" id="remoteDbPort" class="form-control" value="5432">
                     </div>
-                    <div>
-                        <label class="form-label">Локальный порт</label>
-                        <input type="number" id="localPort" class="form-control" value="15432">
-                    </div>
                 </div>
 
-                <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
+                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
                     <button class="btn btn-secondary btn-sm" onclick="saveSshSettings()">
                         <i class="bi bi-save"></i> Сохранить
                     </button>
-                    <button class="btn btn-primary btn-sm" id="sshStartBtn" onclick="startSshTunnel()">
-                        <i class="bi bi-play-fill"></i> Запустить туннель
-                    </button>
-                    <button class="btn btn-danger btn-sm" id="sshStopBtn" onclick="stopSshTunnel()" style="border:1px solid rgba(224,82,82,.4);">
-                        <i class="bi bi-stop-fill"></i> Остановить
+                    <button class="btn btn-info btn-sm" id="sshTestBtn" onclick="testSshConnection()">
+                        <i class="bi bi-plug-fill"></i> Тест соединения
                     </button>
                 </div>
-                <div id="sshResult" style="display:none;margin-top:4px;"></div>
+                <div id="sshResult" style="display:none;margin-top:8px;"></div>
             </div>
         </div>
     </div>
@@ -243,10 +236,10 @@ async function loadSshSettings() {
             document.getElementById('sshKeyPath').value = d.data.ssh_key_path || '';
             document.getElementById('remoteDbHost').value = d.data.remote_db_host || '127.0.0.1';
             document.getElementById('remoteDbPort').value = d.data.remote_db_port || 5432;
-            document.getElementById('localPort').value = d.data.local_port || 15432;
         }
-        updateSshStatusBadge(d.tunnel_active);
-    } catch(e) { console.error('SSH settings load error', e); }
+    } catch(e) { 
+        console.error('SSH settings load error', e); 
+    }
 }
 
 async function saveSshSettings() {
@@ -258,19 +251,33 @@ async function saveSshSettings() {
         ssh_key_path: document.getElementById('sshKeyPath').value.trim(),
         remote_db_host: document.getElementById('remoteDbHost').value.trim() || '127.0.0.1',
         remote_db_port: parseInt(document.getElementById('remoteDbPort').value) || 5432,
-        local_port: parseInt(document.getElementById('localPort').value) || 15432,
+        enabled: true
     };
+    
+    if (!payload.ssh_host || !payload.ssh_user) {
+        showResult('sshResult', false, 'SSH Host и SSH User обязательны');
+        return;
+    }
+    
     try {
-        var r = await fetch('/api/settings/ssh', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+        var r = await fetch('/api/settings/ssh', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
         var d = await r.json();
-        showResult('sshResult', d.success, d.success ? 'Настройки SSH сохранены' : d.error);
-    } catch(e) { showResult('sshResult', false, e.message); }
+        showResult('sshResult', d.success, d.success ? 'SSH настройки сохранены' : d.error);
+    } catch(e) { 
+        showResult('sshResult', false, e.message); 
+    }
 }
 
-async function startSshTunnel() {
-    var btn = document.getElementById('sshStartBtn');
+// 🆕 НОВАЯ ФУНКЦИЯ - Тест SSH соединения
+async function testSshConnection() {
+    var btn = document.getElementById('sshTestBtn');
     btn.disabled = true;
-    btn.innerHTML = '<span class="loading"></span> Запуск...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Тестирование...';
+    
     var payload = {
         ssh_host: document.getElementById('sshHost').value.trim(),
         ssh_port: parseInt(document.getElementById('sshPort').value) || 22,
@@ -278,47 +285,43 @@ async function startSshTunnel() {
         ssh_password: document.getElementById('sshPassword').value,
         ssh_key_path: document.getElementById('sshKeyPath').value.trim(),
         remote_db_host: document.getElementById('remoteDbHost').value.trim() || '127.0.0.1',
-        remote_db_port: parseInt(document.getElementById('remoteDbPort').value) || 5432,
-        local_port: parseInt(document.getElementById('localPort').value) || 15432,
+        remote_db_port: parseInt(document.getElementById('remoteDbPort').value) || 5432
     };
-    try {
-        var r = await fetch('/api/settings/ssh/start', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-        var d = await r.json();
-        showResult('sshResult', d.success, d.success ? d.message : d.error);
-        if (d.success) updateSshStatusBadge(true);
-    } catch(e) { showResult('sshResult', false, e.message); }
-    btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-play-fill"></i> Запустить туннель';
-}
-
-async function stopSshTunnel() {
-    try {
-        var r = await fetch('/api/settings/ssh/stop', {method:'POST'});
-        var d = await r.json();
-        showResult('sshResult', d.success, d.success ? 'SSH туннель остановлен' : d.error);
-        if (d.success) updateSshStatusBadge(false);
-    } catch(e) { showResult('sshResult', false, e.message); }
-}
-
-async function checkSshStatus() {
-    try {
-        var r = await fetch('/api/settings/ssh/status');
-        var d = await r.json();
-        updateSshStatusBadge(d.active);
-        var msg = d.active ? 'Туннель активен на порту '+d.local_port : 'Туннель неактивен';
-        showResult('sshResult', d.active, msg);
-    } catch(e) { showResult('sshResult', false, e.message); }
-}
-
-function updateSshStatusBadge(active) {
-    var badge = document.getElementById('sshStatusBadge');
-    if (active) {
-        badge.className = 'badge badge-green';
-        badge.textContent = 'Активен';
-    } else {
-        badge.className = 'badge badge-red';
-        badge.textContent = 'Неактивен';
+    
+    if (!payload.ssh_host || !payload.ssh_user) {
+        showResult('sshResult', false, 'Заполните SSH Host и SSH User');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug-fill"></i> Тест соединения';
+        return;
     }
+    
+    try {
+        var r = await fetch('/api/settings/ssh/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        var d = await r.json();
+        
+        if (d.success) {
+            showResult('sshResult', true, d.message + (d.warning ? '\n⚠️ ' + d.warning : ''));
+        } else {
+            showResult('sshResult', false, d.error);
+        }
+    } catch(e) { 
+        showResult('sshResult', false, 'Ошибка: ' + e.message); 
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-plug-fill"></i> Тест соединения';
+}
+
+// Вспомогательная функция для вывода результатов
+function showResult(elementId, success, message) {
+    var elem = document.getElementById(elementId);
+    elem.style.display = 'block';
+    elem.className = 'alert alert-' + (success ? 'success' : 'danger');
+    elem.innerHTML = '<i class="bi bi-' + (success ? 'check-circle' : 'exclamation-circle') + '"></i> ' + message.replace(/\n/g, '<br>');
 }
 
 // ── MAIL ─────────────────────────────────────────────
