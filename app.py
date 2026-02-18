@@ -1519,6 +1519,200 @@ def test_db_connection():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ═════════════════════════════════════════════════════════════════════════════
+# NETWORK BUILDER - Конструктор сети водоснабжения
+# ═════════════════════════════════════════════════════════════════════════════
+
+@app.route('/network')
+def network_builder():
+    """Страница конструктора сети"""
+    return render_template('network_builder.html')
+
+
+@app.route('/api/network/tree', methods=['GET'])
+def get_network_tree():
+    """
+    Получить рекурсивное дерево сети водоснабжения.
+    
+    Query параметры:
+        root_node_id: ID корневого узла (обязательный)
+    
+    Returns:
+        JSON с деревом узлов и связей
+    """
+    try:
+        root_node_id = request.args.get('root_node_id', type=int)
+        
+        if not root_node_id or root_node_id <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'root_node_id must be a positive integer'
+            }), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Выполняем рекурсивный запрос
+        # ВАЖНО: все типы в UNION ALL должны совпадать!
+        query = """
+            WITH RECURSIVE tree_cte AS (
+                -- Базовый случай: выбираем корневой элемент
+                SELECT 
+                    'root'::VARCHAR AS line_name,
+                    NULL::BIGINT AS line_id,
+                    %s::BIGINT AS node_id,
+                    %s::BIGINT AS child_id,
+                    0::INT AS level,
+                    ARRAY[%s::BIGINT] AS path,
+                    %s::TEXT AS path_str,
+                    NULL::TEXT AS node_name
+                
+                UNION ALL
+                
+                -- Рекурсивный случай: присоединяем детей
+                SELECT 
+                    rl.line_name::VARCHAR,
+                    rl.line_id::BIGINT,
+                    rlp.node_calculate_parameter_id::BIGINT AS node_id,
+                    rlpc.node_calculate_parameter_id::BIGINT AS child_id,
+                    (t.level + 1)::INT,
+                    t.path || rlpc.node_calculate_parameter_id,
+                    t.path_str || '->' || rlpc.node_calculate_parameter_id::TEXT,
+                    rn.node_name::TEXT
+                FROM tree_cte t
+                JOIN public.rul_line_parameter rlp
+                    ON t.child_id = rlp.node_calculate_parameter_id
+                JOIN public.rul_line_parameter_child rlpc 
+                    ON rlpc.line_parameter_id = rlp.line_parameter_id
+                JOIN public.rul_node_calculate_parameter rncp
+                    ON rlpc.node_calculate_parameter_id = rncp.node_calculate_parameter_id
+                JOIN public.rul_node rn
+                    ON rn.node_id = rncp.node_id
+                JOIN public.rul_line rl 
+                    ON rl.line_id = rlp.line_id
+                WHERE t.level < 50  -- Защита от бесконечной рекурсии
+            )
+            SELECT 
+                tree_cte.line_id,
+                tree_cte.line_name,
+                tree_cte.node_id,
+                tree_cte.child_id,
+                tree_cte.level,
+                tree_cte.path,
+                tree_cte.path_str,
+                tree_cte.node_name
+            FROM tree_cte
+            ORDER BY tree_cte.level, tree_cte.path_str
+            LIMIT 10000
+        """
+        
+        print(f"[NETWORK] Fetching tree for node ID: {root_node_id}")
+        
+        cur.execute(query, (root_node_id, root_node_id, root_node_id, root_node_id))
+        rows = cur.fetchall()
+        
+        result = []
+        for row in rows:
+            result.append({
+                'line_id': row['line_id'],
+                'line_name': row['line_name'],
+                'node_id': row['node_id'],
+                'child_id': row['child_id'],
+                'level': row['level'],
+                'path': row['path'],
+                'path_str': row['path_str'],
+                'node_name': row['node_name']
+            })
+        
+        cur.close()
+        conn.close()
+        
+        print(f"[NETWORK] ✅ Found {len(result)} nodes in tree")
+        
+        return jsonify({
+            'success': True,
+            'data': result,
+            'count': len(result)
+        })
+        
+    except Exception as e:
+        print(f"[NETWORK] ❌ Error fetching network tree: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/network/info', methods=['GET'])
+def get_network_info():
+    """
+    Получить статистику о сети.
+    
+    Query параметры:
+        root_node_id: ID корневого узла
+    """
+    try:
+        root_node_id = request.args.get('root_node_id', type=int)
+        
+        if not root_node_id or root_node_id <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid root_node_id'
+            }), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Статистика
+        query = """
+            WITH RECURSIVE tree_cte AS (
+                SELECT 
+                    %s AS node_id,
+                    %s AS child_id,
+                    0 AS level
+                
+                UNION ALL
+                
+                SELECT 
+                    rlp.node_calculate_parameter_id AS node_id,
+                    rlpc.node_calculate_parameter_id AS child_id,
+                    t.level + 1
+                FROM tree_cte t
+                JOIN public.rul_line_parameter rlp
+                    ON t.child_id = rlp.node_calculate_parameter_id
+                JOIN public.rul_line_parameter_child rlpc 
+                    ON rlpc.line_parameter_id = rlp.line_parameter_id
+            )
+            SELECT 
+                COUNT(DISTINCT child_id) as node_count,
+                MAX(level) as max_depth,
+                COUNT(*) as edge_count
+            FROM tree_cte
+        """
+        
+        cur.execute(query, (root_node_id, root_node_id))
+        stats = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'node_count': stats['node_count'],
+                'max_depth': stats['max_depth'],
+                'edge_count': stats['edge_count']
+            }
+        })
+        
+    except Exception as e:
+        print(f"[NETWORK] Error getting network info: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # ─────────────────────────────────────────────
 # SSH SETTINGS API

@@ -38,6 +38,11 @@
                title="Настройки">
                 <i class="bi bi-gear"></i>
             </a>
+            <a href="{{ url_for('network_builder') }}"
+               class="sidebar-link {% if request.endpoint == 'network_builder' %}active{% endif %}"
+               title="Конструктор сети">
+                <i class="bi bi-diagram-3"></i>
+            </a>
         </nav>
         <div class="sidebar-footer">
             <button id="themeToggle" class="theme-toggle" title="Переключить тему">
