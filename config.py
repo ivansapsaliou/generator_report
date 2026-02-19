@@ -28,3 +28,7 @@ class Config:
     SSH_REMOTE_DB_HOST = os.environ.get('SSH_REMOTE_DB_HOST', '127.0.0.1')
     SSH_REMOTE_DB_PORT = int(os.environ.get('SSH_REMOTE_DB_PORT', 5432))
     SSH_LOCAL_PORT = int(os.environ.get('SSH_LOCAL_PORT', 15432))
+
+    SESSION_TYPE = 'filesystem'
+    SESSION_PERMANENT = True
+    PERMANENT_SESSION_LIFETIME = 86400 * 7  # 7 дней

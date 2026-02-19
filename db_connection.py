@@ -366,3 +366,32 @@ def get_db_connection(config=None, ssh_settings=None):
     except Exception as e:
         print(f"[DB] ❌ Connection error: {e}")
         raise
+
+def get_db_connection_by_profile(profile_id, ssh_settings=None):
+    """
+    Получить подключение к БД по сохранённому профилю.
+    
+    Args:
+        profile_id: ID сохранённого профиля
+        ssh_settings: словарь с настройками SSH (опционально)
+    
+    Returns:
+        psycopg2.connection: объект подключения к БД
+    """
+    from db_profiles import DatabaseProfileManager
+    
+    profile = DatabaseProfileManager.get_profile(profile_id)
+    if not profile:
+        raise Exception(f"Profile {profile_id} not found")
+    
+    # Создаём временный конфиг из профиля
+    temp_config = {
+        'DB_HOST': profile.get('host'),
+        'DB_PORT': profile.get('port', 5432),
+        'DB_NAME': profile.get('database'),
+        'DB_USER': profile.get('user'),
+        'DB_PASSWORD': profile.get('password'),
+    }
+    
+    # Используем существующую функцию с временным конфигом
+    return get_db_connection(config=temp_config, ssh_settings=ssh_settings)

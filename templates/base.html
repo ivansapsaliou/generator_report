@@ -40,11 +40,19 @@
                class="sidebar-link {% if request.endpoint == 'network_builder' %}active{% endif %}"
                title="Конструктор сети">
                 <i class="bi bi-diagram-3"></i>
-
+            </a>
+    
             <a href="{{ url_for('settings') }}"
                class="sidebar-link {% if request.endpoint == 'settings' %}active{% endif %}"
                title="Настройки">
                 <i class="bi bi-gear"></i>
+            </a>
+    
+            <!-- 🆕 НОВАЯ КНОПКА: Подключение к БД -->
+            <a href="{{ url_for('dashboard') }}"
+               class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
+               title="Выбор подключения">
+                <i class="bi bi-database"></i>
             </a>
         </nav>
         <div class="sidebar-footer">

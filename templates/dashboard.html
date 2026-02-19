@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}Подключение к БД — Report Builder{% endblock %}
+{% block topbar_title %}Выбор подключения{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Подключение к <span>БД</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:.04em;">NEWLAND TECHNOLOGY &nbsp;·&nbsp; ВЫБЕРИТЕ ИЛИ СОЗДАЙТЕ ПОДКЛЮЧЕНИЕ</div>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr;gap:14px;max-width:100%;">
+
+    <!-- СОХРАНЁННЫЕ ПОДКЛЮЧЕНИЯ -->
+    <div class="card">
+        <div class="card-header">
+            <div class="header-left"><i class="bi bi-database"></i> Сохранённые подключения <span class="badge badge-blue" id="profileCount">—</span></div>
+            <div class="header-right">
+                <button class="btn btn-primary btn-sm" data-action="new-profile" title="Добавить новое подключение">
+                    <i class="bi bi-plus"></i> Добавить
+                </button>
+            </div>
+        </div>
+        <div class="card-body" style="padding:0;">
+            <div style="overflow-y:auto;max-height:500px;" id="profilesList">
+                <div class="empty-state" style="padding:40px;">
+                    <i class="bi bi-inbox" style="font-size:32px;color:var(--text-3);margin-bottom:12px;display:block;"></i>
+                    <span style="color:var(--text-3);">Нет сохранённых подключений</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ── MODAL: CREATE/EDIT PROFILE ─────────────────────── -->
+<div id="profileModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:500px;">
+        <div class="modal-header">
+            <h5 id="profileModalTitle"><i class="bi bi-plus"></i> Новое подключение</h5>
+            <button type="button" class="modal-close" onclick="closeProfileModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <form id="profileForm" style="display:flex;flex-direction:column;gap:12px;">
+                <input type="hidden" id="profileId">
+                
+                <div>
+                    <label class="form-label">Название подключения <span style="color:var(--red);">*</span></label>
+                    <input type="text" id="profileName" class="form-control" placeholder="Например: Production DB" required>
+                    <div style="font-size:10px;color:var(--text-3);margin-top:3px;">Краткое имя для идентификации подключения</div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
+                    <div>
+                        <label class="form-label">Хост <span style="color:var(--red);">*</span></label>
+                        <input type="text" id="profileHost" class="form-control" placeholder="localhost, 192.168.1.1" required>
+                    </div>
+                    <div>
+                        <label class="form-label">Порт <span style="color:var(--red);">*</span></label>
+                        <input type="number" id="profilePort" class="form-control" value="5432" min="1" max="65535" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="form-label">База данных <span style="color:var(--red);">*</span></label>
+                    <input type="text" id="profileDatabase" class="form-control" placeholder="reports_db" required>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div>
+                        <label class="form-label">Пользователь <span style="color:var(--red);">*</span></label>
+                        <input type="text" id="profileUser" class="form-control" placeholder="postgres" required>
+                    </div>
+                    <div>
+                        <label class="form-label">Пароль <span style="color:var(--red);">*</span></label>
+                        <input type="password" id="profilePassword" class="form-control" required>
+                    </div>
+                </div>
+
+                <div id="testResult" style="display:none;padding:8px;border-radius:4px;border-left:3px solid var(--green);background:rgba(82,183,136,.1);color:var(--green);font-size:12px;"></div>
+
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="testProfileConnection()">
+                        <i class="bi bi-plug"></i> Проверить подключение
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="bi bi-check"></i> Сохранить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL BACKDROP ─────────────────────────────────── -->
+<div id="modalBackdrop" class="modal-backdrop" style="display:none;"></div>
+
+<style>
+.profile-card-item {
+    padding:12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;transition:all .2s;
+}
+.profile-card-item:hover {
+    background:var(--bg-3);
+}
+.profile-card-item:last-child {
+    border-bottom:none;
+}
+.profile-info {
+    flex:1;
+}
+.profile-info-name {
+    font-weight:600;color:var(--text);font-size:13px;
+}
+.profile-info-host {
+    font-size:11px;color:var(--text-3);margin-top:2px;font-family:var(--font-mono);
+}
+.profile-actions {
+    display:flex;gap:6px;
+}
+.modal {
+    position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:1100;
+}
+.modal-content {
+    background:var(--card-bg);border:1px solid var(--line);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.6);padding:0;max-height:90vh;overflow-y:auto;
+}
+.modal-header {
+    padding:16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;
+}
+.modal-header h5 {
+    color:var(--text);margin:0;
+}
+.modal-close {
+    background:none;border:none;color:var(--text-3);font-size:24px;cursor:pointer;padding:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;transition:color .2s;
+}
+.modal-close:hover {
+    color:var(--text);
+}
+.modal-body {
+    padding:20px;
+}
+.modal-backdrop {
+    position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:1099;
+}
+.empty-state {
+    text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-3);
+}
+</style>
+
+<script>
+const ProfileManager = {
+    currentEditId: null,
+
+    async loadProfiles() {
+        try {
+            const res = await fetch('/api/db-profiles');
+            const data = await res.json();
+            
+            const list = document.getElementById('profilesList');
+            const count = document.getElementById('profileCount');
+            
+            if (!data.profiles || data.profiles.length === 0) {
+                list.innerHTML = `<div class="empty-state" style="padding:40px;"><i class="bi bi-inbox" style="font-size:32px;color:var(--text-3);margin-bottom:12px;display:block;"></i><span style="color:var(--text-3);">Нет сохранённых подключений</span></div>`;
+                count.textContent = '0';
+                return;
+            }
+
+            count.textContent = data.profiles.length;
+            
+            list.innerHTML = data.profiles.map(p => `
+                <div class="profile-card-item">
+                    <div class="profile-info">
+                        <div class="profile-info-name">${escapeHtml(p.name)}</div>
+                        <div class="profile-info-host">${escapeHtml(p.user)}@${escapeHtml(p.host)}:${p.port} / ${escapeHtml(p.database)}</div>
+                    </div>
+                    <div class="profile-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="ProfileManager.editProfile(${p.id})" title="Редактировать">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-success btn-sm" onclick="ProfileManager.connectAndGo(${p.id})" title="Подключиться">
+                            <i class="bi bi-arrow-right"></i>
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="ProfileManager.deleteProfile(${p.id})" title="Удалить">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('Ошибка загрузки профилей:', error);
+        }
+    },
+
+    async connectAndGo(profileId) {
+        try {
+            const res = await fetch('/api/db-profiles/select', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile_id: profileId })
+            });
+            
+            if (res.ok) {
+                window.location.href = '/';
+            } else {
+                alert('Ошибка подключения. Проверьте данные.');
+            }
+        } catch (error) {
+            alert('Ошибка: ' + error.message);
+        }
+    },
+
+    editProfile(profileId) {
+        fetch(`/api/db-profiles/${profileId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.profile) {
+                    const p = data.profile;
+                    document.getElementById('profileId').value = p.id;
+                    document.getElementById('profileName').value = p.name;
+                    document.getElementById('profileHost').value = p.host;
+                    document.getElementById('profilePort').value = p.port;
+                    document.getElementById('profileDatabase').value = p.database;
+                    document.getElementById('profileUser').value = p.user;
+                    document.getElementById('profilePassword').value = p.password;
+                    
+                    document.getElementById('profileModalTitle').innerHTML = '<i class="bi bi-pencil"></i> Редактировать подключение';
+                    this.currentEditId = profileId;
+                    openProfileModal();
+                }
+            });
+    },
+
+    async deleteProfile(profileId) {
+        if (!confirm('Удалить это подключение?')) return;
+        
+        try {
+            const res = await fetch(`/api/db-profiles/${profileId}`, { method: 'DELETE' });
+            if (res.ok) {
+                this.loadProfiles();
+            }
+        } catch (error) {
+            alert('Ошибка: ' + error.message);
+        }
+    }
+};
+
+function openProfileModal() {
+    document.getElementById('profileModal').style.display = 'flex';
+    document.getElementById('modalBackdrop').style.display = 'block';
+    document.getElementById('profileModalTitle').innerHTML = '<i class="bi bi-plus"></i> Новое подключение';
+    document.getElementById('profileId').value = '';
+}
+
+function closeProfileModal() {
+    document.getElementById('profileModal').style.display = 'none';
+    document.getElementById('modalBackdrop').style.display = 'none';
+    document.getElementById('profileForm').reset();
+    document.getElementById('testResult').style.display = 'none';
+    ProfileManager.currentEditId = null;
+}
+
+function testProfileConnection() {
+    const data = {
+        host: document.getElementById('profileHost').value,
+        port: parseInt(document.getElementById('profilePort').value),
+        database: document.getElementById('profileDatabase').value,
+        user: document.getElementById('profileUser').value,
+        password: document.getElementById('profilePassword').value
+    };
+    
+    if (!data.host || !data.database || !data.user) {
+        alert('Заполните обязательные поля');
+        return;
+    }
+
+    const resultDiv = document.getElementById('testResult');
+    resultDiv.textContent = 'Проверка подключения...';
+    resultDiv.style.display = 'block';
+    resultDiv.style.borderLeftColor = 'var(--amber)';
+    resultDiv.style.background = 'rgba(240,168,67,.1)';
+    resultDiv.style.color = 'var(--amber)';
+
+    fetch('/api/db-profiles/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            resultDiv.innerHTML = '<i class="bi bi-check-circle"></i> ✓ Подключение успешно!';
+            resultDiv.style.borderLeftColor = 'var(--green)';
+            resultDiv.style.background = 'rgba(82,183,136,.1)';
+            resultDiv.style.color = 'var(--green)';
+        } else {
+            resultDiv.innerHTML = '<i class="bi bi-exclamation-circle"></i> ✗ ' + (result.error || 'Ошибка подключения');
+            resultDiv.style.borderLeftColor = 'var(--red)';
+            resultDiv.style.background = 'rgba(224,82,82,.1)';
+            resultDiv.style.color = 'var(--red)';
+        }
+    })
+    .catch(error => {
+        resultDiv.innerHTML = '<i class="bi bi-exclamation-circle"></i> Ошибка: ' + error.message;
+        resultDiv.style.borderLeftColor = 'var(--red)';
+        resultDiv.style.background = 'rgba(224,82,82,.1)';
+        resultDiv.style.color = 'var(--red)';
+    });
+}
+
+document.getElementById('profileForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const profile = {
+        name: document.getElementById('profileName').value,
+        host: document.getElementById('profileHost').value,
+        port: parseInt(document.getElementById('profilePort').value),
+        database: document.getElementById('profileDatabase').value,
+        user: document.getElementById('profileUser').value,
+        password: document.getElementById('profilePassword').value
+    };
+
+    if (ProfileManager.currentEditId) {
+        profile.id = ProfileManager.currentEditId;
+    }
+
+    try {
+        const res = await fetch('/api/db-profiles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(profile)
+        });
+
+        if (res.ok) {
+            closeProfileModal();
+            ProfileManager.loadProfiles();
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+});
+
+document.getElementById('modalBackdrop').addEventListener('click', closeProfileModal);
+
+document.querySelector('[data-action="new-profile"]').addEventListener('click', openProfileModal);
+
+function escapeHtml(text) {
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// Загружаем профили при открытии страницы
+ProfileManager.loadProfiles();
+</script>
+
+{% endblock %}

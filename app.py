@@ -50,6 +50,9 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
 
+from flask_session import Session
+session = Session()
+session.init_app(app)
 
 # Инициализация менеджера сессий
 pg_session_manager = PostgreSQLSessionManager(app.config)
@@ -137,6 +140,87 @@ atexit.register(close_all_ssh_tunnels)
 
 
 
+
+# Сессия для отслеживания активного профиля
+active_profile_id = None
+
+# Добавьте прямо ПЕРЕД @app.route('/') (перед функцией index()):
+
+# Добавьте прямо ПЕРЕД @app.route('/') (перед функцией index()):
+
+from db_profiles import DatabaseProfileManager
+from flask import session
+
+@app.route('/dashboard')
+def dashboard():
+    """Показать Dashboard с выбором подключения к БД"""
+    return render_template('dashboard.html')
+
+@app.route('/api/db-profiles', methods=['GET'])
+def get_db_profiles():
+    """Получить все сохранённые подключения"""
+    profiles = DatabaseProfileManager.get_all_profiles()
+    # Не отправляем пароли на клиент
+    for p in profiles:
+        p['password'] = '****'
+    return jsonify({'profiles': profiles})
+
+@app.route('/api/db-profiles/<int:profile_id>', methods=['GET'])
+def get_db_profile(profile_id):
+    """Получить конкретное подключение"""
+    profile = DatabaseProfileManager.get_profile(profile_id)
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+    return jsonify({'profile': profile})
+
+@app.route('/api/db-profiles', methods=['POST'])
+def save_db_profile():
+    """Сохранить новое подключение"""
+    data = request.json
+    profile = DatabaseProfileManager.save_profile(data)
+    return jsonify({'success': True, 'profile': profile})
+
+@app.route('/api/db-profiles/<int:profile_id>', methods=['DELETE'])
+def delete_db_profile(profile_id):
+    """Удалить подключение"""
+    DatabaseProfileManager.delete_profile(profile_id)
+    return jsonify({'success': True})
+
+@app.route('/api/db-profiles/test', methods=['POST'])
+def test_db_profile():
+    """Протестировать подключение"""
+    data = request.json
+    try:
+        conn = psycopg2.connect(
+            host=data['host'],
+            port=data['port'],
+            database=data['database'],
+            user=data['user'],
+            password=data['password'],
+            connect_timeout=5
+        )
+        conn.close()
+        return jsonify({'success': True, 'message': 'Connection successful'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/db-profiles/select', methods=['POST'])
+def select_db_profile():
+    """Выбрать активное подключение"""
+    data = request.json
+    profile_id = data.get('profile_id')
+    
+    profile = DatabaseProfileManager.get_profile(profile_id)
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+    
+    session['active_profile_id'] = profile_id
+    session.permanent = True
+    
+    return jsonify({'success': True})
+
+# ────────────────────────────────────────────────
+# ТЕПЕРЬ идёт существующий @app.route('/') который вы заменяете на новый выше
 # Добавить перед другими маршрутами
 
 # Монитор сессий был удален, осталась только кнопка перехода в сетке
