@@ -4,8 +4,8 @@
 {% block topbar_actions %}
 <span id="lastUpdateTime" style="font-size:10px;color:var(--text-3);letter-spacing:.04em;margin-right:8px;"></span>
 
-<!-- Таб-переключатель -->
-<div class="tabs-container" style="display:flex;gap:0;margin-right:15px;">
+<!-- TAB BUTTONS -->
+<div class="tabs-container" style="display:flex;gap:2px;background:var(--bg-3);padding:4px;border-radius:4px;margin-right:15px;">
     <button class="tab-btn active" data-tab="system" onclick="switchTab('system')">
         <i class="bi bi-activity"></i> Система
     </button>
@@ -17,24 +17,133 @@
     </button>
 </div>
 
-<button class="btn btn-secondary btn-sm" onclick="loadStats()" id="refreshBtn">
+<button class="btn btn-secondary btn-sm" onclick="loadActiveTab()" id="refreshBtn">
     <i class="bi bi-arrow-clockwise"></i> Обновить
 </button>
 {% endblock %}
 
 {% block content %}
-
-<!-- КОНТЕЙНЕР ТАБОВ -->
 <div id="tabsContent">
-    
+
     <!-- ════════════════════════════════════════════════════════
          ТАБ 1: СИСТЕМА
          ════════════════════════════════════════════════════════ -->
     <div id="tab-system" class="tab-content active">
         
-        <!-- ВЕСЬ ТЕКУЩИЙ КОНТЕНТ MONITORING.HTML ВСТАВИТЬ СЮДА -->
-        <!-- (ВСЁ ОТ <div class="page-header"> ДО КОНЦА КОНТЕНТА) -->
-        
+        <div class="page-header">
+            <div>
+                <div class="page-title">Мониторинг <span>системы</span></div>
+                <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:.04em;">
+                    NEWLAND TECHNOLOGY &nbsp;·&nbsp; СЕРВЕР И POSTGRESQL &nbsp;·&nbsp;
+                    <span id="nextUpdate" style="color:var(--amber);"></span>
+                </div>
+            </div>
+            <div id="pgVersionBadge" style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);align-self:center;"></div>
+        </div>
+
+        <!-- МЕТРИКИ (CPU, RAM, DISK, DB, CONNECTIONS) -->
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;">
+            <div class="mc" id="mc-cpu">
+                <div class="mc-label"><i class="bi bi-cpu"></i> Загрузка CPU</div>
+                <div class="mc-val" id="v-cpu">—</div>
+                <div class="mc-sub" id="s-cpu">нагрузка процессора</div>
+                <div class="mc-bar"><div class="mc-fill" id="b-cpu"></div></div>
+            </div>
+
+            <div class="mc" id="mc-ram">
+                <div class="mc-label"><i class="bi bi-memory"></i> Оперативная память</div>
+                <div class="mc-val" id="v-ram">—</div>
+                <div class="mc-sub" id="s-ram">использовано / всего</div>
+                <div class="mc-bar"><div class="mc-fill" id="b-ram"></div></div>
+            </div>
+
+            <div class="mc" id="mc-disk">
+                <div class="mc-label"><i class="bi bi-hdd"></i> Диск (корневой раздел)</div>
+                <div class="mc-val" id="v-disk">—</div>
+                <div class="mc-sub" id="s-disk">использовано / всего (ГБ)</div>
+                <div class="mc-bar"><div class="mc-fill" id="b-disk"></div></div>
+            </div>
+
+            <div class="mc" id="mc-dbsize">
+                <div class="mc-label"><i class="bi bi-database"></i> Размер базы данных</div>
+                <div class="mc-val" id="v-dbsize">—</div>
+                <div class="mc-sub" id="s-dbsize">текущая БД · uptime: —</div>
+            </div>
+
+            <div class="mc" id="mc-conn">
+                <div class="mc-label"><i class="bi bi-plug"></i> Подключения к БД</div>
+                <div class="mc-val" id="v-conn">—</div>
+                <div class="mc-sub" id="s-conn">активных / всего / максимум</div>
+                <div class="mc-bar"><div class="mc-fill" id="b-conn"></div></div>
+            </div>
+        </div>
+
+        <!-- КАРТОЧКИ: КЭВШ, СЕТЬ, BGWRITER -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+            <div class="card">
+                <div class="card-header no-indicator">
+                    <div class="header-left">
+                        <i class="bi bi-lightning-charge"></i> Кэш страниц (shared_buffers)
+                        <span class="blk-hint">— % страниц, прочитанных из RAM, а не с диска</span>
+                    </div>
+                </div>
+                <div class="card-body" id="blk-cache"><div class="empty-state"><span class="loading"></span></div></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header no-indicator">
+                    <div class="header-left">
+                        <i class="bi bi-ethernet"></i> Сетевой трафик
+                        <span class="blk-hint">— суммарно за всё время работы ОС (из /proc/net/dev)</span>
+                    </div>
+                </div>
+                <div class="card-body" id="blk-network"><div class="empty-state"><span class="loading"></span></div></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header no-indicator">
+                    <div class="header-left">
+                        <i class="bi bi-hdd-stack"></i> Фоновый записчик (bgwriter)
+                        <span class="blk-hint">— как PG пишет dirty-страницы на диск</span>
+                    </div>
+                </div>
+                <div class="card-body" id="blk-bgwriter"><div class="empty-state"><span class="loading"></span></div></div>
+            </div>
+        </div>
+
+        <!-- КАРТОЧКИ: ПОДКЛЮЧЕНИЯ, ТРАНЗАКЦИИ -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+            <div class="card">
+                <div class="card-header no-indicator">
+                    <div class="header-left">
+                        <i class="bi bi-arrow-left-right"></i> Подключения
+                        <span class="blk-hint">— статистика подключений к БД</span>
+                    </div>
+                </div>
+                <div class="card-body" id="blk-connections"><div class="empty-state"><span class="loading"></span></div></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header no-indicator">
+                    <div class="header-left">
+                        <i class="bi bi-arrow-left-right"></i> Транзакции и операции с данными
+                        <span class="blk-hint">— накопленная статистика с момента сброса pg_stat_reset()</span>
+                    </div>
+                </div>
+                <div class="card-body" id="blk-transactions"><div class="empty-state"><span class="loading"></span></div></div>
+            </div>
+        </div>
+
+        <!-- СТАТИСТИКА ТАБЛИЦ -->
+        <div class="card">
+            <div class="card-header">
+                <div class="header-left">
+                    <i class="bi bi-table"></i> Статистика таблиц (топ 15 по размеру)
+                </div>
+            </div>
+            <div class="card-body" id="blk-tables" style="padding:0;overflow-x:auto;"><div class="empty-state"><span class="loading"></span></div></div>
+        </div>
+
     </div>
 
     <!-- ════════════════════════════════════════════════════════
@@ -44,26 +153,26 @@
         
         <div class="page-header">
             <div>
-                <div class="page-title">Медленные <span>запросы</span></div>
+                <div class="page-title">Запросы <span>БД</span></div>
                 <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:.04em;">
-                    ЗАПРОСЫ ВЫПОЛНЯЮЩИЕСЯ > 1 СЕКУНДЫ &nbsp;·&nbsp;
+                    МЕДЛЕННЫЕ ЗАПРОСЫ И СТАТИСТИКА &nbsp;·&nbsp;
                     <span id="nextUpdateQueries" style="color:var(--amber);"></span>
                 </div>
             </div>
         </div>
 
+        <!-- МЕДЛЕННЫЕ ЗАПРОСЫ -->
         <div class="card">
             <div class="card-header">
                 <div class="header-left">
-                    <i class="bi bi-hourglass-split"></i> Медленные запросы
+                    <i class="bi bi-hourglass-split"></i> Медленные запросы (> 1 сек)
                     <span class="badge" id="slowQueryCount">0</span>
                 </div>
             </div>
-            <div class="card-body" id="blk-slow" style="padding:0;">
-                <div class="empty-state"><span class="loading"></span></div>
-            </div>
+            <div class="card-body" id="blk-slow" style="padding:0;overflow-x:auto;"><div class="empty-state"><span class="loading"></span></div></div>
         </div>
 
+        <!-- ТОП ЗАПРОСОВ -->
         <div class="card" style="margin-top:15px;">
             <div class="card-header">
                 <div class="header-left">
@@ -71,14 +180,12 @@
                     <span class="blk-hint">— самые долгие накопленные запросы</span>
                 </div>
             </div>
-            <div class="card-body" id="blk-top-queries" style="padding:0;">
-                <div class="empty-state"><span class="loading"></span></div>
-            </div>
+            <div class="card-body" id="blk-top-queries" style="padding:0;overflow-x:auto;"><div class="empty-state"><span class="loading"></span></div></div>
         </div>
 
     </div>
 
-    <!-- ════════════════════════════════════════════════════════
+    <!-- ═══════════════════════════���════════════════════════════
          ТАБ 3: СЕССИИ
          ════════════════════════════════════════════════════════ -->
     <div id="tab-sessions" class="tab-content" style="display:none;">
@@ -93,8 +200,8 @@
             </div>
         </div>
 
-        <!-- Контролы сессий -->
-        <div style="display:flex;gap:10px;margin-bottom:15px;align-items:center;">
+        <!-- КОНТРОЛЫ СЕССИЙ -->
+        <div style="display:flex;gap:10px;margin-bottom:15px;align-items:center;flex-wrap:wrap;">
             <select id="sessionRefreshRate" class="form-control" style="width:120px;height:32px;font-size:12px;">
                 <option value="1000">1 сек</option>
                 <option value="3000" selected>3 сек</option>
@@ -105,24 +212,24 @@
                 <option value="0">Вручную</option>
             </select>
 
-            <button id="toggleSessionRefresh" class="btn btn-secondary btn-sm" onclick="toggleSessionAutoRefresh()">
+            <button id="toggleSessionRefresh" class="btn btn-secondary btn-sm" onclick="toggleSessionAutoRefresh()" title="Пауза обновления">
                 <i class="bi bi-pause"></i> Пауза
             </button>
 
-            <button class="btn btn-secondary btn-sm" onclick="loadSessionsData()">
+            <button class="btn btn-secondary btn-sm" onclick="loadSessionsData()" title="Обновить сейчас">
                 <i class="bi bi-arrow-clockwise"></i> Обновить
             </button>
 
-            <button class="btn btn-warning btn-sm" onclick="terminateIdleSessions()">
+            <button class="btn btn-warning btn-sm" onclick="terminateIdleSessions()" title="Завершить idle сессии">
                 <i class="bi bi-x-circle"></i> Idle 5м+
             </button>
 
-            <button class="btn btn-secondary btn-sm" onclick="exportSessionsToCSV()">
+            <button class="btn btn-secondary btn-sm" onclick="exportSessionsToCSV()" title="Экспортировать в CSV">
                 <i class="bi bi-download"></i> CSV
             </button>
         </div>
 
-        <!-- Статистика сессий -->
+        <!-- СТАТИСТИКА СЕССИЙ -->
         <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:12px;margin-bottom:20px;">
             <div class="card">
                 <div class="card-header no-indicator">
@@ -161,10 +268,10 @@
             </div>
         </div>
 
-        <!-- Фильтры -->
+        <!-- ФИЛЬТРЫ -->
         <div class="card">
             <div class="card-body" style="padding:15px;border-bottom:1px solid var(--border-color);">
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:end;">
                     <div>
                         <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;font-weight:600;">Поиск по запросу</label>
                         <input type="text" id="sessionQueryFilter" class="form-control" placeholder="SELECT, UPDATE..." style="height:32px;font-size:12px;">
@@ -188,7 +295,7 @@
             </div>
         </div>
 
-        <!-- Таблица сессий -->
+        <!-- ТАБЛИЦА СЕССИЙ -->
         <div class="card" style="margin-top:15px;">
             <div class="card-header">
                 <div class="header-left">
@@ -196,7 +303,7 @@
                     <span class="badge" id="sessionTableCount">0</span>
                 </div>
                 <div class="header-right" style="font-size:11px;color:var(--text-3);">
-                    Всего найдено: <strong id="sessionTotalFound">0</strong>
+                    Найдено: <strong id="sessionTotalFound">0</strong>
                 </div>
             </div>
             <div class="card-body" style="padding:0;overflow-x:auto;max-height:600px;overflow-y:auto;">
@@ -217,7 +324,7 @@
                     </thead>
                     <tbody id="sessionsTableBody">
                         <tr>
-                            <td colspan="10" style="text-align:center;padding:60px 20px;color:var(--text-3);">
+                            <td colspan="10" style="text-align:center;padding:60px;color:var(--text-3);">
                                 <span class="loading"></span> Загрузка...
                             </td>
                         </tr>
@@ -230,66 +337,12 @@
 
 </div>
 
-<!-- ══════════════════════════════════════════════════════  СТИЛИ  -->
 <style>
-/* ── Metric card ── */
-.mc { background:var(--bg-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:14px 16px 12px;display:flex;flex-direction:column;gap:4px;transition:border-color .2s; }
-.mc.warn { border-color:rgba(240,168,67,.5); }
-.mc.crit { border-color:rgba(224,82,82,.5); }
-.mc-label { font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:5px; }
-.mc-label i { color:var(--amber);font-size:11px; }
-.mc-val { font-family:var(--font-ui);font-size:28px;font-weight:800;color:var(--text);line-height:1.1; }
-.mc-sub { font-size:10px;color:var(--text-3);min-height:14px; }
-.mc-bar { height:3px;background:var(--bg-4);border-radius:2px;overflow:hidden;margin-top:6px; }
-.mc-fill { height:100%;background:var(--green);border-radius:2px;transition:width .6s ease,background .3s;width:0%; }
-.mc-fill.warn { background:var(--amber); }
-.mc-fill.crit { background:var(--red); }
-
-/* ── Stat row ── */
-.sr { display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;gap:8px; }
-.sr:last-child { border-bottom:none; }
-.sr-left { flex:1;display:flex;flex-direction:column;gap:2px; }
-.sr-label { color:var(--text);display:flex;align-items:center;gap:6px;font-weight:500; }
-.sr-desc  { font-size:10px;color:var(--text-3);line-height:1.3; }
-.sr-val   { font-family:var(--font-ui);font-weight:700;color:var(--text);white-space:nowrap;padding-top:1px; }
-.sr-val.warn { color:var(--amber); }
-.sr-val.crit { color:var(--red); }
-.sr-val.good { color:var(--green); }
-
-/* ── Dot ── */
-.dot { width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0; }
-.dot-g { background:var(--green); }
-.dot-a { background:var(--amber); }
-.dot-r { background:var(--red);   }
-.dot-d { background:var(--text-3);}
-
-/* ── Block hint ── */
-.blk-hint { font-size:10px;color:var(--text-3);font-weight:400;margin-left:4px; }
-
-/* ── Monitor table ── */
-.mt { width:100%;border-collapse:collapse;font-size:11px;font-family:var(--font-mono); }
-.mt th { background:var(--bg-3);color:var(--text-3);padding:7px 12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap; }
-.mt th small { display:block;font-size:8px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-3);opacity:.7;margin-top:1px; }
-.mt td { padding:7px 12px;border-bottom:1px solid var(--line);color:var(--text);vertical-align:middle; }
-.mt tbody tr:last-child td { border-bottom:none; }
-.mt tbody tr:hover td { background:var(--bg-2); }
-
-/* ── Cache block ── */
-.cache-big { text-align:center;padding:8px 0 10px; }
-.cache-pct { font-family:var(--font-ui);font-size:52px;font-weight:800;line-height:1; }
-.cache-msg { font-size:11px;margin-top:4px; }
-.cache-bar-wrap { margin:10px 0 4px;height:6px;background:var(--bg-4);border-radius:3px;overflow:hidden; }
-.cache-bar-fill { height:100%;border-radius:3px;transition:width .7s ease; }
-.cache-foot { font-size:10px;color:var(--text-3);display:flex;justify-content:space-between;margin-top:2px; }
-
-* ══════════════════════════════════════════════════════
-   TABS STYLES
-   ══════════════════════════════════════════════════════ */
-
+/* ════════════════════════════════════════════════════════ TABS */
 .tabs-container {
     display: flex;
     gap: 2px;
-    background: var(--card-header-bg);
+    background: var(--bg-3);
     padding: 4px;
     border-radius: 4px;
 }
@@ -311,7 +364,7 @@
 }
 
 .tab-btn:hover {
-    background: var(--bg-3);
+    background: var(--bg-2);
     color: var(--text-1);
 }
 
@@ -335,9 +388,61 @@
     }
 }
 
+/* ═══════════════════════���════════════════════════════════ METRIC CARD */
+.mc { background:var(--bg-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:14px 16px 12px;display:flex;flex-direction:column;gap:4px;transition:border-color .2s; }
+.mc.warn { border-color:rgba(240,168,67,.5); }
+.mc.crit { border-color:rgba(224,82,82,.5); }
+.mc-label { font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:5px; }
+.mc-label i { color:var(--amber);font-size:11px; }
+.mc-val { font-family:var(--font-ui);font-size:28px;font-weight:800;color:var(--text);line-height:1.1; }
+.mc-sub { font-size:10px;color:var(--text-3);min-height:14px; }
+.mc-bar { height:3px;background:var(--bg-4);border-radius:2px;overflow:hidden;margin-top:6px; }
+.mc-fill { height:100%;background:var(--green);border-radius:2px;transition:width .6s ease,background .3s;width:0%; }
+.mc-fill.warn { background:var(--amber); }
+.mc-fill.crit { background:var(--red); }
+
+/* ════════════════════════════════════════════════════════ STAT ROW */
+.sr { display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;gap:8px; }
+.sr:last-child { border-bottom:none; }
+.sr-left { flex:1;display:flex;flex-direction:column;gap:2px; }
+.sr-label { color:var(--text);display:flex;align-items:center;gap:6px;font-weight:500; }
+.sr-desc  { font-size:10px;color:var(--text-3);line-height:1.3; }
+.sr-val   { font-family:var(--font-ui);font-weight:700;color:var(--text);white-space:nowrap;padding-top:1px; }
+.sr-val.warn { color:var(--amber); }
+.sr-val.crit { color:var(--red); }
+.sr-val.good { color:var(--green); }
+
+/* ════════════════════════════════════════════════════════ DOT */
+.dot { width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0; }
+.dot-g { background:var(--green); }
+.dot-a { background:var(--amber); }
+.dot-r { background:var(--red); }
+.dot-d { background:var(--text-3); }
+
+/* ════════════════════════════════════════════════════════ BLOCK HINT */
+.blk-hint { font-size:10px;color:var(--text-3);font-weight:400;margin-left:4px; }
+
+/* ════════════════════════════════════════════════════════ MONITOR TABLE */
+.mt { width:100%;border-collapse:collapse;font-size:11px;font-family:var(--font-mono); }
+.mt th { background:var(--bg-3);color:var(--text-3);padding:7px 12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap; }
+.mt th small { display:block;font-size:8px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-3);opacity:.7;margin-top:1px; }
+.mt td { padding:7px 12px;border-bottom:1px solid var(--line);color:var(--text);vertical-align:middle; }
+.mt tbody tr:last-child td { border-bottom:none; }
+.mt tbody tr:hover td { background:var(--bg-2); }
+
+/* ════════════════════════════════════════════════════════ CACHE BLOCK */
+.cache-big { text-align:center;padding:8px 0 10px; }
+.cache-pct { font-family:var(--font-ui);font-size:52px;font-weight:800;line-height:1; }
+.cache-msg { font-size:11px;margin-top:4px; }
+.cache-bar-wrap { margin:10px 0 4px;height:6px;background:var(--bg-4);border-radius:3px;overflow:hidden; }
+.cache-bar-fill { height:100%;border-radius:3px;transition:width .7s ease; }
+.cache-foot { font-size:10px;color:var(--text-3);display:flex;justify-content:space-between;margin-top:2px; }
+
+/* ═════════════════════════���══════════════════════════════ SESSIONS TABLE */
 .sessions-table {
     border-collapse: collapse;
     font-size: 12px;
+    width: 100%;
 }
 
 .sessions-table thead {
@@ -365,36 +470,78 @@
 .sessions-table tbody tr:hover {
     background: var(--row-hover-bg, rgba(0,0,0,0.02));
 }
+
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--primary);
+    color: white;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding: 0;
+}
+
+.page-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-1);
+}
+
+.page-title span {
+    color: var(--amber);
+}
 </style>
 
-<!-- ══════════════════════════════════════════════════════  СКРИПТ  -->
 <script>
 var _countdown = 60, _iv = null;
+var currentTab = 'system';
+var sessionsData = [];
+var sessionAutoRefreshInterval = null;
+var isSessionAutoRefreshRunning = true;
+var currentSessionRefreshRate = 3000;
 
 function esc(s) {
     var d = document.createElement('div');
-    d.textContent = (s == null || s === '') ? '—' : String(s);
+    d.textContent = s;
     return d.innerHTML;
 }
-function fmt(n) { return Number(n||0).toLocaleString('ru-RU'); }
-function pct(v) { return Math.max(0,Math.min(100, parseFloat(v)||0)); }
 
-/* metric card updater */
-function setMC(id, val, barPct, sub) {
-    var card = document.getElementById('mc-'+id);
-    document.getElementById('v-'+id).textContent = val;
-    if (sub != null) document.getElementById('s-'+id).textContent = sub;
-    var fill = document.getElementById('b-'+id);
+function fmt(n) {
+    if (n === null || n === undefined) return '—';
+    if (typeof n !== 'number') n = parseFloat(n);
+    if (isNaN(n)) return '—';
+    return n.toLocaleString('ru-RU');
+}
+
+function setMC(id, val, pct, warn, crit) {
+    var el = document.getElementById('mc-' + id);
+    if (!el) return;
+    
+    el.classList.remove('warn', 'crit');
+    var fill = el.querySelector('.mc-fill');
+    var valEl = el.querySelector('.mc-val');
+    
+    if (valEl) valEl.textContent = val;
     if (fill) {
-        var p = pct(barPct);
-        fill.style.width = p+'%';
-        var cls = p>=85 ? 'crit' : p>=65 ? 'warn' : '';
-        fill.className = 'mc-fill' + (cls?' '+cls:'');
-        card.className = 'mc'      + (cls?' '+cls:'');
+        fill.style.width = (Math.min(pct, 100)) + '%';
+        fill.classList.remove('warn', 'crit');
+        if (crit) fill.classList.add('crit');
+        else if (warn) fill.classList.add('warn');
+        
+        if (crit) el.classList.add('crit');
+        else if (warn) el.classList.add('warn');
     }
 }
 
-/* stat row builder — label + description + value */
 function sr(label, desc, val, dotCls, valCls) {
     var dot  = dotCls  ? '<span class="dot '+dotCls+'"></span>' : '';
     var vcls = valCls  ? ' '+valCls : '';
@@ -407,15 +554,118 @@ function sr(label, desc, val, dotCls, valCls) {
         +'</div>';
 }
 
+function switchTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.style.display = 'none';
+    });
+    
+    var selectedTab = document.getElementById('tab-' + tabName);
+    if (selectedTab) {
+        selectedTab.style.display = 'block';
+    }
+    
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    var activeBtn = document.querySelector('[data-tab="' + tabName + '"]');
+    if (activeBtn) activeBtn.classList.add('active');
+    
+    currentTab = tabName;
+    
+    if (tabName === 'system' || tabName === 'queries') {
+        loadStats();
+    } else if (tabName === 'sessions') {
+        loadSessionsData();
+        startSessionAutoRefresh(currentSessionRefreshRate);
+    }
+}
 
+function loadActiveTab() {
+    if (currentTab === 'system' || currentTab === 'queries') {
+        loadStats();
+    } else if (currentTab === 'sessions') {
+        loadSessionsData();
+    }
+}
 
-/* ─────────────────── RENDER FUNCTIONS ─────────────────── */
+async function loadStats() {
+    var btn = document.getElementById('refreshBtn');
+    if (btn) {
+        btn.innerHTML = '<span class="loading"></span>';
+        btn.disabled = true;
+    }
+
+    try {
+        var r = await fetch('/api/monitoring/stats');
+        var d = await r.json();
+        if (!d.success) throw new Error(d.error||'Ошибка сервера');
+
+        var data = d.data;
+        var sys  = data.system  || {};
+        var pg   = data.postgres;
+        var ts   = new Date(data.timestamp).toLocaleTimeString('ru-RU');
+        
+        var lastUpdateEl = document.getElementById('lastUpdateTime');
+        if (lastUpdateEl) lastUpdateEl.textContent = 'Обновлено: '+ts;
+
+        if (sys.cpu_percent != null) {
+            setMC('cpu', sys.cpu_percent.toFixed(1)+'%', sys.cpu_percent,
+                  sys.cpu_percent>70, sys.cpu_percent>90);
+        }
+
+        if (sys.memory_percent != null) {
+            setMC('ram', sys.memory_used_gb + ' / ' + sys.memory_total_gb + ' GB',
+                  sys.memory_percent, sys.memory_percent>70, sys.memory_percent>90);
+        }
+
+        if (sys.disk_percent != null) {
+            setMC('disk', sys.disk_used_gb + ' / ' + sys.disk_total_gb + ' GB',
+                  sys.disk_percent, sys.disk_percent>75, sys.disk_percent>90);
+        }
+
+        if (pg) {
+            setMC('dbsize', pg.db_size, 50, false, false);
+            var sub = document.getElementById('s-dbsize');
+            if (sub) sub.textContent = (pg.db_size_bytes ? (pg.db_size_bytes/1024/1024/1024).toFixed(2)+' GB' : '—') + ' · uptime: ' + pg.uptime;
+
+            setMC('conn', pg.connections.active + ' / ' + pg.connections.total + ' / ' + pg.connections.max_connections,
+                  (pg.connections.total / pg.connections.max_connections * 100),
+                  (pg.connections.total / pg.connections.max_connections) > 0.7,
+                  (pg.connections.total / pg.connections.max_connections) > 0.9);
+
+            renderConnections(pg);
+            renderTransactions(pg);
+            renderCache(pg);
+            renderNetwork(sys);
+            renderBgwriter(pg);
+            renderTableStats(pg.table_stats);
+            renderSlowQueries(pg.slow_queries);
+            renderTopQueries(pg.top_queries);
+
+            var versionEl = document.getElementById('pgVersionBadge');
+            if (versionEl) versionEl.textContent = pg.version;
+        }
+
+        startCountdown();
+
+    } catch(e) {
+        console.error('Ошибка загрузки статистики:', e);
+    } finally {
+        if (btn) {
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Обновить';
+            btn.disabled = false;
+        }
+    }
+}
 
 function renderConnections(pg) {
     var c   = pg.connections;
     var usedPct = c.max_connections ? Math.round(c.total / c.max_connections * 100) : 0;
     var wl  = pg.waiting_locks || 0;
-    document.getElementById('blk-connections').innerHTML =
+    var el = document.getElementById('blk-connections');
+    if (!el) return;
+    
+    el.innerHTML =
         sr('Активных сессий',          'Прямо сейчас выполняют SQL-запрос',                     c.active,      'dot-g') +
         sr('Idle (ждут команды)',       'Держат соединение открытым, но ничего не делают',        c.idle,        'dot-d') +
         sr('Idle in transaction',       'Открытая транзакция без активности — потенциальная проблема', c.idle_in_tx, c.idle_in_tx>0?'dot-a':'dot-d', c.idle_in_tx>0?'warn':'') +
@@ -427,16 +677,20 @@ function renderConnections(pg) {
 }
 
 function renderTransactions(pg) {
-    var s = pg.db_stats;
-    document.getElementById('blk-transactions').innerHTML =
-        sr('COMMIT (успешных транзакций)',   'Транзакции, завершившиеся успешно', fmt(s.commits),       'dot-g') +
-        sr('ROLLBACK (откатов)',             'Транзакции, отменённые явно или из-за ошибки', fmt(s.rollbacks), s.rollbacks>0?'dot-a':'dot-d', s.rollbacks>0?'warn':'') +
-        sr('Deadlock (взаимные блокировки)', 'Критическая ситуация: две транзакции ждут друг друга', fmt(s.deadlocks), s.deadlocks>0?'dot-r':'dot-g', s.deadlocks>0?'crit':'good') +
-        sr('Конфликты (hot standby)',        'Возникают при репликации на standby-сервере',     fmt(s.conflicts),  '') +
-        sr('INSERT (вставок строк)',         'Суммарно с момента последнего pg_stat_reset()',   fmt(s.rows_inserted), '') +
-        sr('UPDATE (обновлений)',            'Суммарно с момента последнего pg_stat_reset()',   fmt(s.rows_updated),  '') +
-        sr('DELETE (удалений)',              'Суммарно с момента последнего pg_stat_reset()',   fmt(s.rows_deleted),  '') +
-        sr('SELECT (строк возвращено)',       'Строк отдано клиентам через fetch',              fmt(s.rows_fetched),  '');
+    var db = pg.db_stats || {};
+    var el = document.getElementById('blk-transactions');
+    if (!el) return;
+    
+    el.innerHTML =
+        sr('COMMIT (успешных транзакций)',   'Транзакции, завершившиеся успешно', fmt(db.commits),       'dot-g') +
+        sr('ROLLBACK (откатов)',             'Транзакции, отменённые явно или из-за ошибки', fmt(db.rollbacks), db.rollbacks>0?'dot-a':'dot-d', db.rollbacks>0?'warn':'') +
+        sr('Deadlock (взаимные блокировки)', 'Критическая ситуация: две транзакции ждут друг друга', fmt(db.deadlocks), db.deadlocks>0?'dot-r':'dot-g', db.deadlocks>0?'crit':'good') +
+        sr('Конфликты (hot standby)',        'Возникают при репликации на standby-сервере',     fmt(db.conflicts),  '') +
+        sr('INSERT (вставок строк)',         'Суммарно с момента последнего pg_stat_reset()',   fmt(db.rows_inserted), '') +
+        sr('UPDATE (обновлений)',            'Суммарно с момента последнего pg_stat_reset()',   fmt(db.rows_updated),  '') +
+        sr('DELETE (удалений)',              'Суммарно с момента последнего pg_stat_reset()',   fmt(db.rows_deleted),  '') +
+        sr('SELECT (строк возвращено)',       'Строк отдано клиентам через fetch',              fmt(db.rows_fetched),  '')
+        ;
 }
 
 function renderCache(pg) {
@@ -459,39 +713,40 @@ function renderCache(pg) {
 
 function renderNetwork(sys) {
     var el = document.getElementById('blk-network');
-    if (!sys || sys.net_recv_mb == null) {
-        el.innerHTML = '<div class="empty-state" style="color:var(--text-3);font-size:11px;">Данные /proc/net/dev недоступны.<br>Возможно Flask запущен не на Linux.</div>';
-        return;
-    }
+    if (!el) return;
+    
     el.innerHTML =
-        sr('Получено (RX)', 'Суммарно принято по всем сетевым интерфейсам (кроме lo) с момента загрузки ОС', sys.net_recv_mb+' МБ', '') +
-        sr('Отправлено (TX)', 'Суммарно отправлено по всем сетевым интерфейсам (кроме lo) с момента загрузки ОС', sys.net_sent_mb+' МБ', '');
+        sr('Получено', 'Данные переданы в систему (MB)', fmt(sys.net_recv_mb || 0), '') +
+        sr('Отправлено', 'Данные отправлены из системы (MB)', fmt(sys.net_sent_mb || 0), '');
 }
 
-function renderBgwriter(bgw) {
+function renderBgwriter(pg) {
+    var bgw = pg.bgwriter || {};
     var el = document.getElementById('blk-bgwriter');
-    if (!bgw || Object.keys(bgw).length===0) {
-        el.innerHTML = '<div class="empty-state" style="color:var(--text-3);">Данные bgwriter недоступны</div>';
-        return;
-    }
-    var reqBad = (bgw.checkpoints_req||0) > 10;
-    var beBad  = (bgw.buffers_backend||0) > (bgw.buffers_checkpoint||1);
+    if (!el) return;
+    
+    var beBad = (bgw.buffers_backend || 0) > 100000;
     el.innerHTML =
-        sr('Чекпоинты по расписанию', 'Плановые — по истечении checkpoint_timeout (норма)', fmt(bgw.checkpoints_timed), 'dot-g') +
-        sr('Чекпоинты по требованию', 'Внеплановые — буферы переполнились; если много — увеличьте shared_buffers', fmt(bgw.checkpoints_req), reqBad?'dot-a':'dot-d', reqBad?'warn':'') +
-        sr('Буферов записано (checkpoint)', 'Dirty-страниц сброшено на диск в ходе чекпоинтов', fmt(bgw.buffers_checkpoint), '') +
-        sr('Буферов очищено (bgwriter)',    'Фоновая запись dirty-страниц между чекпоинтами',    fmt(bgw.buffers_clean),     '') +
-        sr('Буферов записано бэкендами',   'Бэкенды сами пишут — признак нехватки буферов',      fmt(bgw.buffers_backend),   beBad?'dot-a':'dot-d', beBad?'warn':'') +
-        sr('Буферов выделено (всего)',      'Всего выделений из пула shared_buffers',             fmt(bgw.buffers_alloc),     '');
+        sr('Checkpoints (scheduled)', 'Плановые контрольные точки', fmt(bgw.checkpoints_timed), '') +
+        sr('Checkpoints (requested)', 'Запрошенные контрольные точки', fmt(bgw.checkpoints_req), '') +
+        sr('Буферов записано', 'Контрольной точкой', fmt(bgw.buffers_checkpoint), '') +
+        sr('Буферов очищено', 'Background writer очищает страницы', fmt(bgw.buffers_clean), '') +
+        sr('Буферов записано бэкендами', 'Бэкенды сами пишут', fmt(bgw.buffers_backend), beBad?'dot-a':'dot-d', beBad?'warn':'') +
+        sr('Буферов выделено', 'Всего выделений из пула shared_buffers', fmt(bgw.buffers_alloc), '');
 }
 
 function renderSlowQueries(queries) {
     var el = document.getElementById('blk-slow');
-    document.getElementById('slowCount').textContent = queries && queries.length ? queries.length+' запр.' : '';
+    if (!el) return;
+    
+    var countEl = document.getElementById('slowQueryCount');
+    if (countEl) countEl.textContent = queries && queries.length ? queries.length : '0';
+    
     if (!queries || queries.length===0) {
-        el.innerHTML = '<div class="empty-state" style="padding:16px;"><i class="bi bi-check-circle" style="color:var(--green);margin-right:6px;"></i>Медленных запросов нет — всё выполняется быстро</div>';
+        el.innerHTML = '<div class="empty-state" style="padding:16px;"><i class="bi bi-check-circle" style="color:var(--green);margin-right:6px;"></i>Медленных запросов нет</div>';
         return;
     }
+    
     var rows = queries.map(function(q) {
         var color = q.duration_sec>60?'var(--red)':q.duration_sec>10?'var(--amber)':'var(--text-2)';
         return '<tr>'
@@ -504,12 +759,7 @@ function renderSlowQueries(queries) {
             +'</tr>';
     }).join('');
     el.innerHTML = '<table class="mt"><thead><tr>'
-        +'<th>PID<small>id процесса</small></th>'
-        +'<th>Пользователь<small>роль PostgreSQL</small></th>'
-        +'<th>Приложение<small>application_name</small></th>'
-        +'<th>Длительность<small>время выполнения</small></th>'
-        +'<th>Состояние<small>state</small></th>'
-        +'<th>SQL-запрос<small>первые 200 символов</small></th>'
+        +'<th>PID</th><th>Пользователь</th><th>Приложение</th><th>Длительность</th><th>Состояние</th><th>SQL-запрос</th>'
         +'</tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
@@ -556,170 +806,58 @@ function renderTableStats(tables) {
 }
 
 function renderTopQueries(queries) {
-    var el = document.getElementById('blk-topqueries');
+    var el = document.getElementById('blk-top-queries');
+    if (!el) return;
+    
     if (!queries || queries.length===0) {
-        el.innerHTML = '<div class="empty-state" style="padding:16px;color:var(--text-3);">Расширение pg_stat_statements не установлено или пусто.<br><small>Добавьте: CREATE EXTENSION IF NOT EXISTS pg_stat_statements;</small></div>';
+        el.innerHTML = '<div class="empty-state" style="padding:16px;">pg_stat_statements недоступна</div>';
         return;
     }
+    
     var rows = queries.map(function(q) {
         return '<tr>'
-            +'<td style="max-width:380px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(q.query)+'">'+esc(q.query)+'</td>'
+            +'<td style="max-width:400px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(q.query)+'">'+esc(q.query.substring(0, 150))+'</td>'
             +'<td style="text-align:right;">'+fmt(q.calls)+'</td>'
             +'<td style="text-align:right;color:var(--amber);font-weight:600;">'+esc(q.total_ms)+' мс</td>'
             +'<td style="text-align:right;">'+esc(q.mean_ms)+' мс</td>'
             +'<td style="text-align:right;">'+fmt(q.rows)+'</td>'
             +'</tr>';
     }).join('');
+    
     el.innerHTML = '<table class="mt"><thead><tr>'
-        +'<th>SQL-запрос<small>первые 150 символов</small></th>'
-        +'<th style="text-align:right">Вызовов<small>кол-во выполнений</small></th>'
-        +'<th style="text-align:right">Суммарно<small>total_exec_time</small></th>'
-        +'<th style="text-align:right">Среднее<small>mean_exec_time</small></th>'
-        +'<th style="text-align:right">Строк<small>суммарно</small></th>'
+        +'<th>SQL-запрос</th><th style="text-align:right">Вызовов</th><th style="text-align:right">Суммарно</th>'
+        +'<th style="text-align:right">Среднее</th><th style="text-align:right">Строк</th>'
         +'</tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
-/* ─────────────────── MAIN LOAD ─────────────────── */
-async function loadStats() {
-    var btn = document.getElementById('refreshBtn');
-    btn.innerHTML = '<span class="loading"></span>';
-    btn.disabled  = true;
-
-    try {
-        var r = await fetch('/api/monitoring/stats');
-        var d = await r.json();
-        if (!d.success) throw new Error(d.error||'Ошибка сервера');
-
-        var data = d.data;
-        var sys  = data.system  || {};
-        var pg   = data.postgres;
-        var ts   = new Date(data.timestamp).toLocaleTimeString('ru-RU');
-        document.getElementById('lastUpdateTime').textContent = 'Обновлено: '+ts;
-
-        /* ── Системные карточки ── */
-        if (sys.cpu_percent != null) {
-            setMC('cpu', sys.cpu_percent.toFixed(1)+'%', sys.cpu_percent,
-                  sys.load_avg_1m!=null
-                    ? 'LA 1м/5м/15м: '+sys.load_avg_1m+' / '+sys.load_avg_5m+' / '+sys.load_avg_15m
-                    : 'нагрузка процессора');
-        } else {
-            document.getElementById('v-cpu').textContent = '—';
-            document.getElementById('s-cpu').textContent = sys.proc_error ? 'Только Linux: /proc недоступен' : 'нет данных';
-        }
-        if (sys.memory_percent != null) {
-            setMC('ram', sys.memory_percent.toFixed(1)+'%', sys.memory_percent,
-                  sys.memory_used_gb+' / '+sys.memory_total_gb+' ГБ · своб. '+sys.memory_avail_gb+' ГБ');
-        } else {
-            document.getElementById('v-ram').textContent = '—';
-            document.getElementById('s-ram').textContent = 'Данные /proc/meminfo недоступны';
-        }
-        if (sys.disk_percent != null) {
-            setMC('disk', sys.disk_percent.toFixed(1)+'%', sys.disk_percent,
-                  sys.disk_used_gb+' / '+sys.disk_total_gb+' ГБ · своб. '+sys.disk_free_gb+' ГБ');
-        } else {
-            document.getElementById('v-disk').textContent = '—';
-            document.getElementById('s-disk').textContent = 'statvfs недоступен';
-        }
-
-        /* ── PostgreSQL карточки ── */
-        if (pg && !pg.error) {
-            document.getElementById('pgVersionBadge').textContent = pg.version;
-            setMC('dbsize', pg.db_size, 0, 'uptime: '+pg.uptime);
-
-            var c = pg.connections;
-            var connPct = c.max_connections ? Math.round(c.total/c.max_connections*100) : 0;
-            setMC('conn', c.active+' / '+c.max_connections, connPct,
-                  'Всего: '+c.total+' · Idle: '+c.idle+' · '+connPct+'% от макс.');
-
-            renderConnections(pg);
-            renderTransactions(pg);
-            renderCache(pg);
-            renderNetwork(sys);
-            renderBgwriter(pg.bgwriter);
-            renderSlowQueries(pg.slow_queries);
-            renderTableStats(pg.table_stats);
-            renderTopQueries(pg.top_queries);
-
-        } else {
-            var msg = pg && pg.error ? pg.error : 'Ошибка подключения к PostgreSQL';
-            ['blk-connections','blk-transactions','blk-cache','blk-network','blk-bgwriter','blk-slow','blk-tables','blk-topqueries'].forEach(function(id){
-                var el = document.getElementById(id);
-                if (el) el.innerHTML = '<div class="empty-state" style="padding:16px;color:var(--red);">'+esc(msg)+'</div>';
-            });
-            ['v-dbsize','v-conn'].forEach(function(id){ document.getElementById(id).textContent='—'; });
-        }
-
-    } catch(e) {
-        document.getElementById('lastUpdateTime').textContent = 'Ошибка: '+e.message;
-    }
-
-    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Обновить';
-    btn.disabled  = false;
-    _countdown = 60;
-}
-
 function startCountdown() {
-    _countdown = 60;
     if (_iv) clearInterval(_iv);
+    _countdown = 60;
+    var nextEl = document.getElementById('nextUpdate');
+    var queriesEl = document.getElementById('nextUpdateQueries');
+    
     _iv = setInterval(function() {
         _countdown--;
-        document.getElementById('nextUpdate').textContent = 'обновление через '+_countdown+' с';
-        if (_countdown<=0) { loadStats(); _countdown=60; }
+        if (nextEl) nextEl.textContent = 'обновление через '+_countdown+' с';
+        if (queriesEl) queriesEl.textContent = 'обновление через '+_countdown+' с';
+        
+        if (_countdown<=0) {
+            if (currentTab === 'system' || currentTab === 'queries') {
+                loadStats();
+            }
+            _countdown = 60;
+        }
     }, 1000);
 }
 
-
-// ═══════════════════════════════════════════════════════
-// TABS SWITCHING
-// ═══════════════════════════════════════════════════════
-
-var currentTab = 'system';
-var sessionsData = [];
-var sessionAutoRefreshInterval = null;
-var isSessionAutoRefreshRunning = true;
-var currentSessionRefreshRate = 3000;
-
-function switchTab(tabName) {
-    // Скрыть все табы
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.style.display = 'none';
-    });
-    
-    // Показать выбранный таб
-    document.getElementById('tab-' + tabName).style.display = 'block';
-    
-    // Обновить кнопки
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
-    
-    currentTab = tabName;
-    
-    // Загрузить данные для таба
-    if (tabName === 'queries') {
-        loadStatsQueries();
-    } else if (tabName === 'sessions') {
-        loadSessionsData();
-        startSessionAutoRefresh(currentSessionRefreshRate);
-    } else if (tabName === 'system') {
-        loadStats();
-    }
-}
-
-// ═══════════════════════════════════════════════════════
-// SESSIONS TAB FUNCTIONS
-// ═══════════════════════════════════════════════════════
-
+/* SESSIONS */
 async function loadSessionsData() {
     try {
-        const [sessionsRes, statsRes] = await Promise.all([
-            fetch('/api/sessions?exclude_current=true'),
-            fetch('/api/sessions/stats')
-        ]);
+        var sessionsRes = await fetch('/api/sessions?exclude_current=true');
+        var statsRes = await fetch('/api/sessions/stats');
         
-        const sessionsResp = await sessionsRes.json();
-        const statsResp = await statsRes.json();
+        var sessionsResp = await sessionsRes.json();
+        var statsResp = await statsRes.json();
         
         if (sessionsResp.success) {
             sessionsData = sessionsResp.data;
@@ -733,60 +871,64 @@ async function loadSessionsData() {
         
         updateSessionLastUpdateTime();
     } catch (error) {
-        console.error('Ошибка загрузки сессий:', error);
+        console.error('Ошибка:', error);
     }
 }
 
 function updateSessionStats(stats) {
-    document.getElementById('sessionTotalCount').textContent = stats.total || 0;
-    document.getElementById('sessionActiveCount').textContent = stats.active || 0;
-    document.getElementById('sessionIdleCount').textContent = stats.idle || 0;
-    document.getElementById('sessionLockCount').textContent = stats.waiting_lock || 0;
+    var els = ['Total', 'Active', 'Idle', 'Lock'];
+    var vals = [stats.total, stats.active, stats.idle, stats.waiting_lock];
+    
+    document.getElementById('sessionTotalCount').textContent = vals[0] || 0;
+    document.getElementById('sessionActiveCount').textContent = vals[1] || 0;
+    document.getElementById('sessionIdleCount').textContent = vals[2] || 0;
+    document.getElementById('sessionLockCount').textContent = vals[3] || 0;
 }
 
 function updateSessionLastUpdateTime() {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('ru-RU');
-    
-    if (currentSessionRefreshRate > 0) {
-        const nextTime = new Date(now.getTime() + currentSessionRefreshRate);
-        const nextTimeStr = nextTime.toLocaleTimeString('ru-RU');
-        document.getElementById('nextUpdateSessions').textContent = `Следующее: ${nextTimeStr}`;
-    } else {
-        document.getElementById('nextUpdateSessions').textContent = 'Ручной режим';
+    var nextEl = document.getElementById('nextUpdateSessions');
+    if (nextEl) {
+        if (currentSessionRefreshRate > 0) {
+            nextEl.textContent = 'Следующее: ' + new Date(Date.now() + currentSessionRefreshRate).toLocaleTimeString('ru-RU');
+        } else {
+            nextEl.textContent = 'Ручной режим';
+        }
     }
 }
 
 function collectSessionUsers() {
-    const users = new Set();
-    sessionsData.forEach(s => {
+    var users = new Set();
+    sessionsData.forEach(function(s) {
         if (s.usename) users.add(s.usename);
     });
     
-    const userSelect = document.getElementById('sessionUserFilter');
-    const selectedValue = userSelect.value;
+    var userSelect = document.getElementById('sessionUserFilter');
+    if (!userSelect) return;
+    
+    var val = userSelect.value;
     userSelect.innerHTML = '<option value="">Все пользователи</option>';
-    
-    Array.from(users).sort().forEach(user => {
-        const option = document.createElement('option');
-        option.value = user;
-        option.textContent = user;
-        userSelect.appendChild(option);
+    Array.from(users).sort().forEach(function(user) {
+        var opt = document.createElement('option');
+        opt.value = user;
+        opt.textContent = user;
+        userSelect.appendChild(opt);
     });
-    
-    userSelect.value = selectedValue;
+    userSelect.value = val;
 }
 
 function applySessionFilters() {
-    const queryFilter = document.getElementById('sessionQueryFilter')?.value.toLowerCase() || '';
-    const statusFilter = document.getElementById('sessionStatusFilter')?.value || '';
-    const userFilter = document.getElementById('sessionUserFilter')?.value || '';
+    var qf = document.getElementById('sessionQueryFilter');
+    var sf = document.getElementById('sessionStatusFilter');
+    var uf = document.getElementById('sessionUserFilter');
     
-    const filtered = sessionsData.filter(s => {
-        const matchQuery = !queryFilter || s.query.toLowerCase().includes(queryFilter);
-        const matchStatus = !statusFilter || s.state === statusFilter;
-        const matchUser = !userFilter || s.usename === userFilter;
-        return matchQuery && matchStatus && matchUser;
+    var q = qf ? qf.value.toLowerCase() : '';
+    var s = sf ? sf.value : '';
+    var u = uf ? uf.value : '';
+    
+    var filtered = sessionsData.filter(function(x) {
+        return (!q || x.query.toLowerCase().includes(q)) &&
+               (!s || x.state === s) &&
+               (!u || x.usename === u);
     });
     
     document.getElementById('sessionTotalFound').textContent = filtered.length;
@@ -796,139 +938,89 @@ function applySessionFilters() {
 }
 
 function renderSessionsTable(sessions) {
-    const tbody = document.getElementById('sessionsTableBody');
+    var tbody = document.getElementById('sessionsTableBody');
+    if (!tbody) return;
     
     if (sessions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:60px;color:var(--text-3);">Сессии не найдены</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:60px;color:var(--text-3);">Нет сессий</td></tr>';
         return;
     }
     
-    tbody.innerHTML = sessions.map(s => {
-        const stateColor = s.state === 'active' ? 'var(--green)' : 
-                          s.state === 'idle' ? 'var(--amber)' : 'var(--text-2)';
+    tbody.innerHTML = sessions.map(function(s) {
+        var col = s.state === 'active' ? 'var(--green)' : s.state === 'idle' ? 'var(--amber)' : 'var(--text-2)';
+        var lock = s.wait_event_type === 'Lock' ? '<i class="bi bi-lock-fill" style="color:var(--red);margin-right:5px;"></i>' : '';
+        var dur = s.duration_seconds < 60 ? s.duration_seconds+'сек' : Math.floor(s.duration_seconds/60)+'м';
+        var qur = s.query_duration_seconds < 60 ? s.query_duration_seconds+'сек' : Math.floor(s.query_duration_seconds/60)+'м';
         
-        const hasLock = s.wait_event_type === 'Lock';
-        const lockIcon = hasLock ? '<i class="bi bi-lock-fill" style="color:var(--red);margin-right:5px;"></i>' : '';
-        
-        const duration = formatSessionDuration(s.duration_seconds);
-        const queryDuration = formatSessionDuration(s.query_duration_seconds);
-        
-        return `
-            <tr>
-                <td><strong style="color:var(--primary);">${s.pid}</strong></td>
-                <td><code style="font-size:11px;">${s.usename || '—'}</code></td>
-                <td style="font-size:12px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.application_name}">${s.application_name || '—'}</td>
-                <td style="font-size:11px;font-family:var(--font-mono);">${s.client_addr || '—'}</td>
-                <td>
-                    <span style="background:${stateColor};color:white;padding:4px 8px;border-radius:3px;font-size:11px;font-weight:600;">
-                        ${s.state || '—'}
-                    </span>
-                </td>
-                <td><code style="font-size:11px;">${s.datname || '—'}</code></td>
-                <td style="font-size:12px;color:var(--text-3);">${duration}</td>
-                <td style="font-size:12px;color:var(--text-3);">${queryDuration}</td>
-                <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);" title="${s.query}">
-                    ${lockIcon}${s.query.substring(0, 150)}${s.query.length > 150 ? '...' : ''}
-                </td>
-                <td style="text-align:center;">
-                    <button onclick="cancelSessionAction(${s.pid}, false)" style="background:var(--amber);color:white;border:none;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;margin:2px;">
-                        <i class="bi bi-stop"></i>
-                    </button>
-                    <button onclick="cancelSessionAction(${s.pid}, true)" style="background:var(--red);color:white;border:none;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;margin:2px;">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </td>
-            </tr>
-        `;
+        return '<tr>'
+            +'<td><strong style="color:var(--primary);">'+s.pid+'</strong></td>'
+            +'<td><code>'+esc(s.usename||'—')+'</code></td>'
+            +'<td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+esc(s.application_name)+'">'+esc(s.application_name||'—')+'</td>'
+            +'<td><code>'+esc(s.client_addr||'—')+'</code></td>'
+            +'<td><span style="background:'+col+';color:white;padding:4px 8px;border-radius:3px;font-size:11px;font-weight:600;">'+esc(s.state)+'</span></td>'
+            +'<td><code>'+esc(s.datname||'—')+'</code></td>'
+            +'<td style="font-size:11px;color:var(--text-3);">'+dur+'</td>'
+            +'<td style="font-size:11px;color:var(--text-3);">'+qur+'</td>'
+            +'<td style="font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);" title="'+esc(s.query)+'">'+lock+esc(s.query.substring(0, 150))+(s.query.length>150?'...':'')+'</td>'
+            +'<td style="text-align:center;">'
+            +'<button onclick="cancelSessionAction('+s.pid+',0)" style="background:var(--amber);color:white;border:none;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;margin:2px;"><i class="bi bi-stop"></i></button>'
+            +'<button onclick="cancelSessionAction('+s.pid+',1)" style="background:var(--red);color:white;border:none;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;margin:2px;"><i class="bi bi-trash"></i></button>'
+            +'</td>'
+            +'</tr>';
     }).join('');
 }
 
 async function cancelSessionAction(pid, force) {
-    const action = force ? 'Жесткое завершение' : 'Отмена запроса';
-    
-    if (!confirm(`${action} для PID ${pid}?`)) return;
+    if (!confirm((force?'Завершить':'Отменить')+' PID '+pid+'?')) return;
     
     try {
-        const response = await fetch(`/api/sessions/${pid}/terminate`, {
+        var r = await fetch('/api/sessions/'+pid+'/terminate', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({force: force})
+            body: JSON.stringify({force: force==1})
         });
-        
-        const data = await response.json();
-        if (data.success && data.data.success) {
-            showSessionNotification('✓ ' + data.data.message, 'success');
+        var d = await r.json();
+        if (d.success && d.data.success) {
             setTimeout(loadSessionsData, 300);
-        } else {
-            showSessionNotification('✗ Ошибка', 'error');
         }
-    } catch (error) {
-        showSessionNotification('✗ Ошибка: ' + error.message, 'error');
+    } catch(e) {
+        console.error('Ошибка:', e);
     }
 }
 
 async function terminateIdleSessions() {
-    const idleSessions = sessionsData.filter(s => s.state === 'idle' && s.duration_seconds > 300);
+    var idle = sessionsData.filter(function(s) { return s.state === 'idle' && s.duration_seconds > 300; });
+    if (idle.length === 0) return;
+    if (!confirm('Завершить '+idle.length+' idle сессий?')) return;
     
-    if (idleSessions.length === 0) {
-        showSessionNotification('ℹ Нет idle сессий старше 5 минут', 'info');
-        return;
-    }
-    
-    if (!confirm(`Завершить ${idleSessions.length} idle сессию(й)?`)) return;
-    
-    let successCount = 0;
-    for (const session of idleSessions) {
+    var ok = 0;
+    for (var i = 0; i < idle.length; i++) {
         try {
-            const response = await fetch(`/api/sessions/${session.pid}/terminate`, {
+            var r = await fetch('/api/sessions/'+idle[i].pid+'/terminate', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({force: true})
             });
-            
-            const data = await response.json();
-            if (data.success && data.data.success) successCount++;
-        } catch (error) {
-            console.error('Ошибка при завершении сессии:', error);
-        }
+            var d = await r.json();
+            if (d.success && d.data.success) ok++;
+        } catch(e) {}
     }
-    
-    showSessionNotification(`✓ Завершено: ${successCount}/${idleSessions.length}`, 'success');
     setTimeout(loadSessionsData, 500);
 }
 
 function exportSessionsToCSV() {
-    if (sessionsData.length === 0) {
-        showSessionNotification('ℹ Нет данных для экспорта', 'info');
-        return;
-    }
+    if (sessionsData.length === 0) return;
     
-    const headers = ['PID', 'Пользователь', 'IP', 'Статус', 'БД', 'Запрос'];
-    const rows = sessionsData.map(s => [
-        s.pid,
-        s.usename,
-        s.client_addr || '',
-        s.state,
-        s.datname,
-        s.query.substring(0, 200).replace(/"/g, '""')
-    ]);
+    var csv = 'PID,Пользователь,IP,Статус,БД,Запрос\n';
+    sessionsData.forEach(function(s) {
+        csv += s.pid + ',"' + s.usename + '","' + (s.client_addr||'') + '","' + s.state + '","' + s.datname + '","' + s.query.substring(0,200).replace(/"/g,'""') + '"\n';
+    });
     
-    let csv = headers.join(',') + '\n';
-    csv += rows.map(row => 
-        row.map(cell => typeof cell === 'string' ? `"${cell}"` : cell).join(',')
-    ).join('\n');
-    
-    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.href = url;
-    link.download = `sessions_${new Date().toISOString().split('T')[0]}.csv`;
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
+    var blob = new Blob([csv], {type: 'text/csv'});
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'sessions.csv';
     link.click();
-    document.body.removeChild(link);
 }
 
 function startSessionAutoRefresh(interval) {
@@ -945,96 +1037,33 @@ function stopSessionAutoRefresh() {
 }
 
 function toggleSessionAutoRefresh() {
+    var btn = document.getElementById('toggleSessionRefresh');
     if (isSessionAutoRefreshRunning) {
         stopSessionAutoRefresh();
-        document.getElementById('toggleSessionRefresh').innerHTML = '<i class="bi bi-play"></i> Возобновить';
-        document.getElementById('toggleSessionRefresh').classList.remove('btn-secondary');
-        document.getElementById('toggleSessionRefresh').classList.add('btn-danger');
+        if (btn) btn.innerHTML = '<i class="bi bi-play"></i> Возобновить';
     } else {
         startSessionAutoRefresh(currentSessionRefreshRate);
-        document.getElementById('toggleSessionRefresh').innerHTML = '<i class="bi bi-pause"></i> Пауза';
-        document.getElementById('toggleSessionRefresh').classList.remove('btn-danger');
-        document.getElementById('toggleSessionRefresh').classList.add('btn-secondary');
+        if (btn) btn.innerHTML = '<i class="bi bi-pause"></i> Пауза';
     }
 }
 
-function formatSessionDuration(seconds) {
-    if (!seconds || seconds < 0) return '—';
-    if (seconds < 60) return `${seconds}сек`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}м`;
-    return `${Math.floor(seconds / 3600)}ч`;
-}
-
-function showSessionNotification(message, type = 'info') {
-    const bgColor = {
-        success: 'var(--green)',
-        error: 'var(--red)',
-        warning: 'var(--amber)',
-        info: 'var(--primary)'
-    }[type] || 'var(--primary)';
-    
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        padding: 12px 18px;
-        background: ${bgColor};
-        color: white;
-        border-radius: 4px;
-        font-size: 12px;
-        z-index: 10000;
-        animation: slideNotification 0.3s ease;
-    `;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    setTimeout(() => notification.remove(), 3000);
-}
-
-/*@keyframes slideNotification {
-    from {
-        transform: translateX(400px);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}*/
-
-// Session refresh rate change
 document.getElementById('sessionRefreshRate')?.addEventListener('change', function(e) {
     currentSessionRefreshRate = parseInt(e.target.value);
     stopSessionAutoRefresh();
-    
     if (currentSessionRefreshRate > 0) {
         startSessionAutoRefresh(currentSessionRefreshRate);
-        document.getElementById('toggleSessionRefresh').innerHTML = '<i class="bi bi-pause"></i> Пауза';
-        document.getElementById('toggleSessionRefresh').classList.remove('btn-danger');
-        document.getElementById('toggleSessionRefresh').classList.add('btn-secondary');
     }
 });
 
-// Session filters
 document.getElementById('sessionQueryFilter')?.addEventListener('input', applySessionFilters);
 document.getElementById('sessionStatusFilter')?.addEventListener('change', applySessionFilters);
 document.getElementById('sessionUserFilter')?.addEventListener('change', applySessionFilters);
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
+window.addEventListener('beforeunload', function() {
     stopSessionAutoRefresh();
 });
 
-// Load queries when on queries tab
-function loadStatsQueries() {
-    // Используем существующую функцию loadStats() которая уже загружает данные
-    loadStats();
-}
-
-
-
 loadStats();
-startCountdown();
 </script>
+
 {% endblock %}
