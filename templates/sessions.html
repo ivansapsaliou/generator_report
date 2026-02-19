@@ -1,0 +1,723 @@
+{% extends "base.html" %}
+{% block title %}Сессии БД — Мониторинг{% endblock %}
+
+{% block topbar_title %}
+    <span style="color:var(--text-3);">Мониторинг</span>
+    &nbsp;<span style="color:var(--text-3);">/</span>&nbsp;
+    <span style="color:var(--amber);">Сессии БД</span>
+{% endblock %}
+
+{% block topbar_actions %}
+<span id="lastUpdateTime" style="font-size:10px;color:var(--text-3);letter-spacing:.04em;margin-right:12px;"></span>
+
+<div style="display:flex;gap:6px;align-items:center;">
+    <!-- Выбор скорости обновления -->
+    <select id="refreshRateSelect" class="form-control" style="width:110px;height:32px;font-size:12px;">
+        <option value="1000">1 сек</option>
+        <option value="3000" selected>3 сек</option>
+        <option value="5000">5 сек</option>
+        <option value="10000">10 сек</option>
+        <option value="30000">30 сек</option>
+        <option value="60000">1 мин</option>
+        <option value="0">Вручную</option>
+    </select>
+
+    <!-- Кнопка паузы/возобновления -->
+    <button id="toggleRefreshBtn" class="btn btn-secondary btn-sm" title="Пауза обновления" 
+            onclick="toggleAutoRefresh()">
+        <i class="bi bi-pause"></i> Пауза
+    </button>
+
+    <!-- Кнопка ручного обновления -->
+    <button class="btn btn-secondary btn-sm" onclick="loadSessions()" title="Обновить сейчас">
+        <i class="bi bi-arrow-clockwise"></i> Обновить
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="padding:20px;">
+
+<!-- ЗАГОЛОВОК СТРАНИЦЫ -->
+<div class="page-header">
+    <div>
+        <div class="page-title">Сессии <span>БД</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:.04em;">
+            МОНИТОРИНГ И УПРАВЛЕНИЕ АКТИВНЫМИ ПОДКЛЮЧЕНИЯМИ &nbsp;·&nbsp;
+            <span id="nextUpdateTime" style="color:var(--amber);"></span>
+        </div>
+    </div>
+</div>
+
+<!-- СТАТИСТИКА КАРТОЧКИ -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:12px;margin-bottom:20px;">
+    
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left"><i class="bi bi-diagram-3" style="color:var(--primary);"></i> Всего сессий</div>
+        </div>
+        <div class="card-body" style="padding:20px;text-align:center;">
+            <div style="font-size:32px;font-weight:bold;color:var(--primary);" id="totalSessions">—</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:8px;" id="totalInfo">—</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left"><i class="bi bi-lightning-charge" style="color:var(--green);"></i> Активные</div>
+        </div>
+        <div class="card-body" style="padding:20px;text-align:center;">
+            <div style="font-size:32px;font-weight:bold;color:var(--green);" id="activeSessions">—</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:8px;">выполняют SQL</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left"><i class="bi bi-hourglass-split" style="color:var(--amber);"></i> Idle</div>
+        </div>
+        <div class="card-body" style="padding:20px;text-align:center;">
+            <div style="font-size:32px;font-weight:bold;color:var(--amber);" id="idleSessions">—</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:8px;">ожидают команды</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left"><i class="bi bi-lock" style="color:var(--red);"></i> Блокировки</div>
+        </div>
+        <div class="card-body" style="padding:20px;text-align:center;">
+            <div style="font-size:32px;font-weight:bold;color:var(--red);" id="blockingSessions">—</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:8px;">ждут блокировок</div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ФИЛЬТРЫ И ИНСТРУМЕНТЫ -->
+<div class="card">
+    <div class="card-body" style="padding:15px;border-bottom:1px solid var(--border-color);">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:12px;align-items:end;">
+            
+            <!-- Поиск по запросу -->
+            <div>
+                <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;font-weight:600;">Поиск по запросу</label>
+                <input type="text" id="filterInput" class="form-control" placeholder="SELECT, UPDATE, DELETE..." 
+                       style="height:32px;font-size:12px;">
+            </div>
+
+            <!-- Фильтр по статусу -->
+            <div>
+                <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;font-weight:600;">Статус</label>
+                <select id="statusFilter" class="form-control" style="height:32px;font-size:12px;">
+                    <option value="">Все статусы</option>
+                    <option value="active">Активные (active)</option>
+                    <option value="idle">Ожидание (idle)</option>
+                    <option value="idle in transaction">Idle in transaction</option>
+                </select>
+            </div>
+
+            <!-- Фильтр по пользователю -->
+            <div>
+                <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;font-weight:600;">Пользователь</label>
+                <select id="userFilter" class="form-control" style="height:32px;font-size:12px;">
+                    <option value="">Все пользователи</option>
+                </select>
+            </div>
+
+            <!-- Быстрые действия -->
+            <div>
+                <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;font-weight:600;">&nbsp;</label>
+                <button class="btn btn-warning btn-sm" onclick="terminateIdleSessions()" title="Завершить все idle сессии старше 5 минут">
+                    <i class="bi bi-x-circle"></i> Idle 5м+
+                </button>
+            </div>
+
+            <!-- Экспорт -->
+            <div>
+                <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;font-weight:600;">&nbsp;</label>
+                <button class="btn btn-secondary btn-sm" onclick="exportToCSV()" title="Экспортировать в CSV">
+                    <i class="bi bi-download"></i> CSV
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ТАБЛИЦА СЕССИЙ -->
+<div class="card" style="margin-top:15px;">
+    <div class="card-header">
+        <div class="header-left">
+            <i class="bi bi-list-check"></i> Активные сессии
+            <span class="badge" id="tableRowCount" style="margin-left:10px;">0</span>
+        </div>
+        <div class="header-right" style="font-size:11px;color:var(--text-3);">
+            Всего найдено: <strong id="totalFound">0</strong>
+        </div>
+    </div>
+    <div class="card-body" style="padding:0;overflow-x:auto;max-height:600px;overflow-y:auto;">
+        <table class="sessions-table" style="width:100%;">
+            <thead>
+                <tr>
+                    <th style="width:60px;"><i class="bi bi-hash"></i> PID</th>
+                    <th style="width:100px;">Пользователь</th>
+                    <th style="width:130px;">Приложение</th>
+                    <th style="width:110px;">IP</th>
+                    <th style="width:70px;">Статус</th>
+                    <th style="width:80px;">БД</th>
+                    <th style="width:80px;">Длительность</th>
+                    <th style="width:80px;">Запрос</th>
+                    <th style="min-width:300px;"><i class="bi bi-code"></i> SQL запрос</th>
+                    <th style="width:90px;text-align:center;">Действия</th>
+                </tr>
+            </thead>
+            <tbody id="sessionsTable">
+                <tr>
+                    <td colspan="10" style="text-align:center;padding:60px 20px;color:var(--text-3);">
+                        <span class="loading"></span> Загрузка сессий...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- СПРАВКА -->
+<div style="margin-top:20px;padding:15px;background:var(--card-bg);border-radius:4px;border-left:3px solid var(--amber);font-size:12px;color:var(--text-3);">
+    <strong>💡 Справка:</strong>
+    <ul style="margin:8px 0 0 20px;padding:0;">
+        <li><strong>Активные (active)</strong> — сессии, которые прямо сейчас выполняют SQL запрос</li>
+        <li><strong>Idle</strong> — сессии, которые держат соединение открытым, но не выполняют запросы</li>
+        <li><strong>Idle in transaction</strong> — открытая транзакция без активности (потенциальная проблема)</li>
+        <li><strong>Блокировки (Lock)</strong> — сессии, которые ждут блокировок от других сессий</li>
+        <li><span style="color:var(--red);"><i class="bi bi-lock"></i> Иконка</span> указывает на сессию в состоянии блокировки</li>
+    </ul>
+</div>
+
+</div>
+
+<script>
+let allSessions = [];
+let allUsers = new Set();
+let autoRefreshInterval = null;
+let isAutoRefreshRunning = true;
+let currentRefreshRate = 3000;
+
+// ═══════════════════════════════════════════════
+// ИНИЦИАЛИЗАЦИЯ
+// ═══════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSessions();
+    
+    // При изменении скорости обновления
+    document.getElementById('refreshRateSelect').addEventListener('change', function(e) {
+        currentRefreshRate = parseInt(e.target.value);
+        stopAutoRefresh();
+        
+        if (currentRefreshRate > 0) {
+            startAutoRefresh(currentRefreshRate);
+            updateToggleButton(true);
+        }
+    });
+    
+    // При изменении фильтров
+    document.getElementById('filterInput').addEventListener('input', applyFilters);
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('userFilter').addEventListener('change', applyFilters);
+});
+
+// ═══════════════════════════════════════════════
+// ОСНОВНЫЕ ФУНКЦИИ ЗАГРУЗКИ
+// ═══════════════════════════════════════════════
+
+async function loadSessions() {
+    try {
+        const [sessionsRes, statsRes] = await Promise.all([
+            fetch('/api/sessions?exclude_current=true'),
+            fetch('/api/sessions/stats')
+        ]);
+        
+        const sessionsData = await sessionsRes.json();
+        const statsData = await statsRes.json();
+        
+        if (sessionsData.success) {
+            allSessions = sessionsData.data;
+            collectUsers();
+            renderSessions();
+        }
+        
+        if (statsData.success) {
+            updateStats(statsData.data);
+        }
+        
+        updateLastUpdateTime();
+    } catch (error) {
+        console.error('Ошибка загрузки сессий:', error);
+    }
+}
+
+function collectUsers() {
+    allUsers.clear();
+    allSessions.forEach(s => {
+        if (s.usename) allUsers.add(s.usename);
+    });
+    
+    const userSelect = document.getElementById('userFilter');
+    const selectedValue = userSelect.value;
+    userSelect.innerHTML = '<option value="">Все пользователи</option>';
+    
+    Array.from(allUsers).sort().forEach(user => {
+        const option = document.createElement('option');
+        option.value = user;
+        option.textContent = user;
+        userSelect.appendChild(option);
+    });
+    
+    userSelect.value = selectedValue;
+}
+
+function updateStats(stats) {
+    const total = stats.total || 0;
+    const active = stats.active || 0;
+    const idle = stats.idle || 0;
+    const blocking = stats.waiting_lock || 0;
+    
+    document.getElementById('totalSessions').textContent = total;
+    document.getElementById('totalInfo').textContent = `${active} активных, ${idle} idle`;
+    
+    document.getElementById('activeSessions').textContent = active;
+    document.getElementById('idleSessions').textContent = idle;
+    document.getElementById('blockingSessions').textContent = blocking;
+}
+
+function updateLastUpdateTime() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    document.getElementById('lastUpdateTime').textContent = `Обновлено: ${timeStr}`;
+    
+    // Следующее обновление
+    if (currentRefreshRate > 0) {
+        const nextTime = new Date(now.getTime() + currentRefreshRate);
+        const nextTimeStr = nextTime.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        document.getElementById('nextUpdateTime').textContent = `Следующее: ${nextTimeStr}`;
+    } else {
+        document.getElementById('nextUpdateTime').textContent = 'Ручной режим';
+    }
+}
+
+// ═══════════════════════════════════════════════
+// АВТООБНОВЛЕНИЕ
+// ═══════════════════════════════════════════════
+
+function startAutoRefresh(interval) {
+    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+    isAutoRefreshRunning = true;
+    autoRefreshInterval = setInterval(loadSessions, interval);
+}
+
+function stopAutoRefresh() {
+    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+    isAutoRefreshRunning = false;
+}
+
+function toggleAutoRefresh() {
+    if (isAutoRefreshRunning) {
+        stopAutoRefresh();
+        updateToggleButton(false);
+    } else {
+        startAutoRefresh(currentRefreshRate);
+        updateToggleButton(true);
+    }
+}
+
+function updateToggleButton(isRunning) {
+    const btn = document.getElementById('toggleRefreshBtn');
+    if (isRunning) {
+        btn.innerHTML = '<i class="bi bi-pause"></i> Пауза';
+        btn.title = 'Пауза обновления';
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-secondary');
+    } else {
+        btn.innerHTML = '<i class="bi bi-play"></i> Возобновить';
+        btn.title = 'Возобновить обновление';
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-danger');
+    }
+}
+
+// ═══════════════════════════════════════════════
+// ФИЛЬТРАЦИЯ И РЕНДЕРИНГ
+// ═══════════════════════════════════════════════
+
+function applyFilters() {
+    const queryFilter = document.getElementById('filterInput').value.toLowerCase();
+    const statusFilter = document.getElementById('statusFilter').value;
+    const userFilter = document.getElementById('userFilter').value;
+    
+    const filtered = allSessions.filter(s => {
+        const matchQuery = !queryFilter || s.query.toLowerCase().includes(queryFilter);
+        const matchStatus = !statusFilter || s.state === statusFilter;
+        const matchUser = !userFilter || s.usename === userFilter;
+        return matchQuery && matchStatus && matchUser;
+    });
+    
+    document.getElementById('totalFound').textContent = filtered.length;
+    document.getElementById('tableRowCount').textContent = filtered.length;
+    
+    renderSessionsTable(filtered);
+}
+
+function renderSessions() {
+    applyFilters();
+}
+
+function renderSessionsTable(sessions) {
+    const tbody = document.getElementById('sessionsTable');
+    
+    if (sessions.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" style="text-align:center;padding:60px 20px;color:var(--text-3);">
+                    <i class="bi bi-inbox" style="font-size:32px;margin-bottom:10px;display:block;opacity:0.5;"></i>
+                    Сессии не найдены
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = sessions.map(s => {
+        const stateColor = s.state === 'active' ? 'var(--green)' : 
+                          s.state === 'idle' ? 'var(--amber)' : 'var(--text-2)';
+        
+        const hasLock = s.wait_event_type === 'Lock';
+        const lockIcon = hasLock ? '<i class="bi bi-lock-fill" style="color:var(--red);margin-right:5px;"></i>' : '';
+        
+        const duration = formatDuration(s.duration_seconds);
+        const queryDuration = formatDuration(s.query_duration_seconds);
+        
+        const queryPreview = escapeHtml(s.query.substring(0, 200));
+        const queryFull = escapeHtml(s.query);
+        
+        // Подсветка найденного текста в запросе
+        const searchTerm = document.getElementById('filterInput').value;
+        let highlightedQuery = queryPreview;
+        if (searchTerm) {
+            const regex = new RegExp(`(${searchTerm})`, 'gi');
+            highlightedQuery = queryPreview.replace(regex, '<span style="background:var(--amber);color:var(--card-bg);padding:2px 4px;border-radius:2px;font-weight:600;">$1</span>');
+        }
+        
+        return `
+            <tr style="border-bottom:1px solid var(--border-color);">
+                <td><strong style="color:var(--primary);font-family:var(--font-mono);">${s.pid}</strong></td>
+                <td><code style="font-size:11px;">${s.usename || '—'}</code></td>
+                <td style="font-size:12px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" 
+                    title="${s.application_name}">${s.application_name || '—'}</td>
+                <td style="font-size:11px;font-family:var(--font-mono);">${s.client_addr || '—'}</td>
+                <td>
+                    <span style="background:${stateColor};color:white;padding:4px 8px;border-radius:3px;font-size:11px;font-weight:600;white-space:nowrap;">
+                        ${s.state || '—'}
+                    </span>
+                </td>
+                <td style="font-size:12px;"><code>${s.datname || '—'}</code></td>
+                <td style="font-size:12px;color:var(--text-3);">${duration}</td>
+                <td style="font-size:12px;color:var(--text-3);font-weight:${s.state === 'active' && s.query_duration_seconds > 60 ? '700' : '400'};">
+                    ${queryDuration}
+                </td>
+                <td style="font-size:12px;max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-mono);" 
+                    title="${queryFull}">
+                    ${lockIcon}${highlightedQuery}${s.query.length > 200 ? '...' : ''}
+                </td>
+                <td style="text-align:center;">
+                    <div style="display:flex;gap:4px;justify-content:center;">
+                        <button class="btn-icon-sm" onclick="cancelSession(${s.pid}, false)" 
+                                title="Отменить текущий запрос (pg_cancel_backend)" 
+                                style="background:var(--amber);color:white;border:none;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;">
+                            <i class="bi bi-stop-fill"></i>
+                        </button>
+                        <button class="btn-icon-sm" onclick="cancelSession(${s.pid}, true)" 
+                                title="Жесткое завершение сессии (pg_terminate_backend)" 
+                                style="background:var(--red);color:white;border:none;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// ДЕЙСТВИЯ НА СЕССИЯХ
+// ═══════════════════════════════════════════════
+
+async function cancelSession(pid, force) {
+    const action = force ? 'Жесткое завершение' : 'Отмена запроса';
+    const method = force ? 'pg_terminate_backend' : 'pg_cancel_backend';
+    
+    const confirmed = confirm(
+        `${action} для PID ${pid}?\n\n` +
+        `Метод: ${method}\n` +
+        `Это может привести к потере несохраненных данных!`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`/api/sessions/${pid}/terminate`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({force: force})
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data.success) {
+            showNotification(`✓ ${data.data.message}`, 'success');
+            setTimeout(loadSessions, 300);
+        } else {
+            showNotification('✗ Ошибка: ' + (data.error || data.data.error), 'error');
+        }
+    } catch (error) {
+        showNotification('✗ Ошибка: ' + error.message, 'error');
+    }
+}
+
+async function terminateIdleSessions() {
+    const idleSessions = allSessions.filter(s => s.state === 'idle' && s.duration_seconds > 300);
+    
+    if (idleSessions.length === 0) {
+        showNotification('ℹ Нет idle сесс��й старше 5 минут', 'info');
+        return;
+    }
+    
+    const confirmed = confirm(
+        `Завершить ${idleSessions.length} idle сессию(й) старше 5 минут?\n\n` +
+        `PID: ${idleSessions.map(s => s.pid).join(', ')}\n\n` +
+        `Это действие необратимо!`
+    );
+    
+    if (!confirmed) return;
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const session of idleSessions) {
+        try {
+            const response = await fetch(`/api/sessions/${session.pid}/terminate`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({force: true})
+            });
+            
+            const data = await response.json();
+            if (data.success && data.data.success) {
+                successCount++;
+            } else {
+                errorCount++;
+            }
+        } catch (error) {
+            errorCount++;
+        }
+    }
+    
+    showNotification(
+        `✓ Завершено: ${successCount} | ✗ Ошибок: ${errorCount}`,
+        errorCount === 0 ? 'success' : 'warning'
+    );
+    
+    setTimeout(loadSessions, 500);
+}
+
+function exportToCSV() {
+    if (allSessions.length === 0) {
+        showNotification('ℹ Нет данных для экспорта', 'info');
+        return;
+    }
+    
+    const headers = ['PID', 'Пользователь', 'Прил��жение', 'IP', 'Статус', 'БД', 'Длительность', 'Запрос'];
+    const rows = allSessions.map(s => [
+        s.pid,
+        s.usename,
+        s.application_name,
+        s.client_addr || '',
+        s.state,
+        s.datname,
+        s.duration_seconds,
+        s.query.substring(0, 200).replace(/"/g, '""')
+    ]);
+    
+    let csv = headers.join(',') + '\n';
+    csv += rows.map(row => 
+        row.map(cell => typeof cell === 'string' ? `"${cell}"` : cell).join(',')
+    ).join('\n');
+    
+    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `sessions_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showNotification(`✓ Экспортировано ${allSessions.length} сессий`, 'success');
+}
+
+// ═══════════════════════════════════════════════
+// УТИЛИТЫ
+// ═══════════════════════════════════════════════
+
+function formatDuration(seconds) {
+    if (!seconds || seconds < 0) return '—';
+    
+    if (seconds < 60) return `${seconds}сек`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}м ${seconds % 60}сек`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}ч ${Math.floor((seconds % 3600) / 60)}м`;
+    return `${Math.floor(seconds / 86400)}д ${Math.floor((seconds % 86400) / 3600)}ч`;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showNotification(message, type = 'info') {
+    const bgColor = {
+        success: 'var(--green)',
+        error: 'var(--red)',
+        warning: 'var(--amber)',
+        info: 'var(--primary)'
+    }[type] || 'var(--primary)';
+    
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        padding: 14px 20px;
+        background: ${bgColor};
+        color: white;
+        border-radius: 4px;
+        font-size: 13px;
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
+}
+
+window.addEventListener('beforeunload', () => {
+    stopAutoRefresh();
+});
+</script>
+
+<style>
+.sessions-table {
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.sessions-table thead {
+    background: var(--card-header-bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.sessions-table th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-1);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.sessions-table td {
+    padding: 10px 12px;
+    color: var(--text-2);
+}
+
+.sessions-table tbody tr:hover {
+    background: var(--row-hover-bg, rgba(0,0,0,0.02));
+}
+
+.btn-icon-sm {
+    transition: all 0.2s ease;
+}
+
+.btn-icon-sm:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    opacity: 0.85;
+}
+
+.btn-icon-sm:active {
+    transform: translateY(0);
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding: 0;
+}
+
+.page-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-1);
+}
+
+.page-title span {
+    color: var(--amber);
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--primary);
+    color: white;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+</style>
+
+{% endblock %}

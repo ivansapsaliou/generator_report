@@ -15,6 +15,10 @@ import csv
 import threading
 import time
 
+from pg_sessions import PostgreSQLSessionManager
+
+
+
 # Импорт модулей
 from db_connection import (
     get_ssh_tunnels,
@@ -45,6 +49,10 @@ _ssh_tunnels_lock = threading.Lock()
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
+
+
+# Инициализация менеджера сессий
+pg_session_manager = PostgreSQLSessionManager(app.config)
 
 # Монитор сессий был удален, осталась только кнопка перехода в сетке
 
@@ -452,6 +460,100 @@ def load_report(report_id):
         return jsonify({'success': True, 'data': result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ─────────────────────────────────────────────
+# SESSION MANAGEMENT
+# ─────────────────────────────────────────────
+
+
+@app.route('/api/sessions', methods=['GET'])
+def api_get_sessions():
+    """API: Получить список активных сессий"""
+    try:
+        exclude_current = request.args.get('exclude_current', 'true').lower() == 'true'
+        sessions = pg_session_manager.get_active_sessions(exclude_current=exclude_current)
+        return jsonify({
+            'success': True,
+            'data': sessions,
+            'count': len(sessions)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/sessions/stats', methods=['GET'])
+def api_get_sessions_stats():
+    """API: Получить статистику сессий"""
+    try:
+        stats = pg_session_manager.get_sessions_stats()
+        return jsonify({
+            'success': True,
+            'data': stats
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/sessions/<int:pid>/terminate', methods=['POST'])
+def api_terminate_session(pid):
+    """API: Завершить сессию по PID"""
+    try:
+        force = False
+        if request.json:
+            force = request.json.get('force', False)
+        
+        result = pg_session_manager.terminate_session(pid, force=force)
+        return jsonify({
+            'success': result.get('success', False),
+            'data': result
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/sessions/idle', methods=['GET'])
+def api_get_idle_sessions():
+    """API: Получить неактивные сессии"""
+    try:
+        timeout = request.args.get('timeout', 300, type=int)
+        sessions = pg_session_manager.get_idle_sessions(timeout_seconds=timeout)
+        return jsonify({
+            'success': True,
+            'data': sessions,
+            'count': len(sessions)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/sessions/long-queries', methods=['GET'])
+def api_get_long_queries():
+    """API: Получить долго выполняющиеся запросы"""
+    try:
+        timeout = request.args.get('timeout', 3600, type=int)
+        sessions = pg_session_manager.get_long_running_queries(timeout_seconds=timeout)
+        return jsonify({
+            'success': True,
+            'data': sessions,
+            'count': len(sessions)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 # ─────────────────────────────────────────────
