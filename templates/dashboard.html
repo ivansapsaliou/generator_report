@@ -285,9 +285,11 @@ const ProfileManager = {
                         if (el) el.value = val || '';
                     };
                     
+                    // ✅ ИСПРАВЛЕНИЕ: НЕ переводите SSH host в profileHost
+                    // Основные поля БД
                     setVal('profileId', p.id);
                     setVal('profileName', p.name);
-                    setVal('profileHost', p.host);
+                    setVal('profileHost', p.host);  // Реальный хост БД
                     setVal('profilePort', p.port);
                     setVal('profileDatabase', p.database);
                     setVal('profileUser', p.user);
@@ -302,15 +304,15 @@ const ProfileManager = {
                     if (sshFields) sshFields.style.display = sshEnabled ? 'flex' : 'none';
                     
                     if (sshEnabled) {
-                        setVal('profileSshHost', p.ssh_host);
+                        setVal('profileSshHost', p.ssh_host);      // SSH хост
                         setVal('profileSshPort', p.ssh_port);
                         setVal('profileSshUser', p.ssh_user);
                         setVal('profileSshPassword', p.ssh_password);
                         setVal('profileSshKeyPath', p.ssh_key_path);
-                        setVal('profileRemoteDbHost', p.remote_db_host);
-                        setVal('profileRemoteDbPort', p.remote_db_port);
+                        // ✅ ВАЖНО: используем СВОИ поля для БД через туннель
+                        setVal('profileRemoteDbHost', p.remote_db_host || p.host);  // Если SSH включён
+                        setVal('profileRemoteDbPort', p.remote_db_port || p.port);
                         
-                        // Определяем тип аутентификации
                         const authType = p.ssh_key_path ? 'key' : 'password';
                         const authTypeEl = document.getElementById('profileSshAuthType');
                         if (authTypeEl) authTypeEl.value = authType;
@@ -558,7 +560,6 @@ function testProfileConnection() {
 document.getElementById('profileForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    // Валидация формы
     if (!validateProfileForm()) {
         return;
     }
@@ -571,16 +572,17 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
     const sshEnabled = document.getElementById('profileSshEnabled')?.checked || false;
     const sshAuthType = document.getElementById('profileSshAuthType')?.value || 'password';
     
-    // При включенном SSH, host берется из ssh_host (для отображения)
-    const dbHost = sshEnabled ? getVal('profileSshHost') : getVal('profileHost');
-    
+    // ✅ ИСПРАВЛЕНИЕ: Раздельно хранить БД и SSH параметры
     const profile = {
         name: getVal('profileName'),
-        host: dbHost,
+        // БД параметры - ВСЕГДА
+        host: getVal('profileHost'),           // Реальный хост БД
         port: parseInt(document.getElementById('profilePort')?.value) || 5432,
         database: getVal('profileDatabase'),
         user: getVal('profileUser'),
         password: getVal('profilePassword'),
+        
+        // SSH параметры - если включён
         ssh_enabled: sshEnabled,
         ssh_host: sshEnabled ? getVal('profileSshHost') : null,
         ssh_port: sshEnabled ? (parseInt(document.getElementById('profileSshPort')?.value) || 22) : null,
