@@ -210,7 +210,7 @@ def delete_db_profile(profile_id):
 
 @app.route('/api/db-profiles/test', methods=['POST'])
 def test_db_profile():
-    """Протестировать подключение"""
+    """Протестировать подключение к БД"""
     data = request.json
     try:
         conn = psycopg2.connect(
@@ -223,6 +223,50 @@ def test_db_profile():
         )
         conn.close()
         return jsonify({'success': True, 'message': 'Connection successful'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/db-profiles/test-ssh', methods=['POST'])
+def test_ssh_profile():
+    """Протестировать SSH подключение и подключение к БД через туннель"""
+    data = request.json
+    
+    ssh_enabled = data.get('ssh_enabled', False)
+    if not ssh_enabled:
+        return jsonify({'success': False, 'error': 'SSH не включён'})
+    
+    try:
+        # Проверяем доступность paramiko
+        if not is_paramiko_available():
+            return jsonify({'success': False, 'error': 'Библиотека paramiko не установлена'})
+        
+        # Создаём SSH туннель
+        local_host, local_port = create_ssh_tunnel(
+            ssh_host=data['ssh_host'],
+            ssh_port=int(data.get('ssh_port', 22)),
+            ssh_user=data['ssh_user'],
+            ssh_password=data.get('ssh_password', ''),
+            ssh_key_path=data.get('ssh_key_path'),
+            remote_db_host=data.get('remote_db_host', 'localhost'),
+            remote_db_port=int(data.get('remote_db_port', 5432))
+        )
+        
+        # Через созданный туннель подключаемся к БД
+        conn = psycopg2.connect(
+            host=local_host,
+            port=local_port,
+            database=data['database'],
+            user=data['user'],
+            password=data['password'],
+            connect_timeout=10
+        )
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'SSH туннель создан. Подключение к БД успешно (локальный порт: {local_port})'
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

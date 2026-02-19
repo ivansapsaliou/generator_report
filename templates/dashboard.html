@@ -47,34 +47,96 @@
                 
                 <div>
                     <label class="form-label">Название подключения <span style="color:var(--red);">*</span></label>
-                    <input type="text" id="profileName" class="form-control" placeholder="Например: Production DB" required>
+                    <input type="text" id="profileName" class="form-control" placeholder="Например: Production DB">
                     <div style="font-size:10px;color:var(--text-3);margin-top:3px;">Краткое имя для идентификации подключения</div>
                 </div>
 
                 <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
                     <div>
                         <label class="form-label">Хост <span style="color:var(--red);">*</span></label>
-                        <input type="text" id="profileHost" class="form-control" placeholder="localhost, 192.168.1.1" required>
+                        <input type="text" id="profileHost" class="form-control" placeholder="localhost, 192.168.1.1">
                     </div>
                     <div>
                         <label class="form-label">Порт <span style="color:var(--red);">*</span></label>
-                        <input type="number" id="profilePort" class="form-control" value="5432" min="1" max="65535" required>
+                        <input type="number" id="profilePort" class="form-control" value="5432" min="1" max="65535">
                     </div>
                 </div>
 
                 <div>
                     <label class="form-label">База данных <span style="color:var(--red);">*</span></label>
-                    <input type="text" id="profileDatabase" class="form-control" placeholder="reports_db" required>
+                    <input type="text" id="profileDatabase" class="form-control" placeholder="reports_db">
                 </div>
 
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                     <div>
                         <label class="form-label">Пользователь <span style="color:var(--red);">*</span></label>
-                        <input type="text" id="profileUser" class="form-control" placeholder="postgres" required>
+                        <input type="text" id="profileUser" class="form-control" placeholder="postgres">
                     </div>
                     <div>
                         <label class="form-label">Пароль <span style="color:var(--red);">*</span></label>
-                        <input type="password" id="profilePassword" class="form-control" required>
+                        <input type="password" id="profilePassword" class="form-control">
+                    </div>
+                </div>
+
+                <!-- SSH TUNNEL SETTINGS -->
+                <div style="margin-top:8px;padding:12px;background:var(--bg-3);border-radius:6px;border:1px solid var(--line);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <i class="bi bi-shield-lock"></i>
+                            <span style="font-weight:600;font-size:13px;">SSH туннель</span>
+                        </div>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;">
+                            <input type="checkbox" id="profileSshEnabled" style="width:16px;height:16px;" onchange="toggleSshFields()">
+                            <span style="font-size:12px;">Включить</span>
+                        </label>
+                    </div>
+                    
+                    <div id="sshFields" style="display:none;flex-direction:column;gap:10px;">
+                        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
+                            <div>
+                                <label class="form-label">SSH хост <span style="color:var(--red);">*</span></label>
+                                <input type="text" id="profileSshHost" class="form-control" placeholder="example.com или IP">
+                            </div>
+                            <div>
+                                <label class="form-label">SSH порт</label>
+                                <input type="number" id="profileSshPort" class="form-control" value="22" min="1" max="65535">
+                            </div>
+                        </div>
+                        
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                            <div>
+                                <label class="form-label">SSH пользователь <span style="color:var(--red);">*</span></label>
+                                <input type="text" id="profileSshUser" class="form-control" placeholder="root">
+                            </div>
+                            <div>
+                                <label class="form-label">Метод аутентификации</label>
+                                <select id="profileSshAuthType" class="form-control" onchange="toggleSshAuthFields()">
+                                    <option value="password">Пароль</option>
+                                    <option value="key">SSH ключ</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div id="sshPasswordField">
+                            <label class="form-label">SSH пароль <span style="color:var(--red);">*</span></label>
+                            <input type="password" id="profileSshPassword" class="form-control">
+                        </div>
+                        
+                        <div id="sshKeyField" style="display:none;">
+                            <label class="form-label">Путь к SSH ключу</label>
+                            <input type="text" id="profileSshKeyPath" class="form-control" placeholder="~/.ssh/id_rsa">
+                        </div>
+                        
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                            <div>
+                                <label class="form-label">Хост БД на сервере</label>
+                                <input type="text" id="profileRemoteDbHost" class="form-control" value="localhost" placeholder="localhost">
+                            </div>
+                            <div>
+                                <label class="form-label">Порт БД на сервере</label>
+                                <input type="number" id="profileRemoteDbPort" class="form-control" value="5432" min="1" max="65535">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -170,7 +232,10 @@ const ProfileManager = {
             list.innerHTML = data.profiles.map(p => `
                 <div class="profile-card-item">
                     <div class="profile-info">
-                        <div class="profile-info-name">${escapeHtml(p.name)}</div>
+                        <div class="profile-info-name">
+                            ${p.ssh_enabled ? '<i class="bi bi-shield-lock" style="color:var(--amber);margin-right:4px;" title="SSH туннель"></i>' : ''}
+                            ${escapeHtml(p.name)}
+                        </div>
                         <div class="profile-info-host">${escapeHtml(p.user)}@${escapeHtml(p.host)}:${p.port} / ${escapeHtml(p.database)}</div>
                     </div>
                     <div class="profile-actions">
@@ -215,13 +280,46 @@ const ProfileManager = {
             .then(data => {
                 if (data.profile) {
                     const p = data.profile;
-                    document.getElementById('profileId').value = p.id;
-                    document.getElementById('profileName').value = p.name;
-                    document.getElementById('profileHost').value = p.host;
-                    document.getElementById('profilePort').value = p.port;
-                    document.getElementById('profileDatabase').value = p.database;
-                    document.getElementById('profileUser').value = p.user;
-                    document.getElementById('profilePassword').value = p.password;
+                    const setVal = (id, val) => {
+                        const el = document.getElementById(id);
+                        if (el) el.value = val || '';
+                    };
+                    
+                    setVal('profileId', p.id);
+                    setVal('profileName', p.name);
+                    setVal('profileHost', p.host);
+                    setVal('profilePort', p.port);
+                    setVal('profileDatabase', p.database);
+                    setVal('profileUser', p.user);
+                    setVal('profilePassword', p.password);
+                    
+                    // SSH настройки
+                    const sshEnabled = p.ssh_enabled || false;
+                    const sshEnabledEl = document.getElementById('profileSshEnabled');
+                    if (sshEnabledEl) sshEnabledEl.checked = sshEnabled;
+                    
+                    const sshFields = document.getElementById('sshFields');
+                    if (sshFields) sshFields.style.display = sshEnabled ? 'flex' : 'none';
+                    
+                    if (sshEnabled) {
+                        setVal('profileSshHost', p.ssh_host);
+                        setVal('profileSshPort', p.ssh_port);
+                        setVal('profileSshUser', p.ssh_user);
+                        setVal('profileSshPassword', p.ssh_password);
+                        setVal('profileSshKeyPath', p.ssh_key_path);
+                        setVal('profileRemoteDbHost', p.remote_db_host);
+                        setVal('profileRemoteDbPort', p.remote_db_port);
+                        
+                        // Определяем тип аутентификации
+                        const authType = p.ssh_key_path ? 'key' : 'password';
+                        const authTypeEl = document.getElementById('profileSshAuthType');
+                        if (authTypeEl) authTypeEl.value = authType;
+                        
+                        const pwField = document.getElementById('sshPasswordField');
+                        const keyField = document.getElementById('sshKeyField');
+                        if (pwField) pwField.style.display = authType === 'password' ? 'block' : 'none';
+                        if (keyField) keyField.style.display = authType === 'key' ? 'block' : 'none';
+                    }
                     
                     document.getElementById('profileModalTitle').innerHTML = '<i class="bi bi-pencil"></i> Редактировать подключение';
                     this.currentEditId = profileId;
@@ -249,6 +347,8 @@ function openProfileModal() {
     document.getElementById('modalBackdrop').style.display = 'block';
     document.getElementById('profileModalTitle').innerHTML = '<i class="bi bi-plus"></i> Новое подключение';
     document.getElementById('profileId').value = '';
+    // Сброс подсветки ошибок
+    clearValidationErrors();
 }
 
 function closeProfileModal() {
@@ -256,22 +356,167 @@ function closeProfileModal() {
     document.getElementById('modalBackdrop').style.display = 'none';
     document.getElementById('profileForm').reset();
     document.getElementById('testResult').style.display = 'none';
+    document.getElementById('sshFields').style.display = 'none';
+    document.getElementById('profileSshEnabled').checked = false;
+    clearValidationErrors();
     ProfileManager.currentEditId = null;
 }
 
-function testProfileConnection() {
-    const data = {
-        host: document.getElementById('profileHost').value,
-        port: parseInt(document.getElementById('profilePort').value),
-        database: document.getElementById('profileDatabase').value,
-        user: document.getElementById('profileUser').value,
-        password: document.getElementById('profilePassword').value
-    };
+function clearValidationErrors() {
+    document.querySelectorAll('.form-control').forEach(el => {
+        el.style.borderColor = '';
+    });
+    document.querySelectorAll('.validation-error').forEach(el => el.remove());
+}
+
+function showValidationError(fieldId, message) {
+    const field = document.getElementById(fieldId);
+    if (field) {
+        field.style.borderColor = 'var(--red)';
+        // Удаляем старое сообщение
+        const existingError = field.parentNode.querySelector('.validation-error');
+        if (existingError) existingError.remove();
+        // Добавляем сообщение
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'validation-error';
+        errorDiv.style.color = 'var(--red)';
+        errorDiv.style.fontSize = '11px';
+        errorDiv.style.marginTop = '4px';
+        errorDiv.textContent = message;
+        field.parentNode.appendChild(errorDiv);
+    }
+}
+
+function validateProfileForm() {
+    clearValidationErrors();
+    let isValid = true;
     
-    if (!data.host || !data.database || !data.user) {
-        alert('Заполните обязательные поля');
+    // Безопасное получение значения поля
+    const getVal = (id) => {
+        const el = document.getElementById(id);
+        return el && el.value ? el.value.trim() : '';
+    };
+
+    const getNumVal = (id, defaultVal) => {
+        const el = document.getElementById(id);
+        const val = el ? parseInt(el.value) : NaN;
+        return isNaN(val) ? defaultVal : val;
+    };
+
+    const name = getVal('profileName');
+    const host = getVal('profileHost');
+    const port = getNumVal('profilePort', 0);
+    const database = getVal('profileDatabase');
+    const user = getVal('profileUser');
+    const password = document.getElementById('profilePassword') ? document.getElementById('profilePassword').value : '';
+    
+    if (!name) {
+        showValidationError('profileName', 'Обязательное поле');
+        isValid = false;
+    }
+    if (!host) {
+        showValidationError('profileHost', 'Обязательное поле');
+        isValid = false;
+    }
+    if (!port || port < 1 || port > 65535) {
+        showValidationError('profilePort', 'Укажите корректный порт');
+        isValid = false;
+    }
+    if (!database) {
+        showValidationError('profileDatabase', 'Обязательное поле');
+        isValid = false;
+    }
+    if (!user) {
+        showValidationError('profileUser', 'Обязательное поле');
+        isValid = false;
+    }
+    if (!password) {
+        showValidationError('profilePassword', 'Обязательное поле');
+        isValid = false;
+    }
+    
+    // Валидация SSH полей
+    const sshEnabled = document.getElementById('profileSshEnabled') ? document.getElementById('profileSshEnabled').checked : false;
+    if (sshEnabled) {
+        const sshHost = getVal('profileSshHost');
+        const sshUser = getVal('profileSshUser');
+        const sshPort = getNumVal('profileSshPort', 0);
+        const sshAuthType = document.getElementById('profileSshAuthType') ? document.getElementById('profileSshAuthType').value : 'password';
+        
+        if (!sshHost) {
+            showValidationError('profileSshHost', 'Обязательное поле');
+            isValid = false;
+        }
+        if (!sshUser) {
+            showValidationError('profileSshUser', 'Обязательное поле');
+            isValid = false;
+        }
+        if (!sshPort || sshPort < 1 || sshPort > 65535) {
+            showValidationError('profileSshPort', 'Укажите корректный порт');
+            isValid = false;
+        }
+        
+        if (sshAuthType === 'password') {
+            const sshPassword = document.getElementById('profileSshPassword') ? document.getElementById('profileSshPassword').value : '';
+            if (!sshPassword) {
+                showValidationError('profileSshPassword', 'Обязательное поле');
+                isValid = false;
+            }
+        } else if (sshAuthType === 'key') {
+            const sshKeyPath = getVal('profileSshKeyPath');
+            if (!sshKeyPath) {
+                showValidationError('profileSshKeyPath', 'Укажите путь к ключу');
+                isValid = false;
+            }
+        }
+    }
+    
+    return isValid;
+}
+
+function toggleSshFields() {
+    const enabled = document.getElementById('profileSshEnabled')?.checked || false;
+    const sshFields = document.getElementById('sshFields');
+    if (sshFields) {
+        sshFields.style.display = enabled ? 'flex' : 'none';
+    }
+}
+
+function toggleSshAuthFields() {
+    const authTypeSelect = document.getElementById('profileSshAuthType');
+    const authType = authTypeSelect ? authTypeSelect.value : 'password';
+    const pwField = document.getElementById('sshPasswordField');
+    const keyField = document.getElementById('sshKeyField');
+    if (pwField) pwField.style.display = authType === 'password' ? 'block' : 'none';
+    if (keyField) keyField.style.display = authType === 'key' ? 'block' : 'none';
+}
+
+function testProfileConnection() {
+    // Сначала валидируем
+    if (!validateProfileForm()) {
         return;
     }
+
+    const getVal = (id) => {
+        const el = document.getElementById(id);
+        return el && el.value ? el.value : '';
+    };
+
+    const data = {
+        host: getVal('profileHost'),
+        port: parseInt(document.getElementById('profilePort')?.value) || 5432,
+        database: getVal('profileDatabase'),
+        user: getVal('profileUser'),
+        password: getVal('profilePassword'),
+        ssh_enabled: document.getElementById('profileSshEnabled')?.checked || false,
+        ssh_host: getVal('profileSshHost'),
+        ssh_port: parseInt(document.getElementById('profileSshPort')?.value) || 22,
+        ssh_user: getVal('profileSshUser'),
+        ssh_password: getVal('profileSshPassword'),
+        ssh_key_path: getVal('profileSshKeyPath') || null,
+        remote_db_host: getVal('profileRemoteDbHost') || 'localhost',
+        remote_db_port: parseInt(document.getElementById('profileRemoteDbPort')?.value) || 5432
+    };
 
     const resultDiv = document.getElementById('testResult');
     resultDiv.textContent = 'Проверка подключения...';
@@ -280,7 +525,10 @@ function testProfileConnection() {
     resultDiv.style.background = 'rgba(240,168,67,.1)';
     resultDiv.style.color = 'var(--amber)';
 
-    fetch('/api/db-profiles/test', {
+    // Выбираем endpoint в зависимости от того, включён ли SSH
+    const endpoint = data.ssh_enabled ? '/api/db-profiles/test-ssh' : '/api/db-profiles/test';
+    
+    fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -288,7 +536,7 @@ function testProfileConnection() {
     .then(r => r.json())
     .then(result => {
         if (result.success) {
-            resultDiv.innerHTML = '<i class="bi bi-check-circle"></i> ✓ Подключение успешно!';
+            resultDiv.innerHTML = '<i class="bi bi-check-circle"></i> ✓ ' + (result.message || 'Подключение успешно!');
             resultDiv.style.borderLeftColor = 'var(--green)';
             resultDiv.style.background = 'rgba(82,183,136,.1)';
             resultDiv.style.color = 'var(--green)';
@@ -310,14 +558,40 @@ function testProfileConnection() {
 document.getElementById('profileForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const profile = {
-        name: document.getElementById('profileName').value,
-        host: document.getElementById('profileHost').value,
-        port: parseInt(document.getElementById('profilePort').value),
-        database: document.getElementById('profileDatabase').value,
-        user: document.getElementById('profileUser').value,
-        password: document.getElementById('profilePassword').value
+    // Валидация формы
+    if (!validateProfileForm()) {
+        return;
+    }
+
+    const getVal = (id) => {
+        const el = document.getElementById(id);
+        return el ? (el.value || '') : '';
     };
+
+    const sshEnabled = document.getElementById('profileSshEnabled')?.checked || false;
+    const sshAuthType = document.getElementById('profileSshAuthType')?.value || 'password';
+    
+    // При включенном SSH, host берется из ssh_host (для отображения)
+    const dbHost = sshEnabled ? getVal('profileSshHost') : getVal('profileHost');
+    
+    const profile = {
+        name: getVal('profileName'),
+        host: dbHost,
+        port: parseInt(document.getElementById('profilePort')?.value) || 5432,
+        database: getVal('profileDatabase'),
+        user: getVal('profileUser'),
+        password: getVal('profilePassword'),
+        ssh_enabled: sshEnabled,
+        ssh_host: sshEnabled ? getVal('profileSshHost') : null,
+        ssh_port: sshEnabled ? (parseInt(document.getElementById('profileSshPort')?.value) || 22) : null,
+        ssh_user: sshEnabled ? getVal('profileSshUser') : null,
+        ssh_password: sshEnabled && sshAuthType === 'password' ? getVal('profileSshPassword') : null,
+        ssh_key_path: sshEnabled && sshAuthType === 'key' ? getVal('profileSshKeyPath') : null,
+        remote_db_host: sshEnabled ? getVal('profileRemoteDbHost') : null,
+        remote_db_port: sshEnabled ? (parseInt(document.getElementById('profileRemoteDbPort')?.value) || 5432) : null
+    };
+
+    console.log('Saving profile:', JSON.stringify(profile, null, 2));
 
     if (ProfileManager.currentEditId) {
         profile.id = ProfileManager.currentEditId;
@@ -333,6 +607,9 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
         if (res.ok) {
             closeProfileModal();
             ProfileManager.loadProfiles();
+        } else {
+            const err = await res.text();
+            alert('Ошибка сохранения: ' + err);
         }
     } catch (error) {
         alert('Ошибка: ' + error.message);
@@ -344,8 +621,9 @@ document.getElementById('modalBackdrop').addEventListener('click', closeProfileM
 document.querySelector('[data-action="new-profile"]').addEventListener('click', openProfileModal);
 
 function escapeHtml(text) {
+    if (text == null) return '';
     const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-    return text.replace(/[&<>"']/g, m => map[m]);
+    return String(text).replace(/[&<>"']/g, m => map[m]);
 }
 
 // Загружаем профили при открытии страницы

@@ -370,10 +370,11 @@ def get_db_connection(config=None, ssh_settings=None):
 def get_db_connection_by_profile(profile_id, ssh_settings=None):
     """
     Получить подключение к БД по сохранённому профилю.
+    Если в профиле включён SSH туннель, использует его для подключения.
     
     Args:
         profile_id: ID сохранённого профиля
-        ssh_settings: словарь с настройками SSH (опционально)
+        ssh_settings: словарь с настройками SSH (опционально, переопределяет настройки из профиля)
     
     Returns:
         psycopg2.connection: объект подключения к БД
@@ -392,6 +393,21 @@ def get_db_connection_by_profile(profile_id, ssh_settings=None):
         'DB_USER': profile.get('user'),
         'DB_PASSWORD': profile.get('password'),
     }
+    
+    # Если ssh_settings не передан, получаем из профиля
+    if ssh_settings is None:
+        ssh_enabled = profile.get('ssh_enabled', False)
+        if ssh_enabled:
+            ssh_settings = {
+                'enabled': True,
+                'ssh_host': profile.get('ssh_host'),
+                'ssh_port': profile.get('ssh_port', 22),
+                'ssh_user': profile.get('ssh_user'),
+                'ssh_password': profile.get('ssh_password'),
+                'ssh_key_path': profile.get('ssh_key_path'),
+                'remote_db_host': profile.get('remote_db_host', 'localhost'),
+                'remote_db_port': profile.get('remote_db_port', profile.get('port', 5432))
+            }
     
     # Используем существующую функцию с временным конфигом
     return get_db_connection(config=temp_config, ssh_settings=ssh_settings)
