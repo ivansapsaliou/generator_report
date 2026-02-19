@@ -42,17 +42,12 @@
                 <i class="bi bi-diagram-3"></i>
             </a>
     
-            <a href="{{ url_for('settings') }}"
-               class="sidebar-link {% if request.endpoint == 'settings' %}active{% endif %}"
-               title="Настройки">
-                <i class="bi bi-gear"></i>
-            </a>
-    
-            <!-- 🆕 НОВАЯ КНОПКА: Подключение к БД -->
+            <!-- 🎉 НОВАЯ КНОПКА: Подключение к БД -->
             <a href="{{ url_for('dashboard') }}"
                class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
                title="Выбор подключения">
                 <i class="bi bi-database"></i>
+            </a>
             </a>
         </nav>
         <div class="sidebar-footer">
@@ -69,6 +64,11 @@
                 {% block topbar_title %}Конструктор отчётов{% endblock %}
             </h1>
             <div class="top-actions">
+                <!-- 🆕 ИНФОРМАЦИЯ О ТЕКУЩЕМ ПОДКЛЮЧЕНИИ -->
+                <div id="activeProfileInfo" style="display:none;padding:6px 12px;background:var(--bg-3);border-radius:4px;border-left:3px solid var(--amber);font-size:11px;color:var(--text-3);margin-right:12px;font-family:var(--font-mono);">
+                    <div id="profileHost" style="margin-top:2px;"></div>
+                </div>
+                
                 {% block topbar_actions %}
                 <a href="{{ url_for('index') }}" class="btn btn-secondary btn-sm">
                     <i class="bi bi-house"></i> Главная
@@ -120,6 +120,22 @@
     });
 })();
 </script>
+
+<script>
+    // Загружаем информацию о текущем профиле
+    fetch('/api/db-profiles/current')
+        .then(r => r.json())
+        .then(data => {
+            if (data.profile) {
+                const info = document.getElementById('activeProfileInfo');
+                document.getElementById('profileHost').textContent = `${data.profile.user}@${data.profile.host}:${data.profile.port}`;
+                info.style.display = 'block';
+            }
+        })
+        .catch(() => {
+            document.getElementById('activeProfileInfo').style.display = 'none';
+        });
+    </script>
 
 {% block extra_js %}{% endblock %}
 </body>

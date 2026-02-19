@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, flash, redirect, url_for, Response
+from flask import Flask, render_template, jsonify, request, flash, redirect, url_for, Response, session
 import psycopg2
 import psycopg2.extras
 import json
@@ -30,16 +30,30 @@ from db_connection import (
     is_tunnel_active,
     get_tunnel_info,
     get_existing_ssh_tunnel,
-    get_db_connection
-)
-from db_settings import (
-    get_ssh_settings,
-    save_ssh_settings,
-    get_mail_settings,
-    save_mail_settings,
-    ensure_app_settings_table
+    get_db_connection as _get_db_connection_original,
+    get_db_connection_by_profile
 )
 from mail_utils import send_email, send_test_email
+
+def get_db_connection(config=None, ssh_settings=None):
+    """
+    Переопределённая функция подключения к БД.
+    Сначала проверяет активный профиль в сессии, потом использует конфиг.
+    """
+    try:
+        # Проверяем активный профиль в сессии
+        profile_id = session.get('active_profile_id')
+        
+        if profile_id:
+            print(f"[DB] Using profile {profile_id} from session")
+            return get_db_connection_by_profile(profile_id)
+    except Exception as e:
+        print(f"[DB] Error using profile from session: {e}")
+        # Падаем на конфиг по умолчанию
+    
+    # Используем оригинальное подключение по конфигу
+    return _get_db_connection_original(config, ssh_settings)
+
 
 # Для обратной совместимости
 PARAMIKO_AVAILABLE = is_paramiko_available()
@@ -50,9 +64,17 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
 
+# 🔐 Конфигурация сессии
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30  # 30 дней
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Защита от XSS
+app.config['SESSION_COOKIE_SECURE'] = False  # True если используется HTTPS
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Защита от CSRF
+
 from flask_session import Session
-session = Session()
-session.init_app(app)
+session_obj = Session()
+session_obj.init_app(app)
 
 # Инициализация менеджера сессий
 pg_session_manager = PostgreSQLSessionManager(app.config)
@@ -1601,6 +1623,25 @@ def get_existing_ssh_tunnel(ssh_host, ssh_port, ssh_user, remote_db_host, remote
                 pass
     return None
 
+@app.route('/api/db-profiles/current', methods=['GET'])
+def get_current_profile():
+    """Получить текущий активный профиль"""
+    profile_id = session.get('active_profile_id')
+    
+    if not profile_id:
+        return jsonify({'profile': None})
+    
+    from db_profiles import DatabaseProfileManager
+    profile = DatabaseProfileManager.get_profile(profile_id)
+    
+    if not profile:
+        return jsonify({'profile': None})
+    
+    # Не отправляем пароль
+    profile_copy = profile.copy()
+    profile_copy['password'] = '****'
+    
+    return jsonify({'profile': profile_copy})
 
 @app.route('/api/settings/db/test', methods=['GET', 'POST'])
 def test_db_connection():
