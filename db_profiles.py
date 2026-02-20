@@ -22,7 +22,12 @@ class DatabaseProfileManager:
         
         try:
             with open(DatabaseProfileManager.PROFILES_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                profiles = json.load(f)
+                # Добавляем db_type если его нет (для обратной совместимости)
+                for profile in profiles:
+                    if 'db_type' not in profile:
+                        profile['db_type'] = 'postgresql'
+                return profiles
         except (json.JSONDecodeError, IOError):
             return []
     
@@ -32,6 +37,9 @@ class DatabaseProfileManager:
         profiles = DatabaseProfileManager.get_all_profiles()
         for profile in profiles:
             if profile['id'] == profile_id:
+                # Добавляем db_type если его нет
+                if 'db_type' not in profile:
+                    profile['db_type'] = 'postgresql'
                 return profile
         return None
     
@@ -40,6 +48,10 @@ class DatabaseProfileManager:
         """Сохранить новое или обновить существующее подключение"""
         DatabaseProfileManager.ensure_storage_dir()
         profiles = DatabaseProfileManager.get_all_profiles()
+        
+        # По умолчанию PostgreSQL если не указан тип
+        if 'db_type' not in profile_data:
+            profile_data['db_type'] = 'postgresql'
         
         # Генерируем ID если это новый профиль
         if 'id' not in profile_data:

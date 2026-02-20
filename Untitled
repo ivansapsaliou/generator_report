@@ -1,0 +1,127 @@
+"""
+Универсальный адаптер для работы с PostgreSQL и Oracle
+"""
+
+import psycopg2
+import psycopg2.extras
+
+try:
+    import oracledb
+    ORACLE_AVAILABLE = True
+except ImportError:
+    ORACLE_AVAILABLE = False
+
+
+class DatabaseAdapter:
+    """Универсальный адаптер для работы с разными типами БД"""
+    
+    POSTGRES = 'postgresql'
+    ORACLE = 'oracle'
+    
+    @staticmethod
+    def is_oracle_available():
+        """Проверка доступности библиотеки Oracle"""
+        return ORACLE_AVAILABLE
+    
+    @staticmethod
+    def connect(db_type, host, port, database, user, password, **kwargs):
+        """
+        Универсальное подключение к БД
+        
+        Args:
+            db_type: тип БД ('postgresql' или 'oracle')
+            host: хост
+            port: порт
+            database: имя БД / service name для Oracle
+            user: пользователь
+            password: пароль
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            connection: объект подключения
+        """
+        
+        if db_type == DatabaseAdapter.POSTGRES:
+            return psycopg2.connect(
+                host=host,
+                port=port,
+                database=database,
+                user=user,
+                password=password,
+                client_encoding='UTF8',
+                connect_timeout=kwargs.get('connect_timeout', 10)
+            )
+            
+        elif db_type == DatabaseAdapter.ORACLE:
+            if not ORACLE_AVAILABLE:
+                raise RuntimeError(
+                    "oracledb не установлен. Установите: pip install oracledb\n"
+                    "Это официальная библиотека Oracle для Python."
+                )
+            
+            # ✅ ИСПРАВЛЕНО: Формируем DSN для Oracle
+            dsn = oracledb.makedsn(host, port, service_name=database)
+            
+            # ✅ ИСПРАВЛЕНО: Убран параметр encoding
+            return oracledb.connect(
+                user=user,
+                password=password,
+                dsn=dsn
+            )
+        
+        else:
+            raise ValueError(f"Неизвестный тип БД: {db_type}")
+    
+    @staticmethod
+    def test_connection(db_type, host, port, database, user, password):
+        """
+        Тестировани�� подключения к БД
+        
+        Returns:
+            tuple: (success: bool, message: str, version: str)
+        """
+        
+        try:
+            conn = DatabaseAdapter.connect(db_type, host, port, database, user, password)
+            
+            # Получаем версию БД
+            if db_type == DatabaseAdapter.POSTGRES:
+                cur = conn.cursor()
+                cur.execute("SELECT version()")
+                version = cur.fetchone()[0]
+                cur.close()
+                
+            elif db_type == DatabaseAdapter.ORACLE:
+                cur = conn.cursor()
+                cur.execute("SELECT banner FROM v$version WHERE rownum = 1")
+                version = cur.fetchone()[0]
+                cur.close()
+            
+            conn.close()
+            
+            return (True, f"Подключение успешно", version)
+            
+        except Exception as e:
+            return (False, f"Ошибка подключения: {str(e)}", None)
+    
+    @staticmethod
+    def get_cursor(conn, db_type):
+        """
+        Получить курсор с поддержкой словарей
+        
+        Args:
+            conn: объект подключения
+            db_type: тип БД
+            
+        Returns:
+            cursor: курсор
+        """
+        
+        if db_type == DatabaseAdapter.POSTGRES:
+            return conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        elif db_type == DatabaseAdapter.ORACLE:
+            cursor = conn.cursor()
+            cursor.rowfactory = lambda *args: dict(zip([d[0] for d in cursor.description], args))
+            return cursor
+        else:
+            raise ValueError(f"Неизвестный тип БД: {db_type}")

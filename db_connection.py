@@ -371,43 +371,81 @@ def get_db_connection_by_profile(profile_id, ssh_settings=None):
     """
     Получить подключение к БД по сохранённому профилю.
     Если в профиле включён SSH туннель, использует его для подключения.
+    Поддерживает PostgreSQL и Oracle.
     
     Args:
         profile_id: ID сохранённого профиля
         ssh_settings: словарь с настройками SSH (опционально, переопределяет настройки из профиля)
     
     Returns:
-        psycopg2.connection: объект подключения к БД
+        connection: объект подключения к БД (psycopg2 или oracledb)
     """
     from db_profiles import DatabaseProfileManager
+    from db_adapter import DatabaseAdapter
     
     profile = DatabaseProfileManager.get_profile(profile_id)
     if not profile:
         raise Exception(f"Profile {profile_id} not found")
     
-    # Создаём временный конфиг из профиля
-    temp_config = {
-        'DB_HOST': profile.get('host'),
-        'DB_PORT': profile.get('port', 5432),
-        'DB_NAME': profile.get('database'),
-        'DB_USER': profile.get('user'),
-        'DB_PASSWORD': profile.get('password'),
-    }
+    # Получаем параметры подключения
+    db_type = profile.get('db_type', 'postgresql')
+    db_host = profile['host']
+    db_port = profile['port']
+    database = profile['database']
+    user = profile['user']
+    password = profile['password']
     
-    # Если ssh_settings не передан, получаем из профиля
-    if ssh_settings is None:
-        ssh_enabled = profile.get('ssh_enabled', False)
-        if ssh_enabled:
-            ssh_settings = {
-                'enabled': True,
-                'ssh_host': profile.get('ssh_host'),
-                'ssh_port': profile.get('ssh_port', 22),
-                'ssh_user': profile.get('ssh_user'),
-                'ssh_password': profile.get('ssh_password'),
-                'ssh_key_path': profile.get('ssh_key_path'),
-                'remote_db_host': profile.get('remote_db_host', 'localhost'),
-                'remote_db_port': profile.get('remote_db_port', profile.get('port', 5432))
-            }
+    # Проверяем SSH туннель
+    ssh_enabled = profile.get('ssh_enabled', False)
     
-    # Используем существующую функцию с временным конфигом
-    return get_db_connection(config=temp_config, ssh_settings=ssh_settings)
+    if ssh_enabled:
+        try:
+            print(f"[SSH] Profile {profile_id}: Creating SSH tunnel for {db_type} connection")
+            
+            # Получаем параметры SSH из профиля
+            ssh_host = profile['ssh_host']
+            ssh_port = profile.get('ssh_port', 22)
+            ssh_user = profile['ssh_user']
+            ssh_password = profile.get('ssh_password')
+            ssh_key_path = profile.get('ssh_key_path')
+            remote_db_host = profile.get('remote_db_host', 'localhost')
+            remote_db_port = profile.get('remote_db_port', db_port)
+            
+            # Создаём SSH туннель
+            local_host, local_port = create_ssh_tunnel(
+                ssh_host=ssh_host,
+                ssh_port=ssh_port,
+                ssh_user=ssh_user,
+                ssh_password=ssh_password,
+                ssh_key_path=ssh_key_path,
+                remote_db_host=remote_db_host,
+                remote_db_port=remote_db_port
+            )
+            
+            # Подключаемся через туннель
+            db_host = local_host
+            db_port = local_port
+            
+            print(f"[SSH] ✅ Tunnel active: {local_host}:{local_port} -> {remote_db_host}:{remote_db_port}")
+            
+        except Exception as e:
+            print(f"[SSH] ❌ Failed to create SSH tunnel: {e}")
+            raise Exception(f"SSH tunnel error: {e}")
+    
+    # Подключаемся к БД через адаптер
+    try:
+        print(f"[DB] Connecting to {db_type} at {db_host}:{db_port}")
+        conn = DatabaseAdapter.connect(
+            db_type=db_type,
+            host=db_host,
+            port=db_port,
+            database=database,
+            user=user,
+            password=password
+        )
+        print(f"[DB] ✅ Connected to {db_type}")
+        return conn
+        
+    except Exception as e:
+        print(f"[DB] ❌ Connection error: {e}")
+        raise

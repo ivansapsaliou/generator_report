@@ -35,6 +35,8 @@ from db_connection import (
 )
 from mail_utils import send_email, send_test_email
 
+from db_adapter import DatabaseAdapter  # ✅ НОВЫЙ ИМПОРТ
+
 def get_db_connection(config=None, ssh_settings=None):
     """
     Переопределённая функция подключения к БД.
@@ -178,14 +180,20 @@ def dashboard():
     """Показать Dashboard с выбором подключения к БД"""
     return render_template('dashboard.html')
 
+# ═════════════════════════════════════════════════════════════════════════════
+# DATABASE PROFILES API
+# ═════════════════════════════════════════════════════════════════════════════
+
 @app.route('/api/db-profiles', methods=['GET'])
 def get_db_profiles():
     """Получить все сохранённые подключения"""
     profiles = DatabaseProfileManager.get_all_profiles()
     # Не отправляем пароли на клиент
     for p in profiles:
-        p['password'] = '****'
+        if 'password' in p:
+            p['password'] = '****'
     return jsonify({'profiles': profiles})
+
 
 @app.route('/api/db-profiles/<int:profile_id>', methods=['GET'])
 def get_db_profile(profile_id):
@@ -195,80 +203,145 @@ def get_db_profile(profile_id):
         return jsonify({'error': 'Profile not found'}), 404
     return jsonify({'profile': profile})
 
+
 @app.route('/api/db-profiles', methods=['POST'])
 def save_db_profile():
-    """Сохранить новое подключение"""
-    data = request.json
-    profile = DatabaseProfileManager.save_profile(data)
-    return jsonify({'success': True, 'profile': profile})
+    """Сохранить новое или обновить существующее подключение"""
+    try:
+        data = request.json
+        print(f"[API] Saving profile: {data.get('name', 'unnamed')}")
+        
+        # Валидация обязательных полей
+        required_fields = ['name', 'host', 'port', 'database', 'user', 'password']
+        for field in required_fields:
+            if field not in data or not data[field]:
+                return jsonify({
+                    'success': False, 
+                    'error': f'Обязательное поле отсутствует: {field}'
+                }), 400
+        
+        # Устанавливаем db_type по умолчанию если не указан
+        if 'db_type' not in data:
+            data['db_type'] = 'postgresql'
+        
+        profile = DatabaseProfileManager.save_profile(data)
+        print(f"[API] Profile saved with ID: {profile['id']}")
+        
+        return jsonify({'success': True, 'profile': profile})
+        
+    except Exception as e:
+        print(f"[API] Error saving profile: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/db-profiles/<int:profile_id>', methods=['DELETE'])
 def delete_db_profile(profile_id):
     """Удалить подключение"""
-    DatabaseProfileManager.delete_profile(profile_id)
-    return jsonify({'success': True})
+    try:
+        DatabaseProfileManager.delete_profile(profile_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/db-profiles/test', methods=['POST'])
-def test_db_profile():
-    """Протестировать подключение к БД"""
-    data = request.json
+def test_db_profile_connection():
+    """Тестирование подключения к БД (PostgreSQL или Oracle) - без SSH"""
     try:
-        conn = psycopg2.connect(
-            host=data['host'],
-            port=data['port'],
-            database=data['database'],
-            user=data['user'],
-            password=data['password'],
-            connect_timeout=5
+        data = request.json
+        
+        db_type = data.get('db_type', 'postgresql')
+        host = data['host']
+        port = data['port']
+        database = data['database']
+        user = data['user']
+        password = data['password']
+        
+        print(f"[TEST] Testing {db_type} connection to {host}:{port}/{database}")
+        
+        success, message, version = DatabaseAdapter.test_connection(
+            db_type, host, port, database, user, password
         )
-        conn.close()
-        return jsonify({'success': True, 'message': 'Connection successful'})
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message,
+                'version': version
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 400
+            
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        print(f"[TEST] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Ошибка тестирования: {str(e)}'
+        }), 500
 
 
 @app.route('/api/db-profiles/test-ssh', methods=['POST'])
-def test_ssh_profile():
-    """Протестировать SSH подключение и подключение к БД через туннель"""
-    data = request.json
-    
-    ssh_enabled = data.get('ssh_enabled', False)
-    if not ssh_enabled:
-        return jsonify({'success': False, 'error': 'SSH не включён'})
-    
+def test_db_profile_connection_ssh():
+    """Тестирование подключения через SSH туннель"""
     try:
-        # Проверяем доступность paramiko
-        if not is_paramiko_available():
-            return jsonify({'success': False, 'error': 'Библиотека paramiko не установлена'})
+        data = request.json
+        
+        if not data.get('ssh_enabled'):
+            return jsonify({'success': False, 'error': 'SSH не включён'}), 400
+        
+        db_type = data.get('db_type', 'postgresql')
+        
+        print(f"[TEST-SSH] Creating SSH tunnel for {db_type} connection")
+        print(f"[TEST-SSH] SSH: {data['ssh_user']}@{data['ssh_host']}:{data.get('ssh_port', 22)}")
+        print(f"[TEST-SSH] Remote DB: {data.get('remote_db_host', 'localhost')}:{data.get('remote_db_port', 5432)}")
         
         # Создаём SSH туннель
         local_host, local_port = create_ssh_tunnel(
             ssh_host=data['ssh_host'],
-            ssh_port=int(data.get('ssh_port', 22)),
+            ssh_port=data.get('ssh_port', 22),
             ssh_user=data['ssh_user'],
-            ssh_password=data.get('ssh_password', ''),
+            ssh_password=data.get('ssh_password'),
             ssh_key_path=data.get('ssh_key_path'),
             remote_db_host=data.get('remote_db_host', 'localhost'),
-            remote_db_port=int(data.get('remote_db_port', 5432))
+            remote_db_port=data.get('remote_db_port', 1521 if db_type == 'oracle' else 5432)
         )
         
-        # Через созданный туннель подключаемся к БД
-        conn = psycopg2.connect(
-            host=local_host,
-            port=local_port,
-            database=data['database'],
-            user=data['user'],
-            password=data['password'],
-            connect_timeout=10
-        )
-        conn.close()
+        print(f"[TEST-SSH] Tunnel created: {local_host}:{local_port}")
         
-        return jsonify({
-            'success': True,
-            'message': f'SSH туннель создан. Подключение к БД успешно (локальный порт: {local_port})'
-        })
+        # Тестируем подключение через туннель
+        success, message, version = DatabaseAdapter.test_connection(
+            db_type, local_host, local_port, 
+            data['database'], data['user'], data['password']
+        )
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'✓ SSH туннель и подключение к {db_type} работают',
+                'version': version
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'SSH туннель создан, но подключение к БД не удалось: {message}'
+            }), 400
+            
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        print(f"[TEST-SSH] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Ошибка SSH туннеля или подключения: {str(e)}'
+        }), 500
+
 
 @app.route('/api/db-profiles/select', methods=['POST'])
 def select_db_profile():

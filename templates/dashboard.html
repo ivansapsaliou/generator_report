@@ -51,6 +51,16 @@
                     <div style="font-size:10px;color:var(--text-3);margin-top:3px;">Краткое имя для идентификации подключения</div>
                 </div>
 
+                <!-- ✅ НОВОЕ ПОЛЕ: Тип базы данных -->
+                <div>
+                    <label class="form-label">Тип базы данных <span style="color:var(--red);">*</span></label>
+                    <select id="profileDbType" class="form-control" onchange="updatePortForDbType()">
+                        <option value="postgresql" selected>PostgreSQL</option>
+                        <option value="oracle">Oracle</option>
+                    </select>
+                    <div style="font-size:10px;color:var(--text-3);margin-top:3px;">Выберите тип СУБД для подключения</div>
+                </div>
+
                 <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;">
                     <div>
                         <label class="form-label">Хост <span style="color:var(--red);">*</span></label>
@@ -227,13 +237,12 @@ const ProfileManager = {
                 return;
             }
 
-            count.textContent = data.profiles.length;
-            
             list.innerHTML = data.profiles.map(p => `
                 <div class="profile-card-item">
                     <div class="profile-info">
                         <div class="profile-info-name">
                             ${p.ssh_enabled ? '<i class="bi bi-shield-lock" style="color:var(--amber);margin-right:4px;" title="SSH туннель"></i>' : ''}
+                            ${p.db_type === 'oracle' ? '<i class="bi bi-database-fill-gear" style="color:var(--red);margin-right:4px;" title="Oracle"></i>' : '<i class="bi bi-database-fill" style="color:var(--blue);margin-right:4px;" title="PostgreSQL"></i>'}
                             ${escapeHtml(p.name)}
                         </div>
                         <div class="profile-info-host">${escapeHtml(p.user)}@${escapeHtml(p.host)}:${p.port} / ${escapeHtml(p.database)}</div>
@@ -285,11 +294,15 @@ const ProfileManager = {
                         if (el) el.value = val || '';
                     };
                     
-                    // ✅ ИСПРАВЛЕНИЕ: НЕ переводите SSH host в profileHost
                     // Основные поля БД
                     setVal('profileId', p.id);
                     setVal('profileName', p.name);
-                    setVal('profileHost', p.host);  // Реальный хост БД
+                    
+                    // ✅ НОВОЕ: Тип БД
+                    const dbType = p.db_type || 'postgresql';
+                    setVal('profileDbType', dbType);
+                    
+                    setVal('profileHost', p.host);
                     setVal('profilePort', p.port);
                     setVal('profileDatabase', p.database);
                     setVal('profileUser', p.user);
@@ -304,13 +317,12 @@ const ProfileManager = {
                     if (sshFields) sshFields.style.display = sshEnabled ? 'flex' : 'none';
                     
                     if (sshEnabled) {
-                        setVal('profileSshHost', p.ssh_host);      // SSH хост
+                        setVal('profileSshHost', p.ssh_host);
                         setVal('profileSshPort', p.ssh_port);
                         setVal('profileSshUser', p.ssh_user);
                         setVal('profileSshPassword', p.ssh_password);
                         setVal('profileSshKeyPath', p.ssh_key_path);
-                        // ✅ ВАЖНО: используем СВОИ поля для БД через туннель
-                        setVal('profileRemoteDbHost', p.remote_db_host || p.host);  // Если SSH включён
+                        setVal('profileRemoteDbHost', p.remote_db_host || p.host);
                         setVal('profileRemoteDbPort', p.remote_db_port || p.port);
                         
                         const authType = p.ssh_key_path ? 'key' : 'password';
@@ -349,6 +361,7 @@ function openProfileModal() {
     document.getElementById('modalBackdrop').style.display = 'block';
     document.getElementById('profileModalTitle').innerHTML = '<i class="bi bi-plus"></i> Новое подключение';
     document.getElementById('profileId').value = '';
+    
     // Сброс подсветки ошибок
     clearValidationErrors();
 }
@@ -356,7 +369,16 @@ function openProfileModal() {
 function closeProfileModal() {
     document.getElementById('profileModal').style.display = 'none';
     document.getElementById('modalBackdrop').style.display = 'none';
-    document.getElementById('profileForm').reset();
+    
+    // ✅ ИСПРАВЛЕНО: Полная очистка формы
+    const form = document.getElementById('profileForm');
+    form.reset();
+    
+    // Возвращаем значения по умолчанию
+    document.getElementById('profileDbType').value = 'postgresql';
+    document.getElementById('profilePort').value = '5432';
+    document.getElementById('profileRemoteDbPort').value = '5432';
+    
     document.getElementById('testResult').style.display = 'none';
     document.getElementById('sshFields').style.display = 'none';
     document.getElementById('profileSshEnabled').checked = false;
@@ -406,6 +428,7 @@ function validateProfileForm() {
     };
 
     const name = getVal('profileName');
+    const dbType = getVal('profileDbType') || 'postgresql';
     const host = getVal('profileHost');
     const port = getNumVal('profilePort', 0);
     const database = getVal('profileDatabase');
@@ -416,6 +439,13 @@ function validateProfileForm() {
         showValidationError('profileName', 'Обязательное поле');
         isValid = false;
     }
+    
+    // ✅ ДОБАВЛЕНО: Валидация типа БД
+    if (!dbType) {
+        showValidationError('profileDbType', 'Выберите тип БД');
+        isValid = false;
+    }
+    
     if (!host) {
         showValidationError('profileHost', 'Обязательное поле');
         isValid = false;
@@ -493,8 +523,32 @@ function toggleSshAuthFields() {
     if (keyField) keyField.style.display = authType === 'key' ? 'block' : 'none';
 }
 
+// ✅ НОВАЯ ФУНКЦИЯ: Обновление порта по умолчанию при смене типа БД
+function updatePortForDbType() {
+    const dbType = document.getElementById('profileDbType')?.value;
+    const portField = document.getElementById('profilePort');
+    const remotePortField = document.getElementById('profileRemoteDbPort');
+    
+    // Предлагаем стандартный порт для типа БД
+    if (dbType === 'postgresql') {
+        if (!portField.value || portField.value === '1521') {
+            portField.value = 5432;
+        }
+        if (remotePortField && (!remotePortField.value || remotePortField.value === '1521')) {
+            remotePortField.value = 5432;
+        }
+    } else if (dbType === 'oracle') {
+        if (!portField.value || portField.value === '5432') {
+            portField.value = 1521;
+        }
+        if (remotePortField && (!remotePortField.value || remotePortField.value === '5432')) {
+            remotePortField.value = 1521;
+        }
+    }
+}
+
 function testProfileConnection() {
-    // Сначала валидируем
+    // ✅ ИСПРАВЛЕНО: Сначала валидируем
     if (!validateProfileForm()) {
         return;
     }
@@ -504,20 +558,31 @@ function testProfileConnection() {
         return el && el.value ? el.value : '';
     };
 
-    const data = {
+    const dbType = getVal('profileDbType') || 'postgresql';
+    const sshEnabled = document.getElementById('profileSshEnabled')?.checked || false;
+
+    console.log('[TEST] Testing connection:', {
+        dbType: dbType,
         host: getVal('profileHost'),
-        port: parseInt(document.getElementById('profilePort')?.value) || 5432,
+        port: document.getElementById('profilePort')?.value,
+        sshEnabled: sshEnabled
+    });
+
+    const data = {
+        db_type: dbType,
+        host: getVal('profileHost'),
+        port: parseInt(document.getElementById('profilePort')?.value) || (dbType === 'oracle' ? 1521 : 5432),
         database: getVal('profileDatabase'),
         user: getVal('profileUser'),
         password: getVal('profilePassword'),
-        ssh_enabled: document.getElementById('profileSshEnabled')?.checked || false,
+        ssh_enabled: sshEnabled,
         ssh_host: getVal('profileSshHost'),
         ssh_port: parseInt(document.getElementById('profileSshPort')?.value) || 22,
         ssh_user: getVal('profileSshUser'),
         ssh_password: getVal('profileSshPassword'),
         ssh_key_path: getVal('profileSshKeyPath') || null,
         remote_db_host: getVal('profileRemoteDbHost') || 'localhost',
-        remote_db_port: parseInt(document.getElementById('profileRemoteDbPort')?.value) || 5432
+        remote_db_port: parseInt(document.getElementById('profileRemoteDbPort')?.value) || (dbType === 'oracle' ? 1521 : 5432)
     };
 
     const resultDiv = document.getElementById('testResult');
@@ -527,18 +592,23 @@ function testProfileConnection() {
     resultDiv.style.background = 'rgba(240,168,67,.1)';
     resultDiv.style.color = 'var(--amber)';
 
-    // Выбираем endpoint в зависимости от того, включён ли SSH
     const endpoint = data.ssh_enabled ? '/api/db-profiles/test-ssh' : '/api/db-profiles/test';
+    
+    console.log('[TEST] Sending request to:', endpoint, data);
     
     fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
     })
-    .then(r => r.json())
+    .then(r => {
+        console.log('[TEST] Response status:', r.status);
+        return r.json();
+    })
     .then(result => {
+        console.log('[TEST] Result:', result);
         if (result.success) {
-            resultDiv.innerHTML = '<i class="bi bi-check-circle"></i> ✓ ' + (result.message || 'Подключение успешно!');
+            resultDiv.innerHTML = '<i class="bi bi-check-circle"></i> ✓ ' + (result.message || 'Подключение успешно!') + (result.version ? '<br><small>' + result.version + '</small>' : '');
             resultDiv.style.borderLeftColor = 'var(--green)';
             resultDiv.style.background = 'rgba(82,183,136,.1)';
             resultDiv.style.color = 'var(--green)';
@@ -550,6 +620,7 @@ function testProfileConnection() {
         }
     })
     .catch(error => {
+        console.error('[TEST] Error:', error);
         resultDiv.innerHTML = '<i class="bi bi-exclamation-circle"></i> Ошибка: ' + error.message;
         resultDiv.style.borderLeftColor = 'var(--red)';
         resultDiv.style.background = 'rgba(224,82,82,.1)';
@@ -560,7 +631,10 @@ function testProfileConnection() {
 document.getElementById('profileForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    console.log('[SAVE] Form submitted');
+    
     if (!validateProfileForm()) {
+        console.log('[SAVE] Validation failed');
         return;
     }
 
@@ -571,18 +645,16 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
 
     const sshEnabled = document.getElementById('profileSshEnabled')?.checked || false;
     const sshAuthType = document.getElementById('profileSshAuthType')?.value || 'password';
+    const dbType = getVal('profileDbType') || 'postgresql';
     
-    // ✅ ИСПРАВЛЕНИЕ: Раздельно хранить БД и SSH параметры
     const profile = {
         name: getVal('profileName'),
-        // БД параметры - ВСЕГДА
-        host: getVal('profileHost'),           // Реальный хост БД
-        port: parseInt(document.getElementById('profilePort')?.value) || 5432,
+        db_type: dbType,
+        host: getVal('profileHost'),
+        port: parseInt(document.getElementById('profilePort')?.value) || (dbType === 'oracle' ? 1521 : 5432),
         database: getVal('profileDatabase'),
         user: getVal('profileUser'),
         password: getVal('profilePassword'),
-        
-        // SSH параметры - если включён
         ssh_enabled: sshEnabled,
         ssh_host: sshEnabled ? getVal('profileSshHost') : null,
         ssh_port: sshEnabled ? (parseInt(document.getElementById('profileSshPort')?.value) || 22) : null,
@@ -590,13 +662,16 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
         ssh_password: sshEnabled && sshAuthType === 'password' ? getVal('profileSshPassword') : null,
         ssh_key_path: sshEnabled && sshAuthType === 'key' ? getVal('profileSshKeyPath') : null,
         remote_db_host: sshEnabled ? getVal('profileRemoteDbHost') : null,
-        remote_db_port: sshEnabled ? (parseInt(document.getElementById('profileRemoteDbPort')?.value) || 5432) : null
+        remote_db_port: sshEnabled ? (parseInt(document.getElementById('profileRemoteDbPort')?.value) || (dbType === 'oracle' ? 1521 : 5432)) : null
     };
 
-    console.log('Saving profile:', JSON.stringify(profile, null, 2));
+    console.log('[SAVE] Profile data:', JSON.stringify(profile, null, 2));
 
     if (ProfileManager.currentEditId) {
         profile.id = ProfileManager.currentEditId;
+        console.log('[SAVE] Updating existing profile ID:', profile.id);
+    } else {
+        console.log('[SAVE] Creating new profile');
     }
 
     try {
@@ -606,14 +681,19 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
             body: JSON.stringify(profile)
         });
 
+        console.log('[SAVE] Response status:', res.status);
+
         if (res.ok) {
+            console.log('[SAVE] Success!');
             closeProfileModal();
             ProfileManager.loadProfiles();
         } else {
             const err = await res.text();
+            console.error('[SAVE] Error:', err);
             alert('Ошибка сохранения: ' + err);
         }
     } catch (error) {
+        console.error('[SAVE] Exception:', error);
         alert('Ошибка: ' + error.message);
     }
 });
