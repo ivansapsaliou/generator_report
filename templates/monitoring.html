@@ -508,6 +508,8 @@ var sessionsData = [];
 var sessionAutoRefreshInterval = null;
 var isSessionAutoRefreshRunning = true;
 var currentSessionRefreshRate = 3000;
+var currentSessionRefreshRate = 3000;
+var currentDbType = 'postgresql'; // ✅ НОВОЕ: Отслеживание типа БД
 
 function esc(s) {
     var d = document.createElement('div');
@@ -598,63 +600,178 @@ async function loadStats() {
     try {
         var r = await fetch('/api/monitoring/stats');
         var d = await r.json();
-        if (!d.success) throw new Error(d.error||'Ошибка сервера');
-
+        
+        if (!d.success) throw new Error(d.error || 'Ошибка сервера');
+        
+        console.log('[Monitoring] Response:', d);
+        
+        // ✅ ИСПРАВЛЕНО: Работаем со старой структурой
         var data = d.data;
-        var sys  = data.system  || {};
-        var pg   = data.postgres;
-        var ts   = new Date(data.timestamp).toLocaleTimeString('ru-RU');
+        var sys = data.system || {};
+        var dbType = d.db_type || 'postgresql';
+        var isOracle = dbType === 'oracle';
+        
+        // ✅ ИСПРАВЛЕНО: Выбираем данные БД
+        var pg = isOracle ? data.oracle : data.postgres;
+        
+        var ts = new Date(data.timestamp).toLocaleTimeString('ru-RU');
         
         var lastUpdateEl = document.getElementById('lastUpdateTime');
-        if (lastUpdateEl) lastUpdateEl.textContent = 'Обновлено: '+ts;
+        if (lastUpdateEl) lastUpdateEl.textContent = 'Обновлено: ' + ts;
+        
+        // ✅ НОВОЕ: Обновляем badge типа БД
+        var versionBadge = document.getElementById('pgVersionBadge');
+        if (versionBadge && pg) {
+            var dbIcon = isOracle ? '🔴' : '🐘';
+            var dbLabel = isOracle ? 'Oracle' : 'PostgreSQL';
+            versionBadge.textContent = dbIcon + ' ' + dbLabel;
+            versionBadge.style.color = isOracle ? 'var(--red)' : 'var(--blue)';
+            versionBadge.style.fontSize = '12px';
+            versionBadge.style.fontWeight = '600';
+        }
 
+        // CPU
         if (sys.cpu_percent != null) {
-            setMC('cpu', sys.cpu_percent.toFixed(1)+'%', sys.cpu_percent,
-                  sys.cpu_percent>70, sys.cpu_percent>90);
+            setMC('cpu', sys.cpu_percent.toFixed(1) + '%', sys.cpu_percent,
+                  sys.cpu_percent > 70, sys.cpu_percent > 90);
         }
 
+        // RAM
         if (sys.memory_percent != null) {
-            setMC('ram', sys.memory_used_gb + ' / ' + sys.memory_total_gb + ' GB',
-                  sys.memory_percent, sys.memory_percent>70, sys.memory_percent>90);
+            var memUsedGb = sys.memory_used_gb || (sys.memory_used_mb / 1024).toFixed(1);
+            var memTotalGb = sys.memory_total_gb || (sys.memory_total_mb / 1024).toFixed(1);
+            setMC('ram', memUsedGb + ' / ' + memTotalGb + ' GB',
+                  sys.memory_percent, sys.memory_percent > 70, sys.memory_percent > 90);
         }
 
+        // Disk
         if (sys.disk_percent != null) {
-            setMC('disk', sys.disk_used_gb + ' / ' + sys.disk_total_gb + ' GB',
-                  sys.disk_percent, sys.disk_percent>75, sys.disk_percent>90);
+            var diskUsed = sys.disk_used_gb ? sys.disk_used_gb + ' GB' : sys.disk_used;
+            var diskTotal = sys.disk_total_gb ? sys.disk_total_gb + ' GB' : sys.disk_total;
+            setMC('disk', diskUsed + ' / ' + diskTotal,
+                  sys.disk_percent, sys.disk_percent > 75, sys.disk_percent > 90);
         }
 
+        // БД статистика
         if (pg) {
-            setMC('dbsize', pg.db_size, 50, false, false);
+            // Размер БД
+            setMC('dbsize', pg.db_size || pg.db_size_pretty, 50, false, false);
             var sub = document.getElementById('s-dbsize');
-            if (sub) sub.textContent = (pg.db_size_bytes ? (pg.db_size_bytes/1024/1024/1024).toFixed(2)+' GB' : '—') + ' · uptime: ' + pg.uptime;
+            if (sub) {
+                var sizeGb = pg.db_size_bytes ? (pg.db_size_bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB' : '—';
+                sub.textContent = sizeGb + ' · uptime: ' + pg.uptime;
+            }
 
+            // Подключения
             setMC('conn', pg.connections.active + ' / ' + pg.connections.total + ' / ' + pg.connections.max_connections,
                   (pg.connections.total / pg.connections.max_connections * 100),
                   (pg.connections.total / pg.connections.max_connections) > 0.7,
                   (pg.connections.total / pg.connections.max_connections) > 0.9);
 
-            renderConnections(pg);
-            renderTransactions(pg);
-            renderCache(pg);
-            renderNetwork(sys);
-            renderBgwriter(pg);
-            renderTableStats(pg.table_stats);
-            renderSlowQueries(pg.slow_queries);
-            renderTopQueries(pg.top_queries);
+            // ✅ ИСПРАВЛЕНО: Рендерим все блоки для PostgreSQL
+            if (!isOracle) {
+                renderConnections(pg);
+                renderTransactions(pg);
+                renderCache(pg);
+                renderNetwork(sys);
+                renderBgwriter(pg);
+                renderTableStats(pg.table_stats);
+                renderSlowQueries(pg.slow_queries);
+                renderTopQueries(pg.top_queries);
+            } else {
+                // Для Oracle - упрощенная статистика
+                renderOracleStats(pg, sys);
+            }
 
             var versionEl = document.getElementById('pgVersionBadge');
-            if (versionEl) versionEl.textContent = pg.version;
+            if (versionEl && pg.version) {
+                var dbIcon = isOracle ? '🔴' : '🐘';
+                var dbLabel = isOracle ? 'Oracle' : 'PostgreSQL';
+                versionEl.textContent = dbIcon + ' ' + dbLabel;
+            }
         }
 
         startCountdown();
 
-    } catch(e) {
+    } catch (e) {
         console.error('Ошибка загрузки статистики:', e);
     } finally {
         if (btn) {
             btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Обновить';
             btn.disabled = false;
         }
+    }
+}
+
+// ✅ НОВАЯ ФУНКЦИЯ: Упрощенный рендер для Oracle
+function renderOracleStats(ora, sys) {
+    // Подключения
+    var c = ora.connections || {};
+    var el = document.getElementById('blk-connections');
+    if (el) {
+        el.innerHTML =
+            sr('Активных сессий', 'Выполняют SQL-запрос', c.active || 0, 'dot-g') +
+            sr('Неактивных', 'INACTIVE статус', c.idle || 0, 'dot-d') +
+            sr('Всего подключений', 'Открытых сессий', c.total || 0, '') +
+            sr('Максимум (sessions)', 'Лимит параллельных сессий', c.max_connections || 0, '') +
+            sr('Заблокированных', 'Waiting on locks', c.waiting_lock || 0, c.waiting_lock > 0 ? 'dot-r' : 'dot-g') +
+            sr('Uptime Oracle', 'Время работы инстанса', ora.uptime || 'N/A', '');
+    }
+    
+    // Медленные запросы
+    renderSlowQueries(ora.slow_queries || []);
+    
+    // Остальные блоки - скрыть или показать заглушки
+    var hideIds = ['blk-transactions', 'blk-cache', 'blk-bgwriter', 'blk-tables', 'blk-top-queries'];
+    hideIds.forEach(function(id) {
+        var elem = document.getElementById(id);
+        if (elem) {
+            elem.innerHTML = '<div class="empty-state" style="padding:16px;">Недоступно для Oracle</div>';
+        }
+    });
+    
+    renderNetwork(sys);
+}
+
+// ✅ НОВАЯ ФУНКЦИЯ: Рендер статистики PostgreSQL
+function renderPostgresStats(pg) {
+    renderConnections(pg);
+    renderTransactions(pg);
+    renderCache(pg);
+    renderNetwork({net_recv_mb: 0, net_sent_mb: 0}); // Пока пусто
+    renderBgwriter(pg);
+    renderTableStats(pg.table_stats);
+    renderTopQueries(pg.top_queries);
+}
+
+// ✅ НОВАЯ ФУНКЦИЯ: Рендер статистики Oracle
+function renderOracleStats(ora) {
+    // Подключения (упрощенная версия для Oracle)
+    var c = ora.connections || {};
+    var el = document.getElementById('blk-connections');
+    if (el) {
+        el.innerHTML =
+            sr('Активных сессий', 'Выполняют SQL-запрос', c.active || 0, 'dot-g') +
+            sr('Неактивных', 'INACTIVE статус', c.idle || 0, 'dot-d') +
+            sr('Всего подключений', 'Открытых сессий', c.total || 0, '') +
+            sr('Максимум (sessions)', 'Лимит параллельных сессий', c.max_connections || 0, '') +
+            sr('Заблокированных', 'Waiting on locks', c.waiting_lock || 0, c.waiting_lock > 0 ? 'dot-r' : 'dot-g') +
+            sr('Uptime Oracle', 'Время работы инстанса', ora.uptime || 'N/A', '');
+    }
+    
+    // Для Oracle скрываем PostgreSQL-специф��чные блоки
+    var hideBlocks = ['blk-transactions', 'blk-cache', 'blk-bgwriter', 'blk-tables', 'blk-top-queries'];
+    hideBlocks.forEach(function(id) {
+        var block = document.getElementById(id);
+        if (block && block.parentElement) {
+            block.parentElement.parentElement.style.display = 'none';
+        }
+    });
+    
+    // Показываем заглушку для "Сетевой трафик"
+    var netEl = document.getElementById('blk-network');
+    if (netEl) {
+        netEl.innerHTML = '<div class="empty-state" style="padding:16px;">Статистика сети недоступна для Oracle</div>';
     }
 }
 

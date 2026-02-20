@@ -1114,7 +1114,28 @@ def run_scheduled_report(report_id):
 
 @app.route('/monitoring')
 def monitoring():
-    return render_template('monitoring.html')
+    """Страница мониторинга - адапт��вная под тип БД"""
+    try:
+        # Определяем активный профиль
+        profile_id = session.get('active_profile_id')
+        db_type = 'postgresql'  # По умолчанию
+        
+        if profile_id:
+            from db_profiles import DatabaseProfileManager
+            profile = DatabaseProfileManager.get_profile(profile_id)
+            if profile:
+                db_type = profile.get('db_type', 'postgresql')
+        
+        # Возвращаем соответствующий шаблон
+        if db_type == 'oracle':
+            return render_template('monitoring_oracle.html')
+        else:
+            return render_template('monitoring.html')
+            
+    except Exception as e:
+        print(f"[Monitoring] Error determining DB type: {e}")
+        # Fallback на PostgreSQL
+        return render_template('monitoring.html')
 
 
 def _get_system_stats_via_db(cur):
@@ -1199,285 +1220,149 @@ def _get_system_stats_via_db(cur):
 
 @app.route('/api/monitoring/stats')
 def get_monitoring_stats():
-    """Получить статистику сервера и БД — совместимо с PG 13/14/15/16"""
-    stats = {}
+    """
+    Получить статистику сервера и БД — адаптивно для PostgreSQL и Oracle
+    """
+    from db_monitoring import DatabaseMonitoring, ServerMonitoring
+    from db_connection import get_ssh_tunnels
+    
+    # ✅ ИСПРАВЛЕНО: Возвращаем в старом формате для совместимости
+    result = {
+        'success': True,
+        'data': {
+            'timestamp': None,
+            'system': {},
+            'postgres': None
+        },
+        'db_type': 'postgresql'  # Новое поле для определения типа БД
+    }
 
-    # ── PostgreSQL статистика ─────────────────────────────────────
     try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-        # Версия
-        cur.execute("SELECT version()")
-        pg_version_full = cur.fetchone()[0]
-        # Извлекаем короткую версию: "PostgreSQL 15.3"
-        import re as _re
-        pg_ver_match = _re.search(r'PostgreSQL ([\d.]+)', pg_version_full)
-        pg_version_short = pg_ver_match.group(0) if pg_ver_match else pg_version_full[:40]
-
-        # Uptime
-        try:
-            cur.execute("SELECT pg_postmaster_start_time()")
-            start_time = cur.fetchone()[0]
-            if start_time:
-                from datetime import timezone
-                now_aware = datetime.now(timezone.utc)
-                if start_time.tzinfo is None:
-                    start_time = start_time.replace(tzinfo=timezone.utc)
-                diff = now_aware - start_time
-                days = diff.days
-                hours, rem = divmod(diff.seconds, 3600)
-                mins, _  = divmod(rem, 60)
-                uptime_str = f"{days}д {hours}ч {mins}м"
+        import datetime
+        result['data']['timestamp'] = datetime.datetime.now().isoformat()
+        
+        profile_id = session.get('active_profile_id')
+        
+        if profile_id:
+            # Используем профиль
+            from db_profiles import DatabaseProfileManager
+            profile = DatabaseProfileManager.get_profile(profile_id)
+            
+            if profile:
+                db_type = profile.get('db_type', 'postgresql')
+                ssh_enabled = profile.get('ssh_enabled', False)
+                
+                print(f"[Monitoring] Using profile {profile_id}: {db_type}, SSH: {ssh_enabled}")
+                
+                # Подключаемся к БД
+                conn = get_db_connection()
+                
+                # ✅ ИСПРАВЛЕНО: Получаем статистику БД
+                db_stats = DatabaseMonitoring.get_database_stats(conn, db_type)
+                
+                # ✅ ИСПРАВЛЕНО: Сохраняем в правильное поле
+                if db_type == 'oracle':
+                    result['db_type'] = 'oracle'
+                    result['data']['oracle'] = db_stats
+                    # Для обратной совместимости оставляем пустой postgres
+                    result['data']['postgres'] = None
+                else:
+                    result['db_type'] = 'postgresql'
+                    result['data']['postgres'] = db_stats
+                
+                conn.close()
+                
+                # ── Статистика сервера ──────────────────────────────
+                if ssh_enabled:
+                    print(f"[Monitoring] Getting server stats via SSH")
+                    
+                    ssh_tunnels = get_ssh_tunnels()
+                    ssh_client = None
+                    
+                    for tunnel_key, tunnel_data in ssh_tunnels.items():
+                        if profile['ssh_host'] in tunnel_key and profile['ssh_user'] in tunnel_key:
+                            ssh_client = tunnel_data.get('client')
+                            break
+                    
+                    if ssh_client:
+                        server_stats = ServerMonitoring.get_server_stats_via_ssh(ssh_client)
+                        result['data']['system'] = server_stats
+                    else:
+                        print(f"[Monitoring] SSH tunnel not found, using local stats")
+                        result['data']['system'] = ServerMonitoring.get_local_server_stats()
+                else:
+                    print(f"[Monitoring] Using local server stats")
+                    result['data']['system'] = ServerMonitoring.get_local_server_stats()
             else:
-                uptime_str = 'N/A'
-        except Exception:
-            uptime_str = 'N/A'
-
-        # Размер БД
-        cur.execute("""
-            SELECT pg_size_pretty(pg_database_size(current_database())) AS size,
-                   pg_database_size(current_database()) AS size_bytes
-        """)
-        db_size_row = cur.fetchone()
-        db_size_pretty = db_size_row['size']
-        db_size_bytes  = db_size_row['size_bytes']
-
-        # Макс. подключений
-        cur.execute("SHOW max_connections")
-        max_conn = int(cur.fetchone()[0])
-
-        # Активные подключения — совместимо со всеми версиями PG
-        cur.execute("""
-            SELECT
-                count(*)                                              AS total,
-                count(*) FILTER (WHERE state = 'active')             AS active,
-                count(*) FILTER (WHERE state = 'idle')               AS idle,
-                count(*) FILTER (WHERE state = 'idle in transaction') AS idle_in_tx,
-                count(*) FILTER (WHERE wait_event_type = 'Lock')     AS waiting_lock
-            FROM pg_stat_activity
-            WHERE datname = current_database()
-        """)
-        conn_stats = dict(cur.fetchone())
-        conn_stats['max_connections'] = max_conn
-
-        # Медленные запросы > 1 сек
-        cur.execute("""
-            SELECT
-                pid,
-                (EXTRACT(EPOCH FROM (now() - query_start)))::int AS duration_sec,
-                LEFT(query, 200)  AS query,
-                state,
-                usename,
-                application_name
-            FROM pg_stat_activity
-            WHERE query_start IS NOT NULL
-              AND state != 'idle'
-              AND datname = current_database()
-              AND (now() - query_start) > interval '1 second'
-            ORDER BY duration_sec DESC
-            LIMIT 10
-        """)
-        slow_queries = []
-        for row in cur.fetchall():
-            sec = row['duration_sec'] or 0
-            h, r = divmod(sec, 3600)
-            m, s = divmod(r, 60)
-            dur_str = (f"{h}ч " if h else "") + (f"{m}м " if m else "") + f"{s}с"
-            slow_queries.append({
-                'pid':   row['pid'],
-                'duration': dur_str,
-                'duration_sec': sec,
-                'query': row['query'] or '',
-                'state': row['state'],
-                'user':  row['usename'],
-                'app':   row['application_name'],
-            })
-
-        # Статистика таблиц — используем relname вместо tablename (совместимо)
-        cur.execute("""
-            SELECT
-                c.relname                                          AS tbl,
-                s.n_live_tup                                      AS live_rows,
-                s.n_dead_tup                                      AS dead_rows,
-                s.n_tup_ins                                       AS inserts,
-                s.n_tup_upd                                       AS updates,
-                s.n_tup_del                                       AS deletes,
-                s.seq_scan                                        AS seq_scans,
-                s.idx_scan                                        AS idx_scans,
-                pg_size_pretty(pg_total_relation_size(c.oid))     AS total_size,
-                pg_size_pretty(pg_relation_size(c.oid))           AS table_size,
-                pg_size_pretty(pg_indexes_size(c.oid))            AS index_size,
-                to_char(s.last_autovacuum,  'DD.MM HH24:MI')     AS last_autovacuum,
-                to_char(s.last_autoanalyze, 'DD.MM HH24:MI')     AS last_autoanalyze
-            FROM pg_stat_user_tables s
-            JOIN pg_class c ON c.relname = s.relname
-            JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = 'public'
-            ORDER BY s.n_live_tup DESC
-            LIMIT 15
-        """)
-        table_stats = []
-        for row in cur.fetchall():
-            table_stats.append({
-                'table':          row['tbl'],
-                'live_rows':      row['live_rows'] or 0,
-                'dead_rows':      row['dead_rows'] or 0,
-                'inserts':        row['inserts'] or 0,
-                'updates':        row['updates'] or 0,
-                'deletes':        row['deletes'] or 0,
-                'seq_scans':      row['seq_scans'] or 0,
-                'idx_scans':      row['idx_scans'] or 0,
-                'total_size':     row['total_size'],
-                'table_size':     row['table_size'],
-                'index_size':     row['index_size'],
-                'last_autovacuum':  row['last_autovacuum'] or '—',
-                'last_autoanalyze': row['last_autoanalyze'] or '—',
-            })
-
-        # Cache hit ratio — через pg_statio_user_tables
-        cur.execute("""
-            SELECT
-                CASE
-                    WHEN sum(heap_blks_hit) + sum(heap_blks_read) > 0
-                    THEN round(100.0 * sum(heap_blks_hit) /
-                               (sum(heap_blks_hit) + sum(heap_blks_read)), 2)
-                    ELSE NULL
-                END AS cache_hit_ratio
-            FROM pg_statio_user_tables
-        """)
-        cache_row = cur.fetchone()
-        cache_hit = float(cache_row['cache_hit_ratio']) if cache_row and cache_row['cache_hit_ratio'] is not None else None
-
-        # Транзакции и IO из pg_stat_database
-        cur.execute("""
-            SELECT
-                xact_commit,
-                xact_rollback,
-                blks_read,
-                blks_hit,
-                tup_returned,
-                tup_fetched,
-                tup_inserted,
-                tup_updated,
-                tup_deleted,
-                deadlocks,
-                conflicts
-            FROM pg_stat_database
-            WHERE datname = current_database()
-        """)
-        db_row = dict(cur.fetchone())
-
-        # Фоновый записчик (bgwriter) — совместимо с PG13-16
-        try:
-            cur.execute("""
-                SELECT checkpoints_timed, checkpoints_req,
-                       buffers_checkpoint, buffers_clean,
-                       buffers_backend, buffers_alloc
-                FROM pg_stat_bgwriter
-            """)
-            bgw = dict(cur.fetchone())
-        except Exception:
-            try:
-                cur.execute("""
-                    SELECT cp.num_timed AS checkpoints_timed,
-                           cp.num_requested AS checkpoints_req,
-                           cp.buffers_written AS buffers_checkpoint,
-                           bg.buffers_clean, bg.buffers_backend, bg.buffers_alloc
-                    FROM pg_stat_checkpointer cp, pg_stat_bgwriter bg
-                """)
-                bgw = dict(cur.fetchone())
-            except Exception:
-                bgw = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-        # Ожидающие блокировки
-        cur.execute("""
-            SELECT count(*) AS cnt
-            FROM pg_locks
-            WHERE NOT granted
-        """)
-        waiting_locks = cur.fetchone()['cnt']
-
-        # Топ запросов по времени (если доступен pg_stat_statements)
-        top_queries = []
-        try:
-            cur.execute("""
-                SELECT
-                    LEFT(query, 150)          AS query,
-                    calls,
-                    round(total_exec_time::numeric, 2) AS total_ms,
-                    round(mean_exec_time::numeric,  2) AS mean_ms,
-                    rows
-                FROM pg_stat_statements
-                ORDER BY total_exec_time DESC
-                LIMIT 5
-            """)
-            for row in cur.fetchall():
-                top_queries.append({
-                    'query':    row['query'],
-                    'calls':    row['calls'],
-                    'total_ms': row['total_ms'],
-                    'mean_ms':  row['mean_ms'],
-                    'rows':     row['rows'],
-                })
-        except Exception:
-            pass  # pg_stat_statements может быть недоступен
-
-        # Системные данные через /proc (без psutil)
-        sys_stats = _get_system_stats_via_db(cur)
-
-        stats['postgres'] = {
-            'version':       pg_version_short,
-            'version_full':  pg_version_full,
-            'uptime':        uptime_str,
-            'db_size':       db_size_pretty,
-            'db_size_bytes': db_size_bytes,
-            'connections':   conn_stats,
-            'slow_queries':  slow_queries,
-            'table_stats':   table_stats,
-            'cache_hit_ratio': cache_hit,
-            'waiting_locks': waiting_locks,
-            'bgwriter':      bgw,
-            'top_queries':   top_queries,
-            'db_stats': {
-                'commits':       db_row.get('xact_commit', 0),
-                'rollbacks':     db_row.get('xact_rollback', 0),
-                'deadlocks':     db_row.get('deadlocks', 0),
-                'conflicts':     db_row.get('conflicts', 0),
-                'cache_reads':   db_row.get('blks_hit', 0),
-                'disk_reads':    db_row.get('blks_read', 0),
-                'rows_returned': db_row.get('tup_returned', 0),
-                'rows_fetched':  db_row.get('tup_fetched', 0),
-                'rows_inserted': db_row.get('tup_inserted', 0),
-                'rows_updated':  db_row.get('tup_updated', 0),
-                'rows_deleted':  db_row.get('tup_deleted', 0),
-            }
-        }
-        stats['system'] = sys_stats
-
-        cur.close()
-        conn.close()
-
+                # Профиль не найден - используем конфиг по умолчанию (PostgreSQL)
+                conn = get_db_connection()
+                db_stats = DatabaseMonitoring.get_database_stats(conn, 'postgresql')
+                result['data']['postgres'] = db_stats
+                result['data']['system'] = ServerMonitoring.get_local_server_stats()
+                conn.close()
+        else:
+            # Нет активного профиля - используем конфиг по умолчанию
+            conn = get_db_connection()
+            db_stats = DatabaseMonitoring.get_database_stats(conn, 'postgresql')
+            result['data']['postgres'] = db_stats
+            result['data']['system'] = ServerMonitoring.get_local_server_stats()
+            conn.close()
+            
     except Exception as e:
+        print(f"[Monitoring] Error: {e}")
         import traceback
-        stats['postgres'] = {'error': str(e), 'details': traceback.format_exc()}
-        stats['system'] = {}
+        traceback.print_exc()
+        
+        # В случае ошибки возвращаем пустые данные но с success=True
+        result['data']['postgres'] = {
+            'version': 'N/A',
+            'uptime': 'N/A',
+            'db_size_pretty': '0 MB',
+            'db_size': '0 MB',
+            'db_size_bytes': 0,
+            'connections': {
+                'total': 0,
+                'active': 0,
+                'idle': 0,
+                'idle_in_tx': 0,
+                'max_connections': 0
+            },
+            'waiting_locks': 0,
+            'db_stats': {
+                'commits': 0,
+                'rollbacks': 0,
+                'deadlocks': 0,
+                'conflicts': 0,
+                'rows_inserted': 0,
+                'rows_updated': 0,
+                'rows_deleted': 0,
+                'rows_fetched': 0,
+                'cache_reads': 0,
+                'disk_reads': 0
+            },
+            'cache_hit_ratio': 0,
+            'bgwriter': {},
+            'table_stats': [],
+            'slow_queries': [],
+            'top_queries': []
+        }
+        result['data']['system'] = {
+            'cpu_percent': 0,
+            'memory_used_mb': 0,
+            'memory_total_mb': 0,
+            'memory_used_gb': 0,
+            'memory_total_gb': 0,
+            'memory_percent': 0,
+            'disk_used': '0G',
+            'disk_total': '0G',
+            'disk_used_gb': 0,
+            'disk_total_gb': 0,
+            'disk_percent': 0,
+            'net_recv_mb': 0,
+            'net_sent_mb': 0
+        }
 
-    stats['timestamp'] = datetime.now().isoformat()
-    return jsonify({'success': True, 'data': stats})
-
+    return jsonify(result)
 
 
 

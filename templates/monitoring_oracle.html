@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+{% block title %}Мониторинг Oracle — Report Builder{% endblock %}
+{% block topbar_title %}Мониторинг Oracle{% endblock %}
+{% block topbar_actions %}
+<span id="lastUpdateTime" style="font-size:10px;color:var(--text-3);letter-spacing:.04em;margin-right:8px;"></span>
+
+<button class="btn btn-secondary btn-sm" onclick="loadStats()" id="refreshBtn">
+    <i class="bi bi-arrow-clockwise"></i> Обновить
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Мониторинг <span>Oracle</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:.04em;">
+            🔴 ORACLE DATABASE &nbsp;·&nbsp; СЕРВЕР И БД &nbsp;·&nbsp;
+            <span id="nextUpdate" style="color:var(--amber);"></span>
+        </div>
+    </div>
+    <div id="oracleVersionBadge" style="font-size:12px;color:var(--red);font-family:var(--font-mono);align-self:center;font-weight:600;">
+        🔴 Oracle
+    </div>
+</div>
+
+<!-- МЕТРИКИ (CPU, RAM, DISK, DB, CONNECTIONS) -->
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;">
+    <div class="mc" id="mc-cpu">
+        <div class="mc-label"><i class="bi bi-cpu"></i> Загрузка CPU</div>
+        <div class="mc-val" id="v-cpu">—</div>
+        <div class="mc-sub" id="s-cpu">нагрузка процессора</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-cpu"></div></div>
+    </div>
+
+    <div class="mc" id="mc-ram">
+        <div class="mc-label"><i class="bi bi-memory"></i> Оперативная память</div>
+        <div class="mc-val" id="v-ram">—</div>
+        <div class="mc-sub" id="s-ram">использовано / всего</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-ram"></div></div>
+    </div>
+
+    <div class="mc" id="mc-disk">
+        <div class="mc-label"><i class="bi bi-hdd"></i> Диск (корневой раздел)</div>
+        <div class="mc-val" id="v-disk">—</div>
+        <div class="mc-sub" id="s-disk">использовано / всего</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-disk"></div></div>
+    </div>
+
+    <div class="mc" id="mc-dbsize">
+        <div class="mc-label"><i class="bi bi-database"></i> Размер БД Oracle</div>
+        <div class="mc-val" id="v-dbsize">—</div>
+        <div class="mc-sub" id="s-dbsize">datafiles · uptime: —</div>
+    </div>
+
+    <div class="mc" id="mc-conn">
+        <div class="mc-label"><i class="bi bi-plug"></i> Сессии Oracle</div>
+        <div class="mc-val" id="v-conn">—</div>
+        <div class="mc-sub" id="s-conn">активных / всего / максимум</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-conn"></div></div>
+    </div>
+</div>
+
+<!-- ПОДКЛЮЧЕНИЯ -->
+<div class="card">
+    <div class="card-header no-indicator">
+        <div class="header-left">
+            <i class="bi bi-arrow-left-right"></i> Сессии Oracle
+            <span class="blk-hint">— статистика активных сессий</span>
+        </div>
+    </div>
+    <div class="card-body" id="blk-connections"><div class="empty-state"><span class="loading"></span></div></div>
+</div>
+
+<!-- МЕДЛЕННЫЕ ЗАПРОСЫ -->
+<div class="card" style="margin-top:15px;">
+    <div class="card-header">
+        <div class="header-left">
+            <i class="bi bi-hourglass-split"></i> Медленные запросы (> 1 сек)
+            <span class="badge" id="slowQueryCount">0</span>
+        </div>
+    </div>
+    <div class="card-body" id="blk-slow" style="padding:0;overflow-x:auto;">
+        <div class="empty-state"><span class="loading"></span></div>
+    </div>
+</div>
+
+<style>
+/* Копируем стили из monitoring.html */
+.mc { background:var(--bg-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:14px 16px 12px;display:flex;flex-direction:column;gap:4px;transition:border-color .2s; }
+.mc.warn { border-color:rgba(240,168,67,.5); }
+.mc.crit { border-color:rgba(224,82,82,.5); }
+.mc-label { font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:5px; }
+.mc-label i { color:var(--amber);font-size:11px; }
+.mc-val { font-family:var(--font-ui);font-size:28px;font-weight:800;color:var(--text);line-height:1.1; }
+.mc-sub { font-size:10px;color:var(--text-3);min-height:14px; }
+.mc-bar { height:3px;background:var(--bg-4);border-radius:2px;overflow:hidden;margin-top:6px; }
+.mc-fill { height:100%;background:var(--green);border-radius:2px;transition:width .6s ease,background .3s;width:0%; }
+.mc-fill.warn { background:var(--amber); }
+.mc-fill.crit { background:var(--red); }
+
+.sr { display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;gap:8px; }
+.sr:last-child { border-bottom:none; }
+.sr-left { flex:1;display:flex;flex-direction:column;gap:2px; }
+.sr-label { color:var(--text);display:flex;align-items:center;gap:6px;font-weight:500; }
+.sr-desc  { font-size:10px;color:var(--text-3);line-height:1.3; }
+.sr-val   { font-family:var(--font-ui);font-weight:700;color:var(--text);white-space:nowrap;padding-top:1px; }
+.sr-val.warn { color:var(--amber); }
+.sr-val.crit { color:var(--red); }
+.sr-val.good { color:var(--green); }
+
+.dot { width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0; }
+.dot-g { background:var(--green); }
+.dot-a { background:var(--amber); }
+.dot-r { background:var(--red); }
+.dot-d { background:var(--text-3); }
+
+.blk-hint { font-size:10px;color:var(--text-3);font-weight:400;margin-left:4px; }
+
+.mt { width:100%;border-collapse:collapse;font-size:11px;font-family:var(--font-mono); }
+.mt th { background:var(--bg-3);color:var(--text-3);padding:7px 12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap; }
+.mt td { padding:7px 12px;border-bottom:1px solid var(--line);color:var(--text);vertical-align:middle; }
+.mt tbody tr:last-child td { border-bottom:none; }
+.mt tbody tr:hover td { background:var(--bg-2); }
+
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--primary);
+    color: white;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+.page-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-1);
+}
+
+.page-title span {
+    color: var(--red);
+}
+</style>
+
+<script>
+function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function setMC(id, val, pct, warn, crit) {
+    var el = document.getElementById('mc-' + id);
+    if (!el) return;
+    
+    el.classList.remove('warn', 'crit');
+    var fill = el.querySelector('.mc-fill');
+    var valEl = el.querySelector('.mc-val');
+    
+    if (valEl) valEl.textContent = val;
+    if (fill) {
+        fill.style.width = (Math.min(pct, 100)) + '%';
+        fill.classList.remove('warn', 'crit');
+        if (crit) fill.classList.add('crit');
+        else if (warn) fill.classList.add('warn');
+        
+        if (crit) el.classList.add('crit');
+        else if (warn) el.classList.add('warn');
+    }
+}
+
+function sr(label, desc, val, dotCls, valCls) {
+    var dot  = dotCls  ? '<span class="dot '+dotCls+'"></span>' : '';
+    var vcls = valCls  ? ' '+valCls : '';
+    return '<div class="sr">'
+        +'<div class="sr-left">'
+        +'<div class="sr-label">'+dot+esc(label)+'</div>'
+        +(desc ? '<div class="sr-desc">'+esc(desc)+'</div>' : '')
+        +'</div>'
+        +'<div class="sr-val'+vcls+'">'+esc(val)+'</div>'
+        +'</div>';
+}
+
+async function loadStats() {
+    var btn = document.getElementById('refreshBtn');
+    if (btn) {
+        btn.innerHTML = '<span class="loading"></span>';
+        btn.disabled = true;
+    }
+
+    try {
+        var r = await fetch('/api/monitoring/stats');
+        var d = await r.json();
+        
+        if (!d.success) throw new Error(d.error || 'Ошибка сервера');
+        
+        console.log('[Oracle Monitoring] Response:', d);
+        
+        var data = d.data;
+        var sys = data.system || {};
+        var ora = data.oracle || {};
+        
+        var ts = new Date(data.timestamp).toLocaleTimeString('ru-RU');
+        var lastUpdateEl = document.getElementById('lastUpdateTime');
+        if (lastUpdateEl) lastUpdateEl.textContent = 'Обновлено: ' + ts;
+        
+        // Обновляем badge версии
+        var versionBadge = document.getElementById('oracleVersionBadge');
+        if (versionBadge && ora.version) {
+            versionBadge.textContent = '🔴 ' + ora.version;
+        }
+
+        // CPU
+        if (sys.cpu_percent != null) {
+            setMC('cpu', sys.cpu_percent.toFixed(1) + '%', sys.cpu_percent,
+                  sys.cpu_percent > 70, sys.cpu_percent > 90);
+        }
+
+        // RAM
+        if (sys.memory_percent != null) {
+            var memUsedGb = sys.memory_used_gb || (sys.memory_used_mb / 1024).toFixed(1);
+            var memTotalGb = sys.memory_total_gb || (sys.memory_total_mb / 1024).toFixed(1);
+            setMC('ram', memUsedGb + ' / ' + memTotalGb + ' GB',
+                  sys.memory_percent, sys.memory_percent > 70, sys.memory_percent > 90);
+        }
+
+        // Disk
+        if (sys.disk_percent != null) {
+            setMC('disk', sys.disk_used + ' / ' + sys.disk_total,
+                  sys.disk_percent, sys.disk_percent > 75, sys.disk_percent > 90);
+        }
+
+        // БД Oracle
+        if (ora) {
+            // Размер БД
+            var dbSize = ora.db_size_pretty || '0 GB';
+            var dbUptime = ora.uptime || 'N/A';
+            var valEl = document.getElementById('v-dbsize');
+            var subEl = document.getElementById('s-dbsize');
+            if (valEl) valEl.textContent = dbSize;
+            if (subEl) subEl.textContent = 'datafiles · uptime: ' + dbUptime;
+
+            // Сессии
+            var conn = ora.connections || {};
+            var connTotal = conn.total || 0;
+            var connMax = conn.max_connections || 1;
+            var connPercent = (connTotal / connMax) * 100;
+            setMC('conn', connTotal + ' / ' + connMax,
+                  connPercent, connPercent > 70, connPercent > 90);
+            
+            var connSubEl = document.getElementById('s-conn');
+            if (connSubEl) {
+                connSubEl.textContent = 'активных: ' + (conn.active || 0) + ' · заблокированных: ' + (conn.waiting_lock || 0);
+            }
+
+            // Подключения
+            renderOracleConnections(ora);
+            
+            // Медленные запросы
+            renderSlowQueries(ora.slow_queries || []);
+        }
+
+    } catch (e) {
+        console.error('[Oracle Monitoring] Error:', e);
+    } finally {
+        if (btn) {
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Обновить';
+            btn.disabled = false;
+        }
+    }
+}
+
+function renderOracleConnections(ora) {
+    var c = ora.connections || {};
+    var el = document.getElementById('blk-connections');
+    if (!el) return;
+    
+    el.innerHTML =
+        sr('Активных сессий', 'Выполняют SQL-запрос (ACTIVE)', c.active || 0, 'dot-g') +
+        sr('Неактивных', 'В режиме ожидания (INACTIVE)', c.idle || 0, 'dot-d') +
+        sr('Всего сессий', 'Открытых подключений к Oracle', c.total || 0, '') +
+        sr('Максимум (sessions)', 'Лимит параллельных сессий из init.ora', c.max_connections || 0, '') +
+        sr('Заблокированных', 'Ожидают освобождения ресурсов', c.waiting_lock || 0, c.waiting_lock > 0 ? 'dot-r' : 'dot-g', c.waiting_lock > 0 ? 'crit' : 'good') +
+        sr('Uptime Oracle', 'Время работы инстанса с последнего запуска', ora.uptime || 'N/A', '');
+}
+
+function renderSlowQueries(queries) {
+    var el = document.getElementById('blk-slow');
+    if (!el) return;
+    
+    var countEl = document.getElementById('slowQueryCount');
+    if (countEl) countEl.textContent = queries && queries.length ? queries.length : '0';
+    
+    if (!queries || queries.length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;"><i class="bi bi-check-circle" style="color:var(--green);margin-right:6px;"></i>Медленных запросов нет</div>';
+        return;
+    }
+    
+    var rows = queries.map(function(q) {
+        var color = q.duration_sec > 60 ? 'var(--red)' : q.duration_sec > 10 ? 'var(--amber)' : 'var(--text-2)';
+        return '<tr>'
+            +'<td>'+esc(q.pid)+'</td>'
+            +'<td>'+esc(q.user||'—')+'</td>'
+            +'<td style="font-size:10px;color:var(--text-3);">'+esc(q.app||'—')+'</td>'
+            +'<td style="color:'+color+';font-weight:700;">'+esc(q.duration_str)+'</td>'
+            +'<td><span style="background:var(--bg-3);padding:1px 6px;border-radius:2px;font-size:9px;">'+esc(q.state)+'</span></td>'
+            +'<td style="max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(q.query)+'">'+esc(q.query)+'</td>'
+            +'</tr>';
+    }).join('');
+    
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        +'<th>SID,SERIAL#</th><th>Пользователь</th><th>Программа</th><th>Длительность</th><th>Статус</th><th>SQL-запрос</th>'
+        +'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+// Загружаем при открытии страницы
+loadStats();
+
+// Автообновление каждые 60 секунд
+setInterval(loadStats, 60000);
+</script>
+
+{% endblock %}
