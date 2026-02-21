@@ -1224,7 +1224,7 @@ def get_monitoring_stats():
     Получить статистику сервера и БД — адаптивно для PostgreSQL и Oracle
     """
     from db_monitoring import DatabaseMonitoring, ServerMonitoring
-    from db_connection import get_ssh_tunnels
+    from db_connection import get_ssh_tunnels, get_db_connection_by_profile
     
     # ✅ ИСПРАВЛЕНО: Возвращаем в старом формате для совместимости
     result = {
@@ -1254,8 +1254,8 @@ def get_monitoring_stats():
                 
                 print(f"[Monitoring] Using profile {profile_id}: {db_type}, SSH: {ssh_enabled}")
                 
-                # Подключаемся к БД
-                conn = get_db_connection()
+                # ✅ ИСПРАВЛЕНО: Подключаемся к БД через профиль, а не к основной БД приложения
+                conn = get_db_connection_by_profile(profile_id)
                 
                 # ✅ ИСПРАВЛЕНО: Получаем статистику БД
                 db_stats = DatabaseMonitoring.get_database_stats(conn, db_type)
@@ -1295,6 +1295,7 @@ def get_monitoring_stats():
                     result['data']['system'] = ServerMonitoring.get_local_server_stats()
             else:
                 # Профиль не найден - используем конфиг по умолчанию (PostgreSQL)
+                print(f"[Monitoring] Profile {profile_id} not found, using default DB")
                 conn = get_db_connection()
                 db_stats = DatabaseMonitoring.get_database_stats(conn, 'postgresql')
                 result['data']['postgres'] = db_stats
@@ -1302,6 +1303,7 @@ def get_monitoring_stats():
                 conn.close()
         else:
             # Нет активного профиля - используем конфиг по умолчанию
+            print(f"[Monitoring] No active profile, using default DB")
             conn = get_db_connection()
             db_stats = DatabaseMonitoring.get_database_stats(conn, 'postgresql')
             result['data']['postgres'] = db_stats

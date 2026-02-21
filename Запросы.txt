@@ -1,0 +1,236 @@
+🎯 1. ОСНОВНЫЕ МЕТРИКИ (Верхний ряд карточек)
+Размер базы данных
+sql
+123456789
+-- Общий размер БД в GB
+SELECT ROUND(SUM(bytes)/1024/1024/1024, 2) as size_gb
+FROM dba_segments;
+
+-- Детализация по схемам
+SELECT owner, ROUND(SUM(bytes)/1024/1024/1024, 2) as size_gb
+FROM dba_segments
+GROUP BY owner
+ORDER BY 2 DESC;
+Подключения к БД (активные/всего/лимит)
+SELECT 
+    (SELECT COUNT(*) FROM v$session WHERE status='ACTIVE' AND type!='BACKGROUND') as active_sessions,
+    (SELECT COUNT(*) FROM v$session WHERE type!='BACKGROUND') as total_sessions,
+    (SELECT VALUE FROM v$parameter WHERE name='processes') as max_connections
+FROM dual;
+12345
+Uptime базы данных
+SELECT startup_time, 
+       SYSDATE - startup_time as uptime_days
+FROM v$instance;
+123
+Версия Oracle
+SELECT banner FROM v$version WHERE rownum = 1;
+1
+📈 2. ПРОИЗВОДИТЕЛЬНОСТЬ (Графики и метрики)
+Load Profile (аналог pg_stat_database)
+sql
+1234567891011121314151617
+-- Статистика по нагрузке (с момента последнего сброса статистики)
+SELECT 
+    SUM(decode(stat_name, 'session logical reads', value, 0)) as logical_reads,
+    SUM(decode(stat_name, 'physical reads', value, 0)) as physical_reads,
+    SUM(decode(stat_name, 'physical writes', value, 0)) as physical_writes,
+    SUM(decode(stat_name, 'user rollbacks', value, 0)) as rollbacks,
+    SUM(decode(stat_name, 'user commits', value, 0)) as commits
+FROM v$sysstat
+WHERE stat_name IN (
+    'session logical reads',
+    'physical reads',
+    'physical writes',
+    'user rollbacks',
+    'user commits',
+    'parse count (total)',
+    'execute count'
+);
+Buffer Cache Hit Ratio (аналог shared_buffers)
+SELECT ROUND(
+    (1 - (phy.value / (cur.value + con.value))) * 100, 2
+) as buffer_cache_hit_ratio_percent
+FROM v$sysstat cur, v$sysstat con, v$sysstat phy
+WHERE cur.name = 'db block gets'
+  AND con.name = 'consistent gets'
+  AND phy.name = 'physical reads';
+1234567
+Library Cache Hit Ratio
+SELECT ROUND(SUM(pins - reloads) / SUM(pins) * 100, 2) as library_cache_hit_ratio
+FROM v$librarycache;
+12
+Dictionary Cache Hit Ratio
+SELECT ROUND((1 - (SUM(getmisses) / (SUM(gets) + SUM(getmisses)))) * 100, 2) as dict_cache_hit_ratio
+FROM v$rowcache;
+12
+🔄 3. ТРАНЗАКЦИИ И ОПЕРАЦИИ
+Текущая активность транзакций
+SELECT 
+    s.status,
+    COUNT(*) as session_count
+FROM v$session s
+GROUP BY s.status;
+
+-- Активные транзакции
+SELECT 
+    t.used_ublk * TO_NUMBER(x.value) / 1024 / 1024 as undo_mb,
+    t.status,
+    t.start_time
+FROM v$transaction t, v$parameter x
+WHERE x.name = 'db_block_size';
+12345678910111213
+DML статистика (INSERT/UPDATE/DELETE)
+SELECT 
+    SUM(decode(stat_name, 'user commits', value, 0)) as commits,
+    SUM(decode(stat_name, 'user rollbacks', value, 0)) as rollbacks,
+    SUM(decode(stat_name, 'db block changes', value, 0)) as block_changes
+FROM v$sysstat
+WHERE stat_name IN ('user commits', 'user rollbacks', 'db block changes');
+123456
+Wait Events (аналог deadlock и блокировок)
+-- Топ событий ожидания
+SELECT event, total_waits, time_waited_micro/1000000 as time_waited_sec
+FROM v$system_event
+WHERE wait_class != 'Idle'
+ORDER BY time_waited DESC
+FETCH FIRST 10 ROWS ONLY;
+
+-- Текущие блокировки
+SELECT 
+    blocking_session,
+    sid,
+    serial#,
+    wait_class,
+    seconds_in_wait
+FROM v$session
+WHERE blocking_session IS NOT NULL
+   OR sid IN (SELECT blocking_session FROM v$session);
+1234567891011121314151617
+💾 4. ХРАНИЛИЩЕ (Таблицы и индексы)
+TOP 15 таблиц по размеру (как на вашем скриншоте)
+SELECT * FROM (
+    SELECT 
+        owner,
+        segment_name as table_name,
+        ROUND(SUM(bytes)/1024/1024/1024, 2) as size_gb,
+        ROUND(SUM(bytes)/1024/1024, 2) as size_mb,
+        COUNT(*) as extents
+    FROM dba_segments
+    WHERE segment_type = 'TABLE'
+    GROUP BY owner, segment_name
+    ORDER BY SUM(bytes) DESC
+) WHERE ROWNUM <= 15;
+123456789101112
+TOP индексов по размеру
+SELECT * FROM (
+    SELECT 
+        owner,
+        segment_name as index_name,
+        tablespace_name,
+        ROUND(SUM(bytes)/1024/1024, 2) as size_mb
+    FROM dba_segments
+    WHERE segment_type LIKE 'INDEX%'
+    GROUP BY owner, segment_name, tablespace_name
+    ORDER BY SUM(bytes) DESC
+) WHERE ROWNUM <= 10;
+1234567891011
+Статистика по таблицам (аналог pg_stat_user_tables)
+SELECT 
+    t.owner,
+    t.table_name,
+    t.num_rows,
+    t.blocks,
+    t.avg_row_len,
+    t.last_analyzed,
+    ROUND(t.num_rows * t.avg_row_len / 1024 / 1024, 2) as estimated_size_mb
+FROM dba_tables t
+WHERE t.owner NOT IN ('SYS', 'SYSTEM', 'ORDSYS', 'CTXSYS')
+ORDER BY t.num_rows DESC
+FETCH FIRST 20 ROWS ONLY;
+123456789101112
+Статистика по индексам
+SELECT 
+    i.owner,
+    i.table_name,
+    i.index_name,
+    i.num_rows,
+    i.leaf_blocks,
+    i.distinct_keys,
+    i.clustering_factor,
+    i.last_analyzed
+FROM dba_indexes i
+WHERE i.owner NOT IN ('SYS', 'SYSTEM')
+ORDER BY i.leaf_blocks DESC
+FETCH FIRST 15 ROWS ONLY;
+12345678910111213
+🗄️ 5. TABLESPACE (Аналог диска в PostgreSQL)
+Использование tablespace
+SELECT 
+    df.tablespace_name,
+    ROUND(df.bytes / 1024 / 1024 / 1024, 2) as size_gb,
+    ROUND((df.bytes - SUM(fs.bytes)) / 1024 / 1024 / 1024, 2) as used_gb,
+    ROUND(SUM(fs.bytes) / 1024 / 1024 / 1024, 2) as free_gb,
+    ROUND(((df.bytes - SUM(fs.bytes)) / df.bytes) * 100, 2) as used_percent
+FROM dba_data_files df
+LEFT JOIN dba_free_space fs ON df.tablespace_name = fs.tablespace_name
+GROUP BY df.tablespace_name, df.bytes
+ORDER BY used_percent DESC;
+12345678910
+Undo Tablespace
+SELECT 
+    tablespace_name,
+    ROUND(SUM(bytes)/1024/1024, 2) as size_mb,
+    status
+FROM dba_undo_extents
+GROUP BY tablespace_name, status;
+123456
+⚡ 6. СЕТЕВАЯ АКТИВНОСТЬ
+Объем переданных данных
+SELECT 
+    SUM(decode(name, 'bytes received via SQL*Net from client', value, 0)) as received_bytes,
+    SUM(decode(name, 'bytes sent via SQL*Net to client', value, 0)) as sent_bytes
+FROM v$sysstat
+WHERE name IN ('bytes received via SQL*Net from client', 
+               'bytes sent via SQL*Net to client');
+123456
+🔥 7. TOP SQL ЗАПРОСЫ (Опционально)
+Самые ресурсоемкие запросы
+SELECT * FROM (
+    SELECT 
+        sql_id,
+        ROUND(elapsed_time/1000000, 2) as elapsed_sec,
+        ROUND(cpu_time/1000000, 2) as cpu_sec,
+        executions,
+        ROUND(elapsed_time/1000000/nullif(executions,0), 2) as avg_elapsed_sec,
+        SUBSTR(sql_text, 1, 100) as sql_preview
+    FROM v$sqlarea
+    WHERE executions > 0
+    ORDER BY elapsed_time DESC
+) WHERE ROWNUM <= 10;
+123456789101112
+📊 8. ДОПОЛНИТЕЛЬНЫЕ МЕТРИКИ
+SGA и PGA память
+-- SGA размер
+SELECT name, ROUND(value/1024/1024, 2) as size_mb
+FROM v$sga;
+
+-- PGA целевой размер
+SELECT name, ROUND(value/1024/1024, 2) as target_mb
+FROM v$pgastat
+WHERE name = 'target PGA memory';
+
+-- Текущее использование PGA
+SELECT 
+    ROUND(SUM(pga_used_mem)/1024/1024, 2) as used_mb,
+    ROUND(SUM(pga_alloc_mem)/1024/1024, 2) as allocated_mb
+FROM v$process;
+1234567891011121314
+Flash Recovery Area
+SELECT 
+    name,
+    ROUND(space_limit/1024/1024/1024, 2) as limit_gb,
+    ROUND(space_used/1024/1024/1024, 2) as used_gb,
+    ROUND((space_used/space_limit)*100, 2) as used_percent
+FROM v$recovery_file_dest;
+123456

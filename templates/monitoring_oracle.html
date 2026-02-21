@@ -15,7 +15,7 @@
         <div class="page-title">Мониторинг <span>Oracle</span></div>
         <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:.04em;">
             🔴 ORACLE DATABASE &nbsp;·&nbsp; СЕРВЕР И БД &nbsp;·&nbsp;
-            <span id="nextUpdate" style="color:var(--amber);"></span>
+            <span id="nextUpdate" style="color:var(--amber);">Автообновление: 60с</span>
         </div>
     </div>
     <div id="oracleVersionBadge" style="font-size:12px;color:var(--red);font-family:var(--font-mono);align-self:center;font-weight:600;">
@@ -23,7 +23,7 @@
     </div>
 </div>
 
-<!-- МЕТРИКИ (CPU, RAM, DISK, DB, CONNECTIONS) -->
+<!-- МЕТРИКИ -->
 <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;">
     <div class="mc" id="mc-cpu">
         <div class="mc-label"><i class="bi bi-cpu"></i> Загрузка CPU</div>
@@ -60,6 +60,36 @@
     </div>
 </div>
 
+<!-- ДОПОЛНИТЕЛЬНЫЕ МЕТРИКИ: Cache Hit Ratios -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
+    <div class="mc" id="mc-buffer">
+        <div class="mc-label"><i class="bi bi-speedometer2"></i> Buffer Cache Hit</div>
+        <div class="mc-val" id="v-buffer">—</div>
+        <div class="mc-sub" id="s-buffer">эффективность кэша буферов</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-buffer"></div></div>
+    </div>
+
+    <div class="mc" id="mc-library">
+        <div class="mc-label"><i class="bi bi-book"></i> Library Cache Hit</div>
+        <div class="mc-val" id="v-library">—</div>
+        <div class="mc-sub" id="s-library">кэш библиотеки</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-library"></div></div>
+    </div>
+
+    <div class="mc" id="mc-dict">
+        <div class="mc-label"><i class="bi bi-list-ol"></i> Dict Cache Hit</div>
+        <div class="mc-val" id="v-dict">—</div>
+        <div class="mc-sub" id="s-dict">кэш словаря данных</div>
+        <div class="mc-bar"><div class="mc-fill" id="b-dict"></div></div>
+    </div>
+
+    <div class="mc" id="mc-sga">
+        <div class="mc-label"><i class="bi bi-memory"></i> SGA Memory</div>
+        <div class="mc-val" id="v-sga">—</div>
+        <div class="mc-sub" id="s-sga">всего SGA</div>
+    </div>
+</div>
+
 <!-- ПОДКЛЮЧЕНИЯ -->
 <div class="card">
     <div class="card-header no-indicator">
@@ -68,7 +98,62 @@
             <span class="blk-hint">— статистика активных сессий</span>
         </div>
     </div>
-    <div class="card-body" id="blk-connections"><div class="empty-state"><span class="loading"></span></div></div>
+    <div class="card-body" id="blk-connections">
+        <div class="empty-state"><span class="loading"></span></div>
+    </div>
+</div>
+
+<!-- LOAD PROFILE И DML -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:15px;">
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left">
+                <i class="bi bi-graph-up"></i> Load Profile
+                <span class="blk-hint">— профиль нагрузки БД</span>
+            </div>
+        </div>
+        <div class="card-body" id="blk-load-profile">
+            <div class="empty-state"><span class="loading"></span></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header no-indicator">
+            <div class="header-left">
+                <i class="bi bi-arrow-repeat"></i> DML Статистика
+                <span class="blk-hint">— операции изменения данных</span>
+            </div>
+        </div>
+        <div class="card-body" id="blk-dml">
+            <div class="empty-state"><span class="loading"></span></div>
+        </div>
+    </div>
+</div>
+
+<!-- TABLESPACES -->
+<div class="card" style="margin-top:15px;">
+    <div class="card-header">
+        <div class="header-left">
+            <i class="bi bi-hdd-stack"></i> Tablespaces
+            <span class="badge" id="tablespaceCount">0</span>
+        </div>
+    </div>
+    <div class="card-body" id="blk-tablespaces" style="padding:0;overflow-x:auto;">
+        <div class="empty-state"><span class="loading"></span></div>
+    </div>
+</div>
+
+<!-- WAIT EVENTS -->
+<div class="card" style="margin-top:15px;">
+    <div class="card-header">
+        <div class="header-left">
+            <i class="bi bi-hourglass-split"></i> Wait Events (Top 10)
+            <span class="badge" id="waitEventCount">0</span>
+        </div>
+    </div>
+    <div class="card-body" id="blk-wait-events" style="padding:0;overflow-x:auto;">
+        <div class="empty-state"><span class="loading"></span></div>
+    </div>
 </div>
 
 <!-- МЕДЛЕННЫЕ ЗАПРОСЫ -->
@@ -84,8 +169,59 @@
     </div>
 </div>
 
+<!-- ТАБЛИЦЫ -->
+<div class="card" style="margin-top:15px;">
+    <div class="card-header">
+        <div class="header-left">
+            <i class="bi bi-table"></i> TOP 15 Таблиц по размеру
+            <span class="badge" id="tableStatsCount">0</span>
+        </div>
+    </div>
+    <div class="card-body" id="blk-tables" style="padding:0;overflow-x:auto;">
+        <div class="empty-state"><span class="loading"></span></div>
+    </div>
+</div>
+
+<!-- TOP SQL -->
+<div class="card" style="margin-top:15px;">
+    <div class="card-header">
+        <div class="header-left">
+            <i class="bi bi-lightning"></i> TOP SQL (по времени выполнения)
+            <span class="badge" id="topSqlCount">0</span>
+        </div>
+    </div>
+    <div class="card-body" id="blk-top-sql" style="padding:0;overflow-x:auto;">
+        <div class="empty-state"><span class="loading"></span></div>
+    </div>
+</div>
+
+<!-- СХЕМЫ -->
+<div class="card" style="margin-top:15px;">
+    <div class="card-header">
+        <div class="header-left">
+            <i class="bi bi-folder"></i> Размер схем БД (TOP 10)
+            <span class="badge" id="schemaCount">0</span>
+        </div>
+    </div>
+    <div class="card-body" id="blk-schemas" style="padding:0;overflow-x:auto;">
+        <div class="empty-state"><span class="loading"></span></div>
+    </div>
+</div>
+
+<!-- ПРОИЗВОДИТЕЛЬНОСТЬ -->
+<div class="card" style="margin-top:15px;">
+    <div class="card-header">
+        <div class="header-left">
+            <i class="bi bi-speedometer2"></i> Производительность
+        </div>
+    </div>
+    <div class="card-body" id="blk-performance">
+        <div class="empty-state"><span class="loading"></span></div>
+    </div>
+</div>
+
 <style>
-/* Копируем стили из monitoring.html */
+/* Оставляем все стили как были */
 .mc { background:var(--bg-1);border:1px solid var(--line);border-radius:var(--radius-lg);padding:14px 16px 12px;display:flex;flex-direction:column;gap:4px;transition:border-color .2s; }
 .mc.warn { border-color:rgba(240,168,67,.5); }
 .mc.crit { border-color:rgba(224,82,82,.5); }
@@ -153,6 +289,7 @@
 
 <script>
 function esc(s) {
+    if (s == null || s === undefined) return '';
     var d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
@@ -198,25 +335,28 @@ async function loadStats() {
     }
 
     try {
+        console.log('[Oracle] Fetching stats...');
         var r = await fetch('/api/monitoring/stats');
         var d = await r.json();
         
-        if (!d.success) throw new Error(d.error || 'Ошибка сервера');
+        console.log('[Oracle] Response:', d);
         
-        console.log('[Oracle Monitoring] Response:', d);
+        if (!d.success) throw new Error(d.error || 'Ошибка сервера');
         
         var data = d.data;
         var sys = data.system || {};
         var ora = data.oracle || {};
         
-        var ts = new Date(data.timestamp).toLocaleTimeString('ru-RU');
+        console.log('[Oracle] ora data:', ora);
+        
+        var ts = data.timestamp ? new Date(data.timestamp).toLocaleTimeString('ru-RU') : '—';
         var lastUpdateEl = document.getElementById('lastUpdateTime');
         if (lastUpdateEl) lastUpdateEl.textContent = 'Обновлено: ' + ts;
         
-        // Обновляем badge версии
+        // Версия
         var versionBadge = document.getElementById('oracleVersionBadge');
         if (versionBadge && ora.version) {
-            versionBadge.textContent = '🔴 ' + ora.version;
+            versionBadge.textContent = '🔴 ' + ora.version.substring(0, 50);
         }
 
         // CPU
@@ -239,38 +379,90 @@ async function loadStats() {
                   sys.disk_percent, sys.disk_percent > 75, sys.disk_percent > 90);
         }
 
-        // БД Oracle
-        if (ora) {
-            // Размер БД
-            var dbSize = ora.db_size_pretty || '0 GB';
-            var dbUptime = ora.uptime || 'N/A';
-            var valEl = document.getElementById('v-dbsize');
-            var subEl = document.getElementById('s-dbsize');
-            if (valEl) valEl.textContent = dbSize;
-            if (subEl) subEl.textContent = 'datafiles · uptime: ' + dbUptime;
-
-            // Сессии
-            var conn = ora.connections || {};
-            var connTotal = conn.total || 0;
-            var connMax = conn.max_connections || 1;
-            var connPercent = (connTotal / connMax) * 100;
-            setMC('conn', connTotal + ' / ' + connMax,
-                  connPercent, connPercent > 70, connPercent > 90);
-            
-            var connSubEl = document.getElementById('s-conn');
-            if (connSubEl) {
-                connSubEl.textContent = 'активных: ' + (conn.active || 0) + ' · заблокированных: ' + (conn.waiting_lock || 0);
-            }
-
-            // Подключения
-            renderOracleConnections(ora);
-            
-            // Медленные запросы
-            renderSlowQueries(ora.slow_queries || []);
+        // Если нет данных Oracle
+        if (!ora || Object.keys(ora).length === 0 || ora.error) {
+            console.warn('[Oracle] No data or error:', ora);
+            document.getElementById('v-dbsize').textContent = ora.error ? 'Ошибка' : 'Нет данных';
+            document.getElementById('s-dbsize').textContent = ora.error ? ora.error : 'Проверьте профиль Oracle';
+            document.getElementById('blk-connections').innerHTML = '<div class="empty-state" style="padding:16px;color:var(--amber);">⚠️ Нет данных от Oracle. Выберите профиль Oracle.</div>';
+            return;
         }
 
+        // Размер БД
+        var dbSize = ora.db_size_pretty || '—';
+        var dbUptime = ora.uptime || 'N/A';
+        document.getElementById('v-dbsize').textContent = dbSize;
+        document.getElementById('s-dbsize').textContent = 'datafiles · uptime: ' + dbUptime;
+
+        // Cache Hit Ratios
+        if (ora.buffer_cache_hit_ratio != null) {
+            var bhr = ora.buffer_cache_hit_ratio;
+            setMC('buffer', bhr + '%', bhr, bhr < 70, bhr < 50);
+        }
+        
+        if (ora.library_cache_hit_ratio != null) {
+            var lchr = ora.library_cache_hit_ratio;
+            setMC('library', lchr + '%', lchr, lchr < 80, lchr < 60);
+        }
+        
+        if (ora.dict_cache_hit_ratio != null) {
+            var dchr = ora.dict_cache_hit_ratio;
+            setMC('dict', dchr + '%', dchr, dchr < 70, dchr < 50);
+        }
+        
+        // SGA Memory
+        if (ora.sga) {
+            var sgaTotal = 0;
+            for (var key in ora.sga) {
+                sgaTotal += ora.sga[key];
+            }
+            document.getElementById('v-sga').textContent = sgaTotal.toFixed(0) + ' MB';
+        }
+
+        // Сессии
+        var conn = ora.connections || {};
+        var connTotal = conn.total || 0;
+        var connMax = conn.max_connections || 1;
+        var connPercent = connMax > 0 ? (connTotal / connMax) * 100 : 0;
+        setMC('conn', connTotal + ' / ' + connMax, connPercent, connPercent > 70, connPercent > 90);
+        
+        var connSubEl = document.getElementById('s-conn');
+        if (connSubEl) {
+            connSubEl.textContent = 'активных: ' + (conn.active || 0) + ' · заблокированных: ' + (conn.waiting_lock || 0);
+        }
+
+        // Блоки сессий
+        renderOracleConnections(ora);
+        
+        // Load Profile
+        renderLoadProfile(ora.load_profile || {});
+        
+        // DML Stats
+        renderDmlStats(ora.dml_stats || {});
+        
+        // Tablespaces
+        renderTablespaces(ora.tablespaces || []);
+        
+        // Wait Events
+        renderWaitEvents(ora.wait_events || []);
+        
+        // Медленные запросы
+        renderSlowQueries(ora.slow_queries || []);
+        
+        // Таблицы
+        renderTopTables(ora.top_tables || []);
+        
+        // TOP SQL
+        renderTopSql(ora.top_sql || []);
+        
+        // Схемы
+        renderSchemas(ora.schema_sizes || []);
+        
+        // Производительность
+        renderPerformance(ora);
+
     } catch (e) {
-        console.error('[Oracle Monitoring] Error:', e);
+        console.error('[Oracle] Error:', e);
     } finally {
         if (btn) {
             btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Обновить';
@@ -288,17 +480,17 @@ function renderOracleConnections(ora) {
         sr('Активных сессий', 'Выполняют SQL-запрос (ACTIVE)', c.active || 0, 'dot-g') +
         sr('Неактивных', 'В режиме ожидания (INACTIVE)', c.idle || 0, 'dot-d') +
         sr('Всего сессий', 'Открытых подключений к Oracle', c.total || 0, '') +
-        sr('Максимум (sessions)', 'Лимит параллельных сессий из init.ora', c.max_connections || 0, '') +
+        sr('Максимум (sessions)', 'Лимит параллельных сессий', c.max_connections || 0, '') +
         sr('Заблокированных', 'Ожидают освобождения ресурсов', c.waiting_lock || 0, c.waiting_lock > 0 ? 'dot-r' : 'dot-g', c.waiting_lock > 0 ? 'crit' : 'good') +
-        sr('Uptime Oracle', 'Время работы инстанса с последнего запуска', ora.uptime || 'N/A', '');
+        sr('Uptime Oracle', 'Время работы инстанса', ora.uptime || 'N/A', '');
 }
 
 function renderSlowQueries(queries) {
     var el = document.getElementById('blk-slow');
-    if (!el) return;
-    
     var countEl = document.getElementById('slowQueryCount');
-    if (countEl) countEl.textContent = queries && queries.length ? queries.length : '0';
+    
+    if (countEl) countEl.textContent = queries ? queries.length : 0;
+    if (!el) return;
     
     if (!queries || queries.length === 0) {
         el.innerHTML = '<div class="empty-state" style="padding:16px;"><i class="bi bi-check-circle" style="color:var(--green);margin-right:6px;"></i>Медленных запросов нет</div>';
@@ -307,11 +499,12 @@ function renderSlowQueries(queries) {
     
     var rows = queries.map(function(q) {
         var color = q.duration_sec > 60 ? 'var(--red)' : q.duration_sec > 10 ? 'var(--amber)' : 'var(--text-2)';
+        var dur = q.duration_str || (q.duration_sec ? q.duration_sec + 'с' : '—');
         return '<tr>'
             +'<td>'+esc(q.pid)+'</td>'
             +'<td>'+esc(q.user||'—')+'</td>'
             +'<td style="font-size:10px;color:var(--text-3);">'+esc(q.app||'—')+'</td>'
-            +'<td style="color:'+color+';font-weight:700;">'+esc(q.duration_str)+'</td>'
+            +'<td style="color:'+color+';font-weight:700;">'+esc(dur)+'</td>'
             +'<td><span style="background:var(--bg-3);padding:1px 6px;border-radius:2px;font-size:9px;">'+esc(q.state)+'</span></td>'
             +'<td style="max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(q.query)+'">'+esc(q.query)+'</td>'
             +'</tr>';
@@ -322,10 +515,209 @@ function renderSlowQueries(queries) {
         +'</tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
-// Загружаем при открытии страницы
-loadStats();
+function formatNumber(num) {
+    if (num == null || num === 0) return '0';
+    if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'G';
+    if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
+    return num.toString();
+}
 
-// Автообновление каждые 60 секунд
+function renderLoadProfile(lp) {
+    var el = document.getElementById('blk-load-profile');
+    if (!el) return;
+    
+    if (!lp || Object.keys(lp).length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных</div>';
+        return;
+    }
+    
+    el.innerHTML = 
+        sr('Logical Reads', 'Всего логических чтений', formatNumber(lp.logical_reads || 0), '', '') +
+        sr('Physical Reads', 'Физических чтений с диска', formatNumber(lp.physical_reads || 0), '', '') +
+        sr('Physical Writes', 'Записей на диск', formatNumber(lp.physical_writes || 0), '', '') +
+        sr('User Commits', 'Подтвержденных транзакций', formatNumber(lp.commits || 0), '', 'good') +
+        sr('User Rollbacks', 'Откаченных транзакций', formatNumber(lp.rollbacks || 0), '', lp.rollbacks > 1000 ? 'warn' : '');
+}
+
+function renderDmlStats(dml) {
+    var el = document.getElementById('blk-dml');
+    if (!el) return;
+    
+    if (!dml || Object.keys(dml).length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных</div>';
+        return;
+    }
+    
+    el.innerHTML = 
+        sr('Commits', 'Количество коммитов', formatNumber(dml.commits || 0), '', 'good') +
+        sr('Rollbacks', 'Количество откатов', formatNumber(dml.rollbacks || 0), '', dml.rollbacks > 1000 ? 'warn' : '') +
+        sr('Block Changes', 'Изменено блоков', formatNumber(dml.block_changes || 0), '', '');
+}
+
+function renderTablespaces(tspaces) {
+    var el = document.getElementById('blk-tablespaces');
+    var countEl = document.getElementById('tablespaceCount');
+    
+    if (countEl) countEl.textContent = tspaces ? tspaces.length : 0;
+    if (!el) return;
+    
+    if (!tspaces || tspaces.length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных о tablespaces</div>';
+        return;
+    }
+    
+    var rows = tspaces.slice(0, 10).map(function(ts) {
+        var pct = ts.used_percent || 0;
+        var cls = pct > 90 ? 'crit' : pct > 75 ? 'warn' : 'good';
+        return '<tr>'
+            +'<td>'+esc(ts.tablespace_name||'—')+'</td>'
+            +'<td>'+esc(ts.size_gb||0)+' GB</td>'
+            +'<td>'+esc(ts.used_gb||0)+' GB</td>'
+            +'<td>'+esc(ts.free_gb||0)+' GB</td>'
+            +'<td><span class="'+cls+'" style="font-weight:700;">'+pct.toFixed(1)+'%</span></td>'
+            +'</tr>';
+    }).join('');
+    
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        +'<th>Tablespace</th><th>Размер</th><th>Использовано</th><th>Свободно</th><th>Использовано %</th>'
+        +'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function renderWaitEvents(events) {
+    var el = document.getElementById('blk-wait-events');
+    var countEl = document.getElementById('waitEventCount');
+    
+    if (countEl) countEl.textContent = events ? events.length : 0;
+    if (!el) return;
+    
+    if (!events || events.length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;"><i class="bi bi-check-circle" style="color:var(--green);margin-right:6px;"></i>Нет событий ожидания</div>';
+        return;
+    }
+    
+    var rows = events.map(function(e) {
+        return '<tr>'
+            +'<td style="max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(e.event)+'">'+esc(e.event||'—')+'</td>'
+            +'<td>'+formatNumber(e.total_waits||0)+'</td>'
+            +'<td>'+(e.time_waited_sec ? e.time_waited_sec.toFixed(2) : '0')+' сек</td>'
+            +'</tr>';
+    }).join('');
+    
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        +'<th>Событие</th><th>Всего ожиданий</th><th>Общее время</th>'
+        +'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function renderTopTables(tables) {
+    var el = document.getElementById('blk-tables');
+    var countEl = document.getElementById('tableStatsCount');
+    
+    if (countEl) countEl.textContent = tables ? tables.length : 0;
+    if (!el) return;
+    
+    if (!tables || tables.length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных о таблицах</div>';
+        return;
+    }
+    
+    var rows = tables.slice(0, 15).map(function(t) {
+        return '<tr>'
+            +'<td style="max-width:150px;">'+esc(t.owner||'')+'.'+esc(t.table_name||'—')+'</td>'
+            +'<td>'+esc(t.size_gb||0)+' GB</td>'
+            +'<td>'+esc(t.size_mb||0)+' MB</td>'
+            +'<td>'+esc(t.extents||0)+'</td>'
+            +'</tr>';
+    }).join('');
+    
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        +'<th>Таблица (владелец)</th><th>Размер GB</th><th>Размер MB</th><th>Extents</th>'
+        +'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function renderTopSql(sqls) {
+    var el = document.getElementById('blk-top-sql');
+    var countEl = document.getElementById('topSqlCount');
+    
+    if (countEl) countEl.textContent = sqls ? sqls.length : 0;
+    if (!el) return;
+    
+    if (!sqls || sqls.length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных о SQL-запросах</div>';
+        return;
+    }
+    
+    var rows = sqls.slice(0, 10).map(function(s) {
+        return '<tr>'
+            +'<td style="font-family:var(--font-mono);font-size:10px;">'+esc(s.sql_id||'—')+'</td>'
+            +'<td>'+(s.elapsed_sec ? s.elapsed_sec.toFixed(2) : '0')+' сек</td>'
+            +'<td>'+(s.cpu_sec ? s.cpu_sec.toFixed(2) : '0')+' сек</td>'
+            +'<td>'+esc(s.executions||0)+'</td>'
+            +'<td>'+(s.avg_elapsed_sec ? s.avg_elapsed_sec.toFixed(4) : '0')+' сек</td>'
+            +'<td style="max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(s.sql_preview)+'">'+esc(s.sql_preview||'—')+'</td>'
+            +'</tr>';
+    }).join('');
+    
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        +'<th>SQL ID</th><th>Общее время</th><th>CPU время</th><th>Вызовов</th><th>Среднее время</th><th>Запрос</th>'
+        +'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function renderSchemas(schemas) {
+    var el = document.getElementById('blk-schemas');
+    var countEl = document.getElementById('schemaCount');
+    
+    if (countEl) countEl.textContent = schemas ? schemas.length : 0;
+    if (!el) return;
+    
+    if (!schemas || schemas.length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных о схемах</div>';
+        return;
+    }
+    
+    var rows = schemas.slice(0, 10).map(function(s) {
+        return '<tr>'
+            +'<td>'+esc(s.owner||'—')+'</td>'
+            +'<td>'+esc(s.size_gb||0)+' GB</td>'
+            +'</tr>';
+    }).join('');
+    
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        +'<th>Схема (Owner)</th><th>Размер</th>'
+        +'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function renderPerformance(ora) {
+    var el = document.getElementById('blk-performance');
+    if (!el) return;
+    
+    var bhr = ora.buffer_cache_hit_ratio || 0;
+    var lchr = ora.library_cache_hit_ratio || 0;
+    var dchr = ora.dict_cache_hit_ratio || 0;
+    var pga = ora.pga_target || 0;
+    var pgaUsed = (ora.pga_usage || {}).used_mb || 0;
+    
+    var bhrCls = bhr > 80 ? 'good' : bhr > 60 ? 'warn' : 'crit';
+    var lchrCls = lchr > 90 ? 'good' : lchr > 80 ? 'warn' : 'crit';
+    var dchrCls = dchr > 90 ? 'good' : dchr > 80 ? 'warn' : 'crit';
+    
+    el.innerHTML = 
+        sr('Buffer Cache Hit Ratio', 'Эффективность кэша буферов', bhr + '%', '', bhrCls) +
+        sr('Library Cache Hit Ratio', 'Эффективность кэша библиотеки', lchr + '%', '', lchrCls) +
+        sr('Dictionary Cache Hit Ratio', 'Эффективность кэша словаря', dchr + '%', '', dchrCls) +
+        sr('PGA Target', 'Целевой размер PGA', pga.toFixed(0) + ' MB', '', '') +
+        sr('PGA Used', 'Текущее использование PGA', pgaUsed.toFixed(0) + ' MB', '', '');
+    
+    // Flash Recovery Area
+    if (ora.flash_recovery_area) {
+        var fra = ora.flash_recovery_area;
+        var fraPct = fra.used_percent || 0;
+        var fraCls = fraPct > 90 ? 'crit' : fraPct > 75 ? 'warn' : 'good';
+        el.innerHTML += sr('Flash Recovery Area', 'Область восстановления', fraPct.toFixed(1) + '% (' + fra.used_gb + '/' + fra.limit_gb + ' GB)', '', fraCls);
+    }
+}
+
+loadStats();
 setInterval(loadStats, 60000);
 </script>
 

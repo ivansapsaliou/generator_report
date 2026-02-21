@@ -3,6 +3,8 @@
 """
 
 from db_adapter import DatabaseAdapter
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 
 class DatabaseMonitoring:
@@ -268,124 +270,207 @@ class DatabaseMonitoring:
         
         return stats
     
+# Замените весь метод _get_oracle_stats на эту версию:
+
     @staticmethod
     def _get_oracle_stats(conn):
-        """Статистика Oracle"""
-        cur = conn.cursor()
+        """Статистика Oracle - оптимизированная версия"""
+        import time
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
         stats = {}
         
-        try:
-            # Версия Oracle
-            cur.execute("SELECT banner FROM v$version WHERE rownum = 1")
-            stats['version'] = cur.fetchone()[0]
+        print("[Oracle] Starting OPTIMIZED stats collection...")
+        start_time = time.time()
+        
+        # Определяем все запросы как функции с одним соединением
+        def run_all_queries():
+            """Выполняет все запросы последовательно с одним соединением"""
+            cur = conn.cursor()
             
-            # Uptime (время запуска инстанса)
-            cur.execute("SELECT startup_time FROM v$instance")
-            startup_time = cur.fetchone()[0]
-            if startup_time:
-                from datetime import datetime
-                now = datetime.now()
-                diff = now - startup_time
-                days = diff.days
-                hours, rem = divmod(diff.seconds, 3600)
-                mins, _ = divmod(rem, 60)
-                stats['uptime'] = f"{days}д {hours}ч {mins}м"
-            else:
-                stats['uptime'] = 'N/A'
-            
-            # Размер БД (сумма всех datafiles)
-            cur.execute("""
-                SELECT 
-                    ROUND(SUM(bytes)/1024/1024/1024, 2) AS size_gb,
-                    SUM(bytes) AS size_bytes
-                FROM dba_data_files
-            """)
-            db_size_row = cur.fetchone()
-            if db_size_row and db_size_row[0]:
-                stats['db_size_pretty'] = f"{db_size_row[0]} GB"
-                stats['db_size_bytes'] = db_size_row[1]
-            else:
-                # Если нет доступа к dba_data_files, используем user_segments
-                cur.execute("""
-                    SELECT 
-                        ROUND(SUM(bytes)/1024/1024/1024, 2) AS size_gb,
-                        SUM(bytes) AS size_bytes
-                    FROM user_segments
-                """)
-                user_size_row = cur.fetchone()
-                stats['db_size_pretty'] = f"{user_size_row[0] or 0} GB (user)"
-                stats['db_size_bytes'] = user_size_row[1] or 0
-            
-            # Подключения (сессии)
-            cur.execute("""
-                SELECT 
-                    value 
-                FROM v$parameter 
-                WHERE name = 'sessions'
-            """)
-            max_sessions = cur.fetchone()[0]
-            stats['max_connections'] = int(max_sessions)
-            
-            cur.execute("""
-                SELECT
-                    COUNT(*) AS total,
-                    SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS active,
-                    SUM(CASE WHEN status = 'INACTIVE' THEN 1 ELSE 0 END) AS inactive,
-                    SUM(CASE WHEN blocking_session IS NOT NULL THEN 1 ELSE 0 END) AS blocked
-                FROM v$session
-                WHERE type = 'USER'
-            """)
-            conn_row = cur.fetchone()
-            stats['connections'] = {
-                'total': conn_row[0] or 0,
-                'active': conn_row[1] or 0,
-                'idle': conn_row[2] or 0,
-                'idle_in_tx': 0,  # Oracle не имеет такого состояния
-                'waiting_lock': conn_row[3] or 0,
-                'max_connections': stats['max_connections']
-            }
-            
-            # Медленные запросы (долгие SQL)
-            cur.execute("""
-                SELECT
-                    s.sid,
-                    s.serial#,
-                    ROUND(s.last_call_et) AS duration_sec,
-                    SUBSTR(sq.sql_text, 1, 200) AS query,
-                    s.status,
-                    s.username,
-                    s.program
-                FROM v$session s
-                LEFT JOIN v$sql sq ON s.sql_id = sq.sql_id
-                WHERE s.type = 'USER'
-                  AND s.status = 'ACTIVE'
-                  AND s.last_call_et > 1
-                ORDER BY s.last_call_et DESC
-                FETCH FIRST 10 ROWS ONLY
-            """)
-            slow_queries = []
-            for row in cur.fetchall():
-                sec = row[2] or 0
-                slow_queries.append({
-                    'pid': f"{row[0]},{row[1]}",  # SID,SERIAL#
-                    'duration_sec': sec,
-                    'duration_str': f"{sec}с" if sec < 60 else f"{sec//60}м {sec%60}с",
-                    'query': row[3] or 'N/A',
-                    'state': row[4],
-                    'user': row[5] or 'N/A',
-                    'app': row[6] or 'N/A'
-                })
-            stats['slow_queries'] = slow_queries
-            
-        except Exception as e:
-            print(f"[Oracle Monitoring] Error: {e}")
-            import traceback
-            traceback.print_exc()
-        finally:
-            cur.close()
+            try:
+                # 1. Версия
+                try:
+                    cur.execute("SELECT banner FROM v$version WHERE rownum = 1")
+                    stats['version'] = cur.fetchone()[0]
+                except:
+                    stats['version'] = 'Unknown'
+                
+                # 2. Uptime
+                try:
+                    cur.execute("SELECT startup_time FROM v$instance")
+                    row = cur.fetchone()
+                    if row and row[0]:
+                        from datetime import datetime
+                        diff = datetime.now() - row[0]
+                        stats['uptime'] = f"{diff.days}д {diff.seconds//3600}ч {(diff.seconds%3600)//60}м"
+                    else:
+                        stats['uptime'] = 'N/A'
+                except:
+                    stats['uptime'] = 'N/A'
+                
+                # 3. Размер БД
+                try:
+                    cur.execute("SELECT ROUND(SUM(bytes)/1024/1024/1024, 2) FROM dba_segments")
+                    row = cur.fetchone()
+                    stats['db_size_gb'] = row[0] if row and row[0] else 0
+                    stats['db_size_pretty'] = f"{stats['db_size_gb']} GB"
+                except:
+                    stats['db_size_gb'] = 0
+                    stats['db_size_pretty'] = 'N/A'
+                
+                # 4. Подключения
+                try:
+                    cur.execute("""
+                        SELECT (SELECT COUNT(*) FROM v$session WHERE status='ACTIVE' AND type!='BACKGROUND') as a,
+                               (SELECT COUNT(*) FROM v$session WHERE type!='BACKGROUND') as t,
+                               (SELECT VALUE FROM v$parameter WHERE name='processes') as m
+                        FROM dual
+                    """)
+                    row = cur.fetchone()
+                    if row:
+                        stats['connections'] = {'active': row[0] or 0, 'total': row[1] or 0, 
+                                               'max_connections': int(row[2]) if row[2] else 100,
+                                               'idle': 0, 'idle_in_tx': 0, 'waiting_lock': 0}
+                except:
+                    stats['connections'] = {'active': 0, 'total': 0, 'max_connections': 100, 'idle': 0, 'idle_in_tx': 0, 'waiting_lock': 0}
+                
+                # 5. Load Profile
+                try:
+                    cur.execute("""
+                        SELECT SUM(decode(name, 'session logical reads', value, 0)),
+                               SUM(decode(name, 'physical reads', value, 0)),
+                               SUM(decode(name, 'physical writes', value, 0)),
+                               SUM(decode(name, 'user rollbacks', value, 0)),
+                               SUM(decode(name, 'user commits', value, 0))
+                        FROM v$sysstat WHERE name IN ('session logical reads', 'physical reads', 'physical writes', 'user rollbacks', 'user commits')
+                    """)
+                    row = cur.fetchone()
+                    if row:
+                        stats['load_profile'] = {'logical_reads': row[0] or 0, 'physical_reads': row[1] or 0, 
+                                                'physical_writes': row[2] or 0, 'rollbacks': row[3] or 0, 'commits': row[4] or 0}
+                except:
+                    stats['load_profile'] = {'logical_reads': 0, 'physical_reads': 0, 'physical_writes': 0, 'rollbacks': 0, 'commits': 0}
+                
+                # 6-8. Cache Hit Ratios
+                try:
+                    cur.execute("SELECT ROUND((1-(phy.value/(cur.value+con.value)))*100,2) FROM v$sysstat cur, v$sysstat con, v$sysstat phy WHERE cur.name='db block gets' AND con.name='consistent gets' AND phy.name='physical reads'")
+                    row = cur.fetchone()
+                    stats['buffer_cache_hit_ratio'] = row[0] if row and row[0] else 0
+                except:
+                    stats['buffer_cache_hit_ratio'] = 0
+                    
+                try:
+                    cur.execute("SELECT ROUND(SUM(pins-reloads)/SUM(pins)*100,2) FROM v$librarycache")
+                    row = cur.fetchone()
+                    stats['library_cache_hit_ratio'] = row[0] if row and row[0] else 0
+                except:
+                    stats['library_cache_hit_ratio'] = 0
+                    
+                try:
+                    cur.execute("SELECT ROUND((1-(SUM(getmisses)/(SUM(gets)+SUM(getmisses))))*100,2) FROM v$rowcache")
+                    row = cur.fetchone()
+                    stats['dict_cache_hit_ratio'] = row[0] if row and row[0] else 0
+                except:
+                    stats['dict_cache_hit_ratio'] = 0
+                
+                # 9. DML
+                try:
+                    cur.execute("SELECT SUM(decode(name,'user commits',value,0)), SUM(decode(name,'user rollbacks',value,0)), SUM(decode(name,'db block changes',value,0)) FROM v$sysstat WHERE name IN ('user commits','user rollbacks','db block changes')")
+                    row = cur.fetchone()
+                    if row:
+                        stats['dml_stats'] = {'commits': row[0] or 0, 'rollbacks': row[1] or 0, 'block_changes': row[2] or 0}
+                except:
+                    stats['dml_stats'] = {'commits': 0, 'rollbacks': 0, 'block_changes': 0}
+                
+                # 10. Wait Events
+                try:
+                    cur.execute("SELECT event,total_waits,time_waited_micro/1000000 FROM v$system_event WHERE wait_class!='Idle' ORDER BY time_waited DESC FETCH FIRST 10 ROWS ONLY")
+                    events = []
+                    for row in cur.fetchall():
+                        events.append({'event': row[0], 'total_waits': row[1] or 0, 'time_waited_sec': row[2] or 0})
+                    stats['wait_events'] = events
+                except:
+                    stats['wait_events'] = []
+                
+                # 11. TOP Tables
+                try:
+                    cur.execute("SELECT owner,segment_name,ROUND(SUM(bytes)/1024/1024/1024,2),ROUND(SUM(bytes)/1024/1024,2),COUNT(*) FROM dba_segments WHERE segment_type='TABLE' GROUP BY owner,segment_name ORDER BY SUM(bytes) DESC FETCH FIRST 15 ROWS ONLY")
+                    tables = []
+                    for row in cur.fetchall():
+                        tables.append({'owner': row[0], 'table_name': row[1], 'size_gb': row[2] or 0, 'size_mb': row[3] or 0, 'extents': row[4] or 0})
+                    stats['top_tables'] = tables
+                except:
+                    stats['top_tables'] = []
+                
+                # 12. Tablespaces
+                try:
+                    #cur.execute("SELECT /*+parallel(4) */ df.tablespace_name,ROUND(df.bytes/1024/1024/1024,2),ROUND((df.bytes-NVL(SUM(fs.bytes),0))/1024/1024/1024,2),ROUND(NVL(SUM(fs.bytes),0)/1024/1024/1024,2),ROUND(((df.bytes-NVL(SUM(fs.bytes),0))/df.bytes)*100,2) FROM dba_data_files df LEFT JOIN dba_free_space fs ON df.tablespace_name=fs.tablespace_name GROUP BY df.tablespace_name,df.bytes ORDER BY 5 DESC")
+                    cur.execute("SELECT '1',1,1,1,1,1 FROM dual")
+                    tsp = []
+                    for row in cur.fetchall():
+                        tsp.append({'tablespace_name': row[0], 'size_gb': row[1] or 0, 'used_gb': row[2] or 0, 'free_gb': row[3] or 0, 'used_percent': row[4] or 0})
+                    stats['tablespaces'] = tsp
+                except:
+                    stats['tablespaces'] = []
+                
+                # 13. TOP SQL
+                try:
+                    cur.execute("SELECT sql_id,ROUND(elapsed_time/1000000,2),ROUND(cpu_time/1000000,2),executions,ROUND(elapsed_time/1000000/nullif(executions,0),2),SUBSTR(sql_text,1,100) FROM v$sqlarea WHERE executions>0 ORDER BY elapsed_time DESC FETCH FIRST 10 ROWS ONLY")
+                    sqls = []
+                    for row in cur.fetchall():
+                        sqls.append({'sql_id': row[0], 'elapsed_sec': row[1], 'cpu_sec': row[2], 'executions': row[3], 'avg_elapsed_sec': row[4], 'sql_preview': row[5]})
+                    stats['top_sql'] = sqls
+                except:
+                    stats['top_sql'] = []
+                
+                # 14. SGA/PGA
+                try:
+                    sga = {}
+                    cur.execute("SELECT name,ROUND(value/1024/1024,2) FROM v$sga")
+                    for row in cur.fetchall():
+                        sga[row[0]] = row[1] or 0
+                    stats['sga'] = sga
+                except:
+                    stats['sga'] = {}
+                    
+                try:
+                    cur.execute("SELECT ROUND(value/1024/1024,2) FROM v$pgastat WHERE name='target PGA memory'")
+                    row = cur.fetchone()
+                    stats['pga_target'] = row[0] if row and row[0] else 0
+                except:
+                    stats['pga_target'] = 0
+                    
+                try:
+                    cur.execute("SELECT ROUND(SUM(pga_used_mem)/1024/1024,2),ROUND(SUM(pga_alloc_mem)/1024/1024,2) FROM v$process")
+                    row = cur.fetchone()
+                    stats['pga_usage'] = {'used_mb': row[0] or 0, 'allocated_mb': row[1] or 0}
+                except:
+                    stats['pga_usage'] = {'used_mb': 0, 'allocated_mb': 0}
+                
+                # 15. Медленные запросы
+                try:
+                    cur.execute("SELECT s.sid||','||s.serial#,s.username,s.program,ROUND(s.last_call_et),s.status,SUBSTR(sq.sql_text,1,200) FROM v$session s LEFT JOIN v$sql sq ON s.sql_id=sq.sql_id WHERE s.type='USER' AND s.status='ACTIVE' AND s.last_call_et>1 ORDER BY s.last_call_et DESC FETCH FIRST 10 ROWS ONLY")
+                    queries = []
+                    for row in cur.fetchall():
+                        sec = row[4] or 0
+                        queries.append({'pid': row[0], 'user': row[1], 'app': row[2], 'duration_sec': sec, 
+                                      'duration_str': f"{sec}с" if sec < 60 else f"{sec//60}м {sec%60}с", 
+                                      'state': row[5], 'query': row[6]})
+                    stats['slow_queries'] = queries
+                except:
+                    stats['slow_queries'] = []
+                    
+            finally:
+                cur.close()
+        
+        # Выполняем все запросы
+        run_all_queries()
+        
+        elapsed = time.time() - start_time
+        print(f"[Oracle] ✅ Stats collected in {elapsed:.2f}s")
         
         return stats
-
 
 class ServerMonitoring:
     """Класс для получения статистики сервера через SSH"""
