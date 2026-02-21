@@ -3,35 +3,43 @@
 {% block topbar_title %}Выбор подключения{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="page-header" style="margin-bottom:28px;">
     <div>
-        <div class="page-title">Подключение к <span>БД</span></div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:.04em;">NEWLAND TECHNOLOGY &nbsp;·&nbsp; ВЫБЕРИТЕ ИЛИ СОЗДАЙТЕ ПОДКЛЮЧЕНИЕ</div>
+        <div class="page-title">Выберите <span>подключение</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:6px;letter-spacing:.06em;text-transform:uppercase;">NEWLAND TECHNOLOGY &nbsp;·&nbsp; ВАШИ СОХРАНЁННЫЕ БД</div>
     </div>
+    <button class="btn btn-primary" data-action="new-profile" title="Добавить новое подключение" id="addNewBtn" style="align-self:flex-start;">
+        <i class="bi bi-plus-lg"></i> Новое подключение
+    </button>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr;gap:14px;max-width:100%;">
+<!-- СЕТКА ПЛИТОК ПОДКЛЮЧЕНИЙ -->
+<div id="profilesGrid" style="
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+">
+    <!-- Плитки загружаются здесь -->
+</div>
 
-    <!-- СОХРАНЁННЫЕ ПОДКЛЮЧЕНИЯ -->
-    <div class="card">
-        <div class="card-header">
-            <div class="header-left"><i class="bi bi-database"></i> Сохранённые подключения <span class="badge badge-blue" id="profileCount">—</span></div>
-            <div class="header-right">
-                <button class="btn btn-primary btn-sm" data-action="new-profile" title="Добавить новое подключение">
-                    <i class="bi bi-plus"></i> Добавить
-                </button>
-            </div>
-        </div>
-        <div class="card-body" style="padding:0;">
-            <div style="overflow-y:auto;max-height:500px;" id="profilesList">
-                <div class="empty-state" style="padding:40px;">
-                    <i class="bi bi-inbox" style="font-size:32px;color:var(--text-3);margin-bottom:12px;display:block;"></i>
-                    <span style="color:var(--text-3);">Нет сохранённых подключений</span>
-                </div>
-            </div>
-        </div>
+<!-- ПУСТОЕ СОСТОЯНИЕ -->
+<div id="emptyState" style="
+    text-align: center;
+    padding: 60px 20px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+">
+    <i class="bi bi-inbox" style="font-size:56px;color:var(--text-3);margin-bottom:20px;display:block;opacity:0.5;"></i>
+    <div style="font-size:16px;color:var(--text-2);margin-bottom:8px;">Нет сохранённых подключений</div>
+    <div style="font-size:13px;color:var(--text-3);margin-bottom:24px;max-width:400px;">
+        Создайте первое подключение к вашей базе данных, чтобы начать работать с Report Builder.
     </div>
-
+    <button class="btn btn-primary" data-action="new-profile" title="Добавить новое подключение">
+        <i class="bi bi-plus-lg"></i> Создать подключение
+    </button>
 </div>
 
 <!-- ── MODAL: CREATE/EDIT PROFILE ─────────────────────── -->
@@ -51,7 +59,6 @@
                     <div style="font-size:10px;color:var(--text-3);margin-top:3px;">Краткое имя для идентификации подключения</div>
                 </div>
 
-                <!-- ✅ НОВОЕ ПОЛЕ: Тип базы данных -->
                 <div>
                     <label class="form-label">Тип базы данных <span style="color:var(--red);">*</span></label>
                     <select id="profileDbType" class="form-control" onchange="updatePortForDbType()">
@@ -169,53 +176,353 @@
 <div id="modalBackdrop" class="modal-backdrop" style="display:none;"></div>
 
 <style>
-.profile-card-item {
-    padding:12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;transition:all .2s;
+/* ════════════════════════════════════════════════════════
+   PROFILE TILE CARD (ПЛИТКА ПОДКЛЮЧЕНИЯ)
+   ════════════════════════════════════════════════════════ */
+
+.profile-tile {
+    background: linear-gradient(135deg, var(--bg-2) 0%, var(--bg-1) 100%);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
 }
-.profile-card-item:hover {
-    background:var(--bg-3);
+
+.profile-tile::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--amber), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
-.profile-card-item:last-child {
-    border-bottom:none;
+
+.profile-tile:hover {
+    border-color: var(--amber);
+    box-shadow: 0 8px 24px rgba(240, 168, 67, 0.15);
+    transform: translateY(-4px);
 }
-.profile-info {
-    flex:1;
+
+.profile-tile:hover::before {
+    opacity: 1;
 }
-.profile-info-name {
-    font-weight:600;color:var(--text);font-size:13px;
+
+/* HEADER ПЛИТКИ */
+.profile-tile-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
 }
-.profile-info-host {
-    font-size:11px;color:var(--text-3);margin-top:2px;font-family:var(--font-mono);
+
+.profile-tile-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-lg);
+    background: var(--amber-glow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
 }
-.profile-actions {
-    display:flex;gap:6px;
+
+.profile-tile-icon.oracle {
+    background: rgba(224, 82, 82, 0.1);
+    color: var(--red);
 }
+
+.profile-tile-icon.postgresql {
+    background: var(--amber-glow);
+    color: var(--amber);
+}
+
+.profile-tile-badges {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.profile-tile-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--bg-3);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.profile-tile-badge.ssh {
+    background: rgba(240, 168, 67, 0.1);
+    border-color: var(--amber);
+    color: var(--amber);
+}
+
+/* ИНФОРМАЦИЯ О ПОДКЛЮЧЕНИИ */
+.profile-tile-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.profile-tile-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-tile-name-icon {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.profile-tile-host {
+    font-size: 12px;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    word-break: break-all;
+}
+
+.profile-tile-host strong {
+    color: var(--text-2);
+    font-weight: 500;
+}
+
+.profile-tile-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.profile-tile-meta-item {
+    padding: 6px 8px;
+    background: var(--bg-3);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.profile-tile-meta-item i {
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+/* ACTIONS */
+.profile-tile-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.profile-tile:hover .profile-tile-actions {
+    opacity: 1;
+}
+
+.profile-tile-action-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text-3);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.profile-tile-action-btn:hover {
+    border-color: var(--amber);
+    color: var(--amber);
+    background: var(--amber-glow2);
+}
+
+.profile-tile-action-btn.connect {
+    background: var(--green);
+    border-color: var(--green);
+    color: white;
+    flex: 1.5;
+}
+
+.profile-tile-action-btn.connect:hover {
+    background: #52b788;
+    border-color: #52b788;
+}
+
+.profile-tile-action-btn.danger:hover {
+    border-color: var(--red);
+    color: var(--red);
+    background: rgba(224, 82, 82, 0.1);
+}
+
+/* MODAL */
 .modal {
-    position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:1100;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
 }
-.modal-content {
-    background:var(--card-bg);border:1px solid var(--line);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.6);padding:0;max-height:90vh;overflow-y:auto;
-}
-.modal-header {
-    padding:16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;
-}
-.modal-header h5 {
-    color:var(--text);margin:0;
-}
-.modal-close {
-    background:none;border:none;color:var(--text-3);font-size:24px;cursor:pointer;padding:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;transition:color .2s;
-}
-.modal-close:hover {
-    color:var(--text);
-}
-.modal-body {
-    padding:20px;
-}
+
 .modal-backdrop {
-    position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:1099;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1099;
 }
-.empty-state {
-    text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-3);
+
+.modal-content {
+    background: var(--bg-1);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    padding: 0;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-header h5 {
+    color: var(--text);
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-header h5 i {
+    color: var(--amber);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.modal-close:hover {
+    color: var(--text);
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+/* FORM ELEMENTS */
+.form-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+}
+
+.form-control, .form-select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--amber);
+}
+
+/* EMPTY STATE */
+#emptyState {
+    border-radius: var(--radius-lg);
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+    #profilesGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .profile-tile {
+        padding: 16px;
+    }
+    
+    .profile-tile-actions {
+        flex-direction: column;
+    }
 }
 </style>
 
@@ -228,41 +535,86 @@ const ProfileManager = {
             const res = await fetch('/api/db-profiles');
             const data = await res.json();
             
-            const list = document.getElementById('profilesList');
-            const count = document.getElementById('profileCount');
+            const grid = document.getElementById('profilesGrid');
+            const empty = document.getElementById('emptyState');
             
             if (!data.profiles || data.profiles.length === 0) {
-                list.innerHTML = `<div class="empty-state" style="padding:40px;"><i class="bi bi-inbox" style="font-size:32px;color:var(--text-3);margin-bottom:12px;display:block;"></i><span style="color:var(--text-3);">Нет сохранённых подключений</span></div>`;
-                count.textContent = '0';
+                grid.innerHTML = '';
+                empty.style.display = 'flex';
                 return;
             }
 
-            list.innerHTML = data.profiles.map(p => `
-                <div class="profile-card-item">
-                    <div class="profile-info">
-                        <div class="profile-info-name">
-                            ${p.ssh_enabled ? '<i class="bi bi-shield-lock" style="color:var(--amber);margin-right:4px;" title="SSH туннель"></i>' : ''}
-                            ${p.db_type === 'oracle' ? '<i class="bi bi-database-fill-gear" style="color:var(--red);margin-right:4px;" title="Oracle"></i>' : '<i class="bi bi-database-fill" style="color:var(--blue);margin-right:4px;" title="PostgreSQL"></i>'}
-                            ${escapeHtml(p.name)}
-                        </div>
-                        <div class="profile-info-host">${escapeHtml(p.user)}@${escapeHtml(p.host)}:${p.port} / ${escapeHtml(p.database)}</div>
-                    </div>
-                    <div class="profile-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="ProfileManager.editProfile(${p.id})" title="Редактировать">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <button class="btn btn-success btn-sm" onclick="ProfileManager.connectAndGo(${p.id})" title="Подключиться">
-                            <i class="bi bi-arrow-right"></i>
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="ProfileManager.deleteProfile(${p.id})" title="Удалить">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+            empty.style.display = 'none';
+            grid.innerHTML = data.profiles.map(p => this.createTileHTML(p)).join('');
+            
+            // Вешаем обработчики
+            this.attachTileListeners();
+
         } catch (error) {
             console.error('Ошибка загрузки профилей:', error);
         }
+    },
+
+    createTileHTML(p) {
+        const dbIcon = p.db_type === 'oracle' ? '🔴' : '🐘';
+        const dbLabel = p.db_type === 'oracle' ? 'Oracle' : 'PostgreSQL';
+        const tileClass = p.db_type === 'oracle' ? 'oracle' : 'postgresql';
+        const sshBadge = p.ssh_enabled ? '<div class="profile-tile-badge ssh"><i class="bi bi-shield-lock"></i>SSH</div>' : '';
+        
+        return `
+            <div class="profile-tile" data-profile-id="${p.id}">
+                <div class="profile-tile-header">
+                    <div class="profile-tile-icon ${tileClass}">${dbIcon}</div>
+                    <div class="profile-tile-badges">
+                        ${sshBadge}
+                    </div>
+                </div>
+                
+                <div class="profile-tile-info">
+                    <div class="profile-tile-name">
+                        ${escapeHtml(p.name)}
+                        <span class="profile-tile-name-icon">${dbLabel}</span>
+                    </div>
+                    
+                    <div class="profile-tile-host">
+                        <strong>${escapeHtml(p.user)}</strong>@<strong>${escapeHtml(p.host)}</strong>:<strong>${p.port}</strong>
+                        <br>
+                        <span style="color:var(--text-3);">/ ${escapeHtml(p.database)}</span>
+                    </div>
+                    
+                    <div class="profile-tile-meta">
+                        <div class="profile-tile-meta-item">
+                            <i class="bi bi-server"></i> ${escapeHtml(p.host)}
+                        </div>
+                        <div class="profile-tile-meta-item">
+                            <i class="bi bi-database"></i> ${escapeHtml(p.database)}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="profile-tile-actions">
+                    <button class="profile-tile-action-btn connect" onclick="event.stopPropagation(); ProfileManager.connectAndGo(${p.id})">
+                        <i class="bi bi-arrow-right"></i> Подключиться
+                    </button>
+                    <button class="profile-tile-action-btn" onclick="event.stopPropagation(); ProfileManager.editProfile(${p.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="profile-tile-action-btn danger" onclick="event.stopPropagation(); ProfileManager.deleteProfile(${p.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    attachTileListeners() {
+        document.querySelectorAll('.profile-tile').forEach(tile => {
+            tile.addEventListener('click', (e) => {
+                if (e.target.closest('button')) return;
+                const profileId = parseInt(tile.dataset.profileId);
+                ProfileManager.connectAndGo(profileId);
+            });
+        });
     },
 
     async connectAndGo(profileId) {
@@ -274,7 +626,7 @@ const ProfileManager = {
             });
             
             if (res.ok) {
-                window.location.href = '/';
+                window.location.href = '/monitoring';
             } else {
                 alert('Ошибка подключения. Проверьте данные.');
             }
@@ -294,21 +646,15 @@ const ProfileManager = {
                         if (el) el.value = val || '';
                     };
                     
-                    // Основные поля БД
                     setVal('profileId', p.id);
                     setVal('profileName', p.name);
-                    
-                    // ✅ НОВОЕ: Тип БД
-                    const dbType = p.db_type || 'postgresql';
-                    setVal('profileDbType', dbType);
-                    
+                    setVal('profileDbType', p.db_type || 'postgresql');
                     setVal('profileHost', p.host);
                     setVal('profilePort', p.port);
                     setVal('profileDatabase', p.database);
                     setVal('profileUser', p.user);
                     setVal('profilePassword', p.password);
                     
-                    // SSH настройки
                     const sshEnabled = p.ssh_enabled || false;
                     const sshEnabledEl = document.getElementById('profileSshEnabled');
                     if (sshEnabledEl) sshEnabledEl.checked = sshEnabled;
@@ -361,8 +707,6 @@ function openProfileModal() {
     document.getElementById('modalBackdrop').style.display = 'block';
     document.getElementById('profileModalTitle').innerHTML = '<i class="bi bi-plus"></i> Новое подключение';
     document.getElementById('profileId').value = '';
-    
-    // Сброс подсветки ошибок
     clearValidationErrors();
 }
 
@@ -370,15 +714,12 @@ function closeProfileModal() {
     document.getElementById('profileModal').style.display = 'none';
     document.getElementById('modalBackdrop').style.display = 'none';
     
-    // ✅ ИСПРАВЛЕНО: Полная очистка формы
     const form = document.getElementById('profileForm');
     form.reset();
     
-    // Возвращаем значения по умолчанию
     document.getElementById('profileDbType').value = 'postgresql';
     document.getElementById('profilePort').value = '5432';
     document.getElementById('profileRemoteDbPort').value = '5432';
-    
     document.getElementById('testResult').style.display = 'none';
     document.getElementById('sshFields').style.display = 'none';
     document.getElementById('profileSshEnabled').checked = false;
@@ -393,29 +734,10 @@ function clearValidationErrors() {
     document.querySelectorAll('.validation-error').forEach(el => el.remove());
 }
 
-function showValidationError(fieldId, message) {
-    const field = document.getElementById(fieldId);
-    if (field) {
-        field.style.borderColor = 'var(--red)';
-        // Удаляем старое сообщение
-        const existingError = field.parentNode.querySelector('.validation-error');
-        if (existingError) existingError.remove();
-        // Добавляем сообщение
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'validation-error';
-        errorDiv.style.color = 'var(--red)';
-        errorDiv.style.fontSize = '11px';
-        errorDiv.style.marginTop = '4px';
-        errorDiv.textContent = message;
-        field.parentNode.appendChild(errorDiv);
-    }
-}
-
 function validateProfileForm() {
     clearValidationErrors();
     let isValid = true;
     
-    // Безопасное получение значения поля
     const getVal = (id) => {
         const el = document.getElementById(id);
         return el && el.value ? el.value.trim() : '';
@@ -440,7 +762,6 @@ function validateProfileForm() {
         isValid = false;
     }
     
-    // ✅ ДОБАВЛЕНО: Валидация типа БД
     if (!dbType) {
         showValidationError('profileDbType', 'Выберите тип БД');
         isValid = false;
@@ -467,7 +788,6 @@ function validateProfileForm() {
         isValid = false;
     }
     
-    // Валидация SSH полей
     const sshEnabled = document.getElementById('profileSshEnabled') ? document.getElementById('profileSshEnabled').checked : false;
     if (sshEnabled) {
         const sshHost = getVal('profileSshHost');
@@ -506,6 +826,22 @@ function validateProfileForm() {
     return isValid;
 }
 
+function showValidationError(fieldId, message) {
+    const field = document.getElementById(fieldId);
+    if (field) {
+        field.style.borderColor = 'var(--red)';
+        const existingError = field.parentNode.querySelector('.validation-error');
+        if (existingError) existingError.remove();
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'validation-error';
+        errorDiv.style.color = 'var(--red)';
+        errorDiv.style.fontSize = '11px';
+        errorDiv.style.marginTop = '4px';
+        errorDiv.textContent = message;
+        field.parentNode.appendChild(errorDiv);
+    }
+}
+
 function toggleSshFields() {
     const enabled = document.getElementById('profileSshEnabled')?.checked || false;
     const sshFields = document.getElementById('sshFields');
@@ -523,13 +859,11 @@ function toggleSshAuthFields() {
     if (keyField) keyField.style.display = authType === 'key' ? 'block' : 'none';
 }
 
-// ✅ НОВАЯ ФУНКЦИЯ: Обновление порта по умолчанию при смене типа БД
 function updatePortForDbType() {
     const dbType = document.getElementById('profileDbType')?.value;
     const portField = document.getElementById('profilePort');
     const remotePortField = document.getElementById('profileRemoteDbPort');
     
-    // Предлагаем стандартный порт для типа БД
     if (dbType === 'postgresql') {
         if (!portField.value || portField.value === '1521') {
             portField.value = 5432;
@@ -547,8 +881,7 @@ function updatePortForDbType() {
     }
 }
 
-function testProfileConnection() {
-    // ✅ ИСПРАВЛЕНО: Сначала валидируем
+async function testProfileConnection() {
     if (!validateProfileForm()) {
         return;
     }
@@ -560,13 +893,6 @@ function testProfileConnection() {
 
     const dbType = getVal('profileDbType') || 'postgresql';
     const sshEnabled = document.getElementById('profileSshEnabled')?.checked || false;
-
-    console.log('[TEST] Testing connection:', {
-        dbType: dbType,
-        host: getVal('profileHost'),
-        port: document.getElementById('profilePort')?.value,
-        sshEnabled: sshEnabled
-    });
 
     const data = {
         db_type: dbType,
@@ -594,19 +920,13 @@ function testProfileConnection() {
 
     const endpoint = data.ssh_enabled ? '/api/db-profiles/test-ssh' : '/api/db-profiles/test';
     
-    console.log('[TEST] Sending request to:', endpoint, data);
-    
     fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
     })
-    .then(r => {
-        console.log('[TEST] Response status:', r.status);
-        return r.json();
-    })
+    .then(r => r.json())
     .then(result => {
-        console.log('[TEST] Result:', result);
         if (result.success) {
             resultDiv.innerHTML = '<i class="bi bi-check-circle"></i> ✓ ' + (result.message || 'Подключение успешно!') + (result.version ? '<br><small>' + result.version + '</small>' : '');
             resultDiv.style.borderLeftColor = 'var(--green)';
@@ -620,7 +940,6 @@ function testProfileConnection() {
         }
     })
     .catch(error => {
-        console.error('[TEST] Error:', error);
         resultDiv.innerHTML = '<i class="bi bi-exclamation-circle"></i> Ошибка: ' + error.message;
         resultDiv.style.borderLeftColor = 'var(--red)';
         resultDiv.style.background = 'rgba(224,82,82,.1)';
@@ -631,10 +950,7 @@ function testProfileConnection() {
 document.getElementById('profileForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    console.log('[SAVE] Form submitted');
-    
     if (!validateProfileForm()) {
-        console.log('[SAVE] Validation failed');
         return;
     }
 
@@ -665,13 +981,8 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
         remote_db_port: sshEnabled ? (parseInt(document.getElementById('profileRemoteDbPort')?.value) || (dbType === 'oracle' ? 1521 : 5432)) : null
     };
 
-    console.log('[SAVE] Profile data:', JSON.stringify(profile, null, 2));
-
     if (ProfileManager.currentEditId) {
         profile.id = ProfileManager.currentEditId;
-        console.log('[SAVE] Updating existing profile ID:', profile.id);
-    } else {
-        console.log('[SAVE] Creating new profile');
     }
 
     try {
@@ -681,26 +992,22 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
             body: JSON.stringify(profile)
         });
 
-        console.log('[SAVE] Response status:', res.status);
-
         if (res.ok) {
-            console.log('[SAVE] Success!');
             closeProfileModal();
             ProfileManager.loadProfiles();
         } else {
             const err = await res.text();
-            console.error('[SAVE] Error:', err);
             alert('Ошибка сохранения: ' + err);
         }
     } catch (error) {
-        console.error('[SAVE] Exception:', error);
         alert('Ошибка: ' + error.message);
     }
 });
 
 document.getElementById('modalBackdrop').addEventListener('click', closeProfileModal);
-
-document.querySelector('[data-action="new-profile"]').addEventListener('click', openProfileModal);
+document.querySelectorAll('[data-action="new-profile"]').forEach(btn => {
+    btn.addEventListener('click', openProfileModal);
+});
 
 function escapeHtml(text) {
     if (text == null) return '';
@@ -708,7 +1015,6 @@ function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, m => map[m]);
 }
 
-// Загружаем профили при открытии страницы
 ProfileManager.loadProfiles();
 </script>
 

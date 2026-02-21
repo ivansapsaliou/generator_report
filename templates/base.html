@@ -20,36 +20,56 @@
     <aside class="sidebar">
         <a href="{{ url_for('index') }}" class="sidebar-brand" title="Главная">NL</a>
         <nav class="sidebar-nav">
+            <!-- 🎉 НОВАЯ КНОПКА: Подключение к БД -->
+            <a href="{{ url_for('dashboard') }}"
+                class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
+                title="Выбор подключения">
+                <i class="bi bi-database"></i>
+            </a>
+
+            <a href="{{ url_for('monitoring') }}"
+                class="sidebar-link {% if request.endpoint == 'monitoring' %}active{% endif %}"
+                title="Мониторинг">
+                <i class="bi bi-activity"></i>
+            </a>
+
             <a href="{{ url_for('index') }}"
                class="sidebar-link {% if request.endpoint == 'index' %}active{% endif %}"
                title="Отчёты">
                 <i class="bi bi-bar-chart-line"></i>
             </a>
+
             <a href="{{ url_for('scheduled_reports') }}"
                class="sidebar-link {% if request.endpoint == 'scheduled_reports' %}active{% endif %}"
                title="Запланированные отчёты">
                 <i class="bi bi-clock"></i>
             </a>
-            <a href="{{ url_for('monitoring') }}"
-               class="sidebar-link {% if request.endpoint == 'monitoring' %}active{% endif %}"
-               title="Мониторинг">
-                <i class="bi bi-activity"></i>
-            </a>
-            
+
             <a href="{{ url_for('network_builder') }}"
                class="sidebar-link {% if request.endpoint == 'network_builder' %}active{% endif %}"
                title="Конструктор сети">
                 <i class="bi bi-diagram-3"></i>
             </a>
-    
-            <!-- 🎉 НОВАЯ КНОПКА: Подключение к БД -->
-            <a href="{{ url_for('dashboard') }}"
-               class="sidebar-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
-               title="Выбор подключения">
-                <i class="bi bi-database"></i>
-            </a>
+
+            
+
             </a>
         </nav>
+        <!--<a href="{{ url_for('login') }}"
+               class="sidebar-link {% if request.endpoint == 'login' %}active{% endif %}"
+               title="Выход из системы">
+                <i class="bi bi-box-arrow-right"></i>
+            </a>
+        <div class="dropdown-divider"></div>
+            <button class="dropdown-link logout-btn" onclick="handleLogout()">
+                <i class="bi bi-box-arrow-right"></i>
+                Выход из системы
+            </button>-->
+        <div class="sidebar-footer">
+            <button id="Logout" class="theme-toggle" onclick="handleLogout()" title="Выход из системы">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
         <div class="sidebar-footer">
             <button id="themeToggle" class="theme-toggle" title="Переключить тему">
                 <i class="bi bi-sun"></i>
@@ -119,6 +139,29 @@
         applyTheme(next);
     });
 })();
+
+// Разлогинивание
+async function handleLogout() {
+    if (!confirm('Вы уверены, что хотите выйти из системы?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            // Перенаправляем на страницу входа
+            window.location.href = '/login';
+        }
+    } catch (error) {
+        console.error('Ошибка выхода:', error);
+        // Даже если произойдёт ошибка, перенаправляем
+        window.location.href = '/login';
+    }
+}
 </script>
 
 <script>
@@ -139,7 +182,7 @@
         .catch(() => {
             document.getElementById('activeProfileInfo').style.display = 'none';
         });
-    </script>
+</script>
 
 {% block extra_js %}{% endblock %}
 </body>

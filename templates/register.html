@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация — Report Builder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0d0d0d;
+            --bg-1: #141414;
+            --bg-2: #1c1c1c;
+            --text: #e8e3dc;
+            --text-2: #a09890;
+            --text-3: #5c5550;
+            --primary: #f0a843;
+            --green: #52b788;
+            --red: #e05252;
+        }
+
+        body.light-theme {
+            --bg: #f5f2ee;
+            --bg-1: #eeebe6;
+            --bg-2: #e8e4de;
+            --text: #1a1714;
+            --text-2: #5a5450;
+            --text-3: #9a9490;
+            --primary: #b8680a;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            font-family: 'Geist Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .register-container {
+            display: flex;
+            min-height: 100vh;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--bg) 0%, var(--bg-2) 100%);
+        }
+
+        .register-card {
+            background: var(--bg-1);
+            border: 1px solid var(--bg-2);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 450px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+            animation: slideUp 0.5s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .register-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .register-logo {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--primary), #f5b85a);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 32px;
+            font-weight: 800;
+            color: #0d0d0d;
+        }
+
+        .register-title {
+            font-size: 24px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            color: var(--text);
+            letter-spacing: -0.5px;
+        }
+
+        .register-subtitle {
+            font-size: 13px;
+            color: var(--text-3);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-3);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--bg-2);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 13px;
+            transition: all 0.2s ease;
+        }
+
+        .form-input::placeholder {
+            color: var(--text-3);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(240, 168, 67, 0.1);
+        }
+
+        .form-input-group {
+            position: relative;
+        }
+
+        .form-input-icon-left {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-3);
+            font-size: 16px;
+            pointer-events: none;
+        }
+
+        .form-input.with-icon-left {
+            padding-left: 40px;
+        }
+
+        .error-message {
+            color: var(--red);
+            font-size: 12px;
+            margin-top: 6px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .alert {
+            padding: 12px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-danger {
+            background: rgba(224, 82, 82, 0.1);
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .alert-info {
+            background: rgba(91, 141, 238, 0.1);
+            border-color: #5b8dee;
+            color: #5b8dee;
+        }
+
+        .alert i {
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .register-button {
+            width: 100%;
+            padding: 11px 16px;
+            background: var(--primary);
+            color: #0d0d0d;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .register-button:hover {
+            background: #f5b85a;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(240, 168, 67, 0.3);
+        }
+
+        .register-button:active {
+            transform: translateY(0);
+        }
+
+        .register-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(13, 13, 13, 0.3);
+            border-top-color: #0d0d0d;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .register-footer {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 12px;
+            color: var(--text-3);
+        }
+
+        .register-footer-link {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s ease;
+        }
+
+        .register-footer-link:hover {
+            color: #f5b85a;
+        }
+
+        .password-strength {
+            font-size: 10px;
+            margin-top: 6px;
+            display: none;
+            padding: 6px 8px;
+            border-radius: 4px;
+            background: var(--bg-2);
+        }
+
+        .password-strength.show {
+            display: block;
+        }
+
+        .strength-bar {
+            width: 100%;
+            height: 4px;
+            background: var(--bg);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 4px;
+        }
+
+        .strength-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        .strength-fill.weak {
+            width: 33%;
+            background: var(--red);
+        }
+
+        .strength-fill.medium {
+            width: 66%;
+            background: var(--primary);
+        }
+
+        .strength-fill.strong {
+            width: 100%;
+            background: var(--green);
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            width: 40px;
+            height: 40px;
+            border: 1px solid var(--bg-2);
+            background: transparent;
+            color: var(--text-2);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            z-index: 100;
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(240, 168, 67, 0.1);
+        }
+
+        .logo-mini {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            font-family: 'Syne', sans-serif;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            color: var(--primary);
+        }
+
+        @media (max-width: 480px) {
+            .register-card {
+                padding: 28px;
+            }
+
+            .register-logo {
+                width: 56px;
+                height: 56px;
+                font-size: 28px;
+            }
+
+            .register-title {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ЛОГОТИП -->
+    <div class="logo-mini">NL</div>
+
+    <!-- ПЕРЕКЛЮЧАТЕЛЬ ТЕМЫ -->
+    <button class="theme-toggle" id="themeToggle" title="Переключить тему">
+        <i class="bi bi-sun"></i>
+    </button>
+
+    <!-- ГЛАВНЫЙ КОНТЕЙНЕР -->
+    <div class="register-container">
+        <div class="register-card">
+            <!-- ЗАГОЛОВОК -->
+            <div class="register-header">
+                <div class="register-logo">✨</div>
+                <div class="register-title">Создать аккаунт</div>
+                <div class="register-subtitle">Присоединиться к Report Builder</div>
+            </div>
+
+            <!-- УВЕДОМЛЕНИЕ ОБ ОШИБКЕ -->
+            {% if error %}
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-circle"></i>
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <!-- ФОРМА -->
+            <form id="registerForm" onsubmit="handleRegister(event)">
+                <!-- ИМЕНА ПОЛЬЗОВАТЕЛЯ -->
+                <div class="form-group">
+                    <label class="form-label" for="username">
+                        <i class="bi bi-person"></i> Имя пользователя
+                    </label>
+                    <div class="form-input-group">
+                        <i class="form-input-icon-left bi bi-person-fill"></i>
+                        <input
+                            type="text"
+                            id="username"
+                            class="form-input with-icon-left"
+                            placeholder="admin"
+                            required
+                            autocomplete="username"
+                        />
+                    </div>
+                    <div class="error-message" data-field="username"></div>
+                </div>
+
+                <!-- EMAIL -->
+                <div class="form-group">
+                    <label class="form-label" for="email">
+                        <i class="bi bi-envelope"></i> Email
+                    </label>
+                    <div class="form-input-group">
+                        <i class="form-input-icon-left bi bi-envelope-fill"></i>
+                        <input
+                            type="email"
+                            id="email"
+                            class="form-input with-icon-left"
+                            placeholder="user@example.com"
+                            required
+                            autocomplete="email"
+                        />
+                    </div>
+                    <div class="error-message" data-field="email"></div>
+                </div>
+
+                <!-- ПАРОЛЬ -->
+                <div class="form-group">
+                    <label class="form-label" for="password">
+                        <i class="bi bi-lock"></i> Пароль
+                    </label>
+                    <div class="form-input-group">
+                        <i class="form-input-icon-left bi bi-lock-fill"></i>
+                        <input
+                            type="password"
+                            id="password"
+                            class="form-input with-icon-left"
+                            placeholder="••••••••"
+                            required
+                            autocomplete="new-password"
+                        />
+                    </div>
+                    <div class="password-strength">
+                        <div class="strength-bar">
+                            <div class="strength-fill"></div>
+                        </div>
+                        <span id="strengthText">Слабый</span>
+                    </div>
+                    <div class="error-message" data-field="password"></div>
+                </div>
+
+                <!-- ПОДТВЕРЖДЕНИЕ ПАРОЛЯ -->
+                <div class="form-group">
+                    <label class="form-label" for="confirmPassword">
+                        <i class="bi bi-lock-check"></i> Подтвердить пароль
+                    </label>
+                    <div class="form-input-group">
+                        <i class="form-input-icon-left bi bi-lock-fill"></i>
+                        <input
+                            type="password"
+                            id="confirmPassword"
+                            class="form-input with-icon-left"
+                            placeholder="••••••••"
+                            required
+                            autocomplete="new-password"
+                        />
+                    </div>
+                    <div class="error-message" data-field="confirmPassword"></div>
+                </div>
+
+                <!-- КНОПКА РЕГИСТРАЦИИ -->
+                <button type="submit" class="register-button">
+                    <span id="buttonText"><i class="bi bi-arrow-right"></i> Создать аккаунт</span>
+                </button>
+            </form>
+
+            <!-- ССЫЛКА НА ВХОД -->
+            <div class="register-footer">
+                Уже есть аккаунт?
+                <a href="{{ url_for('login') }}" class="register-footer-link">
+                    Войти →
+                </a>
+            </div>
+
+            <!-- ИНФОРМАЦИЯ -->
+            <div class="register-footer" style="margin-top: 28px; font-size: 11px; opacity: 0.6;">
+                <i class="bi bi-shield-check"></i> Ваши данные защищены
+                <br>
+                Report Builder v1.18
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Тема
+        (function() {
+            const toggle = document.getElementById('themeToggle');
+            const saved = localStorage.getItem('theme') || 'dark';
+            
+            function applyTheme(t) {
+                if (t === 'light') {
+                    document.body.classList.add('light-theme');
+                    toggle.innerHTML = '<i class="bi bi-moon"></i>';
+                } else {
+                    document.body.classList.remove('light-theme');
+                    toggle.innerHTML = '<i class="bi bi-sun"></i>';
+                }
+            }
+            
+            applyTheme(saved);
+            toggle.addEventListener('click', () => {
+                const next = document.body.classList.contains('light-theme') ? 'dark' : 'light';
+                localStorage.setItem('theme', next);
+                applyTheme(next);
+            });
+        })();
+
+        // Проверка силы пароля
+        document.getElementById('password').addEventListener('input', function() {
+            const password = this.value;
+            const strengthEl = document.querySelector('.password-strength');
+            const strengthFill = document.querySelector('.strength-fill');
+            const strengthText = document.getElementById('strengthText');
+            
+            if (!password) {
+                strengthEl.classList.remove('show');
+                return;
+            }
+            
+            strengthEl.classList.add('show');
+            
+            let strength = 'weak';
+            let score = 0;
+            
+            if (password.length >= 8) score++;
+            if (password.length >= 12) score++;
+            if (/[a-z]/.test(password)) score++;
+            if (/[A-Z]/.test(password)) score++;
+            if (/[0-9]/.test(password)) score++;
+            if (/[^a-zA-Z0-9]/.test(password)) score++;
+            
+            if (score >= 4) strength = 'strong';
+            else if (score >= 2) strength = 'medium';
+            else strength = 'weak';
+            
+            strengthFill.className = 'strength-fill ' + strength;
+            
+            const texts = {
+                weak: 'Слабый пароль',
+                medium: 'Средний пароль',
+                strong: 'Сильный пароль'
+            };
+            
+            strengthText.textContent = texts[strength];
+        });
+
+        // Обработка формы
+        async function handleRegister(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const button = e.target.querySelector('button[type="submit"]');
+            const buttonText = document.getElementById('buttonText');
+            
+            clearErrors();
+            
+            // Валидация
+            let hasError = false;
+            
+            if (!username || username.length < 3) {
+                showError('username', 'Имя пользователя должно быть не менее 3 символов');
+                hasError = true;
+            }
+            
+            if (!email || !email.includes('@')) {
+                showError('email', 'Укажите корректный email');
+                hasError = true;
+            }
+            
+            if (!password || password.length < 6) {
+                showError('password', 'Пароль должен быть не менее 6 символов');
+                hasError = true;
+            }
+            
+            if (password !== confirmPassword) {
+                showError('confirmPassword', 'Пароли не совпадают');
+                hasError = true;
+            }
+            
+            if (hasError) return;
+            
+            // Отправляем
+            button.disabled = true;
+            buttonText.innerHTML = '<span class="spinner"></span> Создание...';
+            
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password, confirm_password: confirmPassword })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Успех - переходим на dashboard
+                    window.location.href = data.redirect || '/dashboard';
+                } else {
+                    // Ошибка
+                    showAlert(data.error || 'Ошибка регистрации', 'danger');
+                    button.disabled = false;
+                    buttonText.innerHTML = '<i class="bi bi-arrow-right"></i> Создать аккаунт';
+                }
+            } catch (error) {
+                showAlert('Ошибка подключения: ' + error.message, 'danger');
+                button.disabled = false;
+                buttonText.innerHTML = '<i class="bi bi-arrow-right"></i> Создать аккаунт';
+            }
+        }
+
+        function showError(field, message) {
+            const errorEl = document.querySelector(`.error-message[data-field="${field}"]`);
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.add('show');
+            }
+        }
+
+        function clearErrors() {
+            document.querySelectorAll('.error-message').forEach(el => {
+                el.textContent = '';
+                el.classList.remove('show');
+            });
+        }
+
+        function showAlert(message, type) {
+            const oldAlert = document.querySelector('.alert');
+            if (oldAlert) oldAlert.remove();
+            
+            const card = document.querySelector('.register-card');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.innerHTML = `
+                <i class="bi bi-${type === 'danger' ? 'exclamation-circle' : 'check-circle'}"></i>
+                ${escapeHtml(message)}
+            `;
+            card.insertBefore(alert, card.firstChild);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Очистка ошибок при вводе
+        document.getElementById('username').addEventListener('input', clearErrors);
+        document.getElementById('email').addEventListener('input', clearErrors);
+        document.getElementById('password').addEventListener('input', clearErrors);
+        document.getElementById('confirmPassword').addEventListener('input', clearErrors);
+    </script>
+</body>
+</html>

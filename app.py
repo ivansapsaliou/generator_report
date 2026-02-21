@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, flash, redirect, url_for, Response, session
+from flask import Flask, render_template, jsonify, request, flash, redirect, url_for, Response, session, flash
 import psycopg2
 import psycopg2.extras
 import json
@@ -9,11 +9,13 @@ from psycopg2.extensions import AsIs
 from collections import defaultdict
 import base64
 import os
-from datetime import datetime
+from datetime import datetime,timedelta
 import io
 import csv
 import threading
 import time
+from functools import wraps
+from auth_manager import AuthManager
 
 from pg_sessions import PostgreSQLSessionManager
 
@@ -74,6 +76,8 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True  # Защита от XSS
 app.config['SESSION_COOKIE_SECURE'] = False  # True если используется HTTPS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Защита от CSRF
 
+AuthManager.init_db()
+
 from flask_session import Session
 session_obj = Session()
 session_obj.init_app(app)
@@ -91,6 +95,49 @@ pg_session_manager = PostgreSQLSessionManager(app.config)
 # ─────────────────────────────────────────────
 # DB CONNECTION (используется модуль db_connection)
 # ─────────────────────────────────────────────
+
+def login_required(f):
+    """Декоратор для проверки авторизации"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_token = session.get('auth_token')
+        
+        if not auth_token:
+            return redirect(url_for('login'))
+        
+        # Проверяем валидность токена
+        result = AuthManager.verify_session(auth_token)
+        
+        if not result['success']:
+            # Сессия истекла или неверна
+            session.clear()
+            return redirect(url_for('login'))
+        
+        # Добавляем user_id в контекст
+        request.user_id = result['user_id']
+        request.user = AuthManager.get_user_by_id(result['user_id'])
+        
+        return f(*args, **kwargs)
+    
+    return decorated_function
+
+
+def redirect_if_logged_in(f):
+    """Редирект если уже авторизован"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_token = session.get('auth_token')
+        
+        if auth_token:
+            # Проверяем валидность
+            result = AuthManager.verify_session(auth_token)
+            if result['success']:
+                return redirect(url_for('dashboard'))
+        
+        return f(*args, **kwargs)
+    
+    return decorated_function
+
 
 # Функция get_db_connection теперь импортируется из db_connection
 # Для обратной совместимости создаем обертку
@@ -175,10 +222,216 @@ active_profile_id = None
 from db_profiles import DatabaseProfileManager
 from flask import session
 
+# ═════════════════════════════════════════════════════════════════════════════
+# ROUTES - АВТОРИЗАЦИЯ
+# ═════════════════════════════════════════════════════════════════════════════
+
+@app.route('/login', methods=['GET', 'POST'])
+@redirect_if_logged_in
+def login():
+    """Страница входа"""
+    if request.method == 'POST':
+        data = request.json or request.form
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
+        
+        # Аутентификация
+        result = AuthManager.authenticate_user(username, password)
+        
+        if not result['success']:
+            if request.is_json:
+                return jsonify({'success': False, 'error': result['message']}), 401
+            else:
+                return render_template('login.html', error=result['message']), 401
+        
+        # Создаём сессию
+        user_id = result['user_id']
+        session_result = AuthManager.create_session(
+            user_id,
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+        
+        if session_result['success']:
+            session['auth_token'] = session_result['token']
+            session['user_id'] = user_id
+            session['username'] = result['username']
+            session.permanent = True
+            
+            if request.is_json:
+                return jsonify({'success': True, 'redirect': url_for('dashboard')})
+            else:
+                return redirect(url_for('dashboard'))
+        else:
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Ошибка создания сессии'}), 500
+            else:
+                return render_template('login.html', error='Ошибка создания сессии'), 500
+    
+    return render_template('login.html')
+
+
+@app.route('/register', methods=['GET', 'POST'])
+@redirect_if_logged_in
+def register():
+    """Страница регистрации"""
+    if request.method == 'POST':
+        data = request.json or request.form
+        username = data.get('username', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '')
+        confirm_password = data.get('confirm_password', '')
+        
+        # Проверяем совпадение паролей
+        if password != confirm_password:
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Пароли не совпадают'}), 400
+            else:
+                return render_template('register.html', error='Пароли не совпадают'), 400
+        
+        # Регистрируем пользователя
+        result = AuthManager.register_user(username, email, password)
+        
+        if not result['success']:
+            if request.is_json:
+                return jsonify({'success': False, 'error': result['message']}), 400
+            else:
+                return render_template('register.html', error=result['message']), 400
+        
+        # После успешной регистрации - сразу входим
+        auth_result = AuthManager.authenticate_user(username, password)
+        
+        if auth_result['success']:
+            session_result = AuthManager.create_session(
+                auth_result['user_id'],
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+            
+            if session_result['success']:
+                session['auth_token'] = session_result['token']
+                session['user_id'] = auth_result['user_id']
+                session['username'] = auth_result['username']
+                session.permanent = True
+                
+                if request.is_json:
+                    return jsonify({'success': True, 'redirect': url_for('dashboard')})
+                else:
+                    return redirect(url_for('dashboard'))
+        
+        if request.is_json:
+            return jsonify({'success': True, 'message': 'Регистрация успешна. Пожалуйста, войдите.'})
+        else:
+            return redirect(url_for('login'))
+    
+    return render_template('register.html')
+
+
+@app.route('/logout', methods=['POST', 'GET'])
+@login_required
+def logout():
+    """Выход из системы"""
+    auth_token = session.get('auth_token')
+    
+    if auth_token:
+        AuthManager.delete_session(auth_token)
+    
+    session.clear()
+    
+    if request.method == 'POST' and request.is_json:
+        return jsonify({'success': True})
+    else:
+        return redirect(url_for('login'))
+
+
+@app.route('/api/auth/profile', methods=['GET'])
+@login_required
+def get_profile():
+    """Получить профиль текущего пользователя"""
+    return jsonify({
+        'success': True,
+        'user': {
+            'id': request.user['id'],
+            'username': request.user['username'],
+            'email': request.user['email'],
+            'created_at': request.user['created_at'],
+            'last_login': request.user['last_login']
+        }
+    })
+
+
+@app.route('/api/auth/change-password', methods=['POST'])
+@login_required
+def change_password_api():
+    """Изменить пароль"""
+    data = request.json or {}
+    
+    old_password = data.get('old_password', '')
+    new_password = data.get('new_password', '')
+    confirm_password = data.get('confirm_password', '')
+    
+    if new_password != confirm_password:
+        return jsonify({'success': False, 'error': 'Новые пароли не совпадают'}), 400
+    
+    result = AuthManager.change_password(request.user_id, old_password, new_password)
+    
+    if result['success']:
+        return jsonify({'success': True, 'message': result['message']})
+    else:
+        return jsonify({'success': False, 'error': result['message']}), 400
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ROUTES - ОСНОВНЫЕ СТРАНИЦЫ
+# ═════════════════════════════════════════════════════════════════════════════
+
+@app.route('/')
+@login_required
+def index():
+    """Главная страница - требует авторизацию"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT * FROM report_get_tables('public') ORDER BY table_name")
+        tables = cur.fetchall()
+        cur.close()
+        conn.close()
+        return render_template('index.html', tables=tables, user=request.user)
+    except Exception as e:
+        flash(f'Ошибка при загрузке таблиц: {str(e)}', 'danger')
+        return render_template('index.html', tables=[], user=request.user)
+
+
 @app.route('/dashboard')
+@login_required
 def dashboard():
-    """Показать Dashboard с выбором подключения к БД"""
-    return render_template('dashboard.html')
+    """Dashboard - требует авторизацию"""
+    return render_template('dashboard.html', user=request.user)
+
+
+#@app.route('/report-builder')
+#@login_required
+#def report_builder():
+#    """Report Builder - требует авторизацию"""
+#    # Ваш код для report builder
+#    return render_template('report_builder.html', user=request.user)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ERROR HANDLERS
+# ═════════════════════════════════════════════════════════════════════════════
+
+@app.errorhandler(404)
+def not_found(error):
+    """Обработка 404 ошибок"""
+    return render_template('404.html'), 404
+
+
+@app.errorhandler(500)
+def server_error(error):
+    """Обработка 500 ошибок"""
+    return render_template('500.html'), 500
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # DATABASE PROFILES API
@@ -368,19 +621,19 @@ def select_db_profile():
 # MAIN ROUTES
 # ─────────────────────────────────────────────
 
-@app.route('/')
-def index():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT * FROM report_get_tables('public') ORDER BY table_name")
-        tables = cur.fetchall()
-        cur.close()
-        conn.close()
-        return render_template('index.html', tables=tables)
-    except Exception as e:
-        flash(f'Ошибка при загрузке таблиц: {str(e)}', 'danger')
-        return render_template('index.html', tables=[])
+#@app.route('/')
+#def index():
+#    try:
+#        conn = get_db_connection()
+#        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+#        cur.execute("SELECT * FROM report_get_tables('public') ORDER BY table_name")
+#        tables = cur.fetchall()
+#        cur.close()
+#        conn.close()
+#        return render_template('index.html', tables=tables)
+#    except Exception as e:
+#        flash(f'Ошибка при загрузке таблиц: {str(e)}', 'danger')
+#        return render_template('index.html', tables=[])
 
 
 @app.route('/api/get-tables', methods=['GET'])
@@ -579,6 +832,7 @@ def generate_report():
 
 
 @app.route('/report-builder')
+@login_required
 def report_builder():
     template_id = request.args.get('template_id')
     table = request.args.get('table')
