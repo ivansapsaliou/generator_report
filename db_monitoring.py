@@ -406,15 +406,17 @@ class DatabaseMonitoring:
                 
                 # 12. Tablespaces
                 try:
-                    cur.execute("""SELECT /*+parallel(4) */ 
+                    cur.execute("""
+                    SELECT /*+parallel(4) */ 
                         df.tablespace_name,
-                        ROUND(df.bytes/1024/1024/1024,2),
-                        ROUND((df.bytes-NVL(SUM(fs.bytes),0))/1024/1024/1024,2),
+                        ROUND(SUM(df.bytes)/1024/1024/1024,2),
+                        ROUND((SUM(df.bytes)-NVL(SUM(fs.bytes),0))/1024/1024/1024,2),
                         ROUND(NVL(SUM(fs.bytes),0)/1024/1024/1024,2),
-                        ROUND(((df.bytes-NVL(SUM(fs.bytes),0))/df.bytes)*100,2) 
-                    FROM dba_data_files df 
-                    LEFT JOIN dba_free_space fs ON df.tablespace_name=fs.tablespace_name 
-                    GROUP BY df.tablespace_name,df.bytes 
+                        ROUND(((SUM(df.bytes)-NVL(SUM(fs.bytes),0))/SUM(df.bytes))*100,2) 
+                    FROM (SELECT tablespace_name,SUM(bytes) as bytes FROM dba_data_files GROUP BY tablespace_name) df 
+                    LEFT JOIN (SELECT tablespace_name,SUM(bytes) as bytes FROM dba_free_space GROUP BY tablespace_name)
+                    fs ON df.tablespace_name=fs.tablespace_name 
+                    GROUP BY df.tablespace_name
                     ORDER BY 5 DESC""")
                     tsp = []
                     for row in cur.fetchall():

@@ -39,6 +39,7 @@ from db_connection import (
 from mail_utils import send_email, send_test_email
 
 from db_adapter import DatabaseAdapter  # ✅ НОВЫЙ ИМПОРТ
+from db_schema_dumper import SchemaDumper
 
 def get_db_connection(config=None, ssh_settings=None):
     """
@@ -497,6 +498,61 @@ def delete_db_profile(profile_id):
         DatabaseProfileManager.delete_profile(profile_id)
         return jsonify({'success': True})
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/db-profiles/<int:profile_id>/schema', methods=['GET'])
+def get_db_profile_schema(profile_id):
+    """
+    Получить структуру базы данных (дамп схемы без данных).
+    Поддерживает PostgreSQL и Oracle.
+    
+    Query params:
+        format: 'json' (по умолчанию) или 'sql'
+    """
+    try:
+        # Получаем параметры
+        format_type = request.args.get('format', 'json')
+        
+        # Подключаемся к БД
+        conn = get_db_connection_by_profile(profile_id)
+        if not conn:
+            return jsonify({'success': False, 'error': 'Не удалось подключиться к БД'}), 400
+        
+        # Получаем тип БД
+        from db_profiles import DatabaseProfileManager
+        profile = DatabaseProfileManager.get_profile(profile_id)
+        db_type = profile.get('db_type', 'postgresql')
+        
+        # Определяем тип для SchemaDumper
+        if db_type == 'oracle':
+            schema_db_type = DatabaseAdapter.ORACLE
+        else:
+            schema_db_type = DatabaseAdapter.POSTGRES
+        
+        # Получаем структуру
+        schema = SchemaDumper.get_schema(conn, schema_db_type)
+        
+        # Закрываем подключение
+        conn.close()
+        
+        if 'error' in schema:
+            return jsonify({'success': False, 'error': schema['error']}), 500
+        
+        # Форматируем ответ - всегда возвращаем SQL
+        import io
+        sql = SchemaDumper.generate_sql(schema, schema_db_type)
+        # Возвращаем как файл для скачивания
+        filename = f"schema_{profile.get('name', 'db')}_{db_type}.sql"
+        return Response(
+            io.BytesIO(sql.encode('utf-8')),
+            mimetype='text/plain; charset=utf-8',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -1992,12 +2048,16 @@ def get_network_tree():
     
     Query параметры:
         root_node_id: ID корневого узла (обязательный)
+        accounting_month: месяц для режима учета (формат YYYY-MM)
+        use_accounting: использовать режим способов учета (true/false)
     
     Returns:
         JSON с деревом узлов и связей
     """
     try:
         root_node_id = request.args.get('root_node_id', type=int)
+        accounting_month = request.args.get('accounting_month')
+        use_accounting = request.args.get('use_accounting', 'false').lower() == 'true'
         
         if not root_node_id or root_node_id <= 0:
             return jsonify({
@@ -2021,7 +2081,9 @@ def get_network_tree():
                     0::INT AS level,
                     ARRAY[%s::BIGINT] AS path,
                     %s::TEXT AS path_str,
-                    NULL::TEXT AS node_name
+                    NULL::TEXT AS node_name,
+                    NULL::TEXT AS node_type_name,
+                    %s::BIGINT AS node_calculate_parameter_id
                 
                 UNION ALL
                 
@@ -2034,7 +2096,9 @@ def get_network_tree():
                     (t.level + 1)::INT,
                     t.path || rlpc.node_calculate_parameter_id,
                     t.path_str || '->' || rlpc.node_calculate_parameter_id::TEXT,
-                    rn.node_name::TEXT
+                    rn.node_name::TEXT,
+                    rnt.node_type_name::TEXT,
+                    rlpc.node_calculate_parameter_id::BIGINT AS node_calculate_parameter_id
                 FROM tree_cte t
                 JOIN public.rul_line_parameter rlp
                     ON t.child_id = rlp.node_calculate_parameter_id
@@ -2044,6 +2108,8 @@ def get_network_tree():
                     ON rlpc.node_calculate_parameter_id = rncp.node_calculate_parameter_id
                 JOIN public.rul_node rn
                     ON rn.node_id = rncp.node_id
+                JOIN public.rul_node_type rnt
+                    ON rnt.node_type_id = rn.node_type_id
                 JOIN public.rul_line rl 
                     ON rl.line_id = rlp.line_id
                 WHERE t.level < 50  -- Защита от бесконечной рекурсии
@@ -2056,7 +2122,9 @@ def get_network_tree():
                 tree_cte.level,
                 tree_cte.path,
                 tree_cte.path_str,
-                tree_cte.node_name
+                tree_cte.node_name,
+                tree_cte.node_type_name,
+                tree_cte.node_calculate_parameter_id
             FROM tree_cte
             ORDER BY tree_cte.level, tree_cte.path_str
             LIMIT 10000
@@ -2064,7 +2132,7 @@ def get_network_tree():
         
         print(f"[NETWORK] Fetching tree for node ID: {root_node_id}")
         
-        cur.execute(query, (root_node_id, root_node_id, root_node_id, root_node_id))
+        cur.execute(query, (root_node_id, root_node_id, root_node_id, root_node_id, root_node_id))
         rows = cur.fetchall()
         
         result = []
@@ -2077,19 +2145,88 @@ def get_network_tree():
                 'level': row['level'],
                 'path': row['path'],
                 'path_str': row['path_str'],
-                'node_name': row['node_name']
+                'node_name': row['node_name'],
+                'node_type_name': row['node_type_name'],
+                'node_calculate_parameter_id': row['node_calculate_parameter_id']
             })
+        
+        # Если включен режим "Использовать способ учета"
+        accounting_data = {}
+        if use_accounting and accounting_month:
+            # Парсим месяц
+            try:
+                year, month = map(int, accounting_month.split('-'))
+                # Начало месяца
+                p_start_date = datetime(year, month, 1)
+                # Конец месяца
+                if month == 12:
+                    p_end_date = datetime(year + 1, 1, 1) - timedelta(seconds=1)
+                else:
+                    p_end_date = datetime(year, month + 1, 1) - timedelta(seconds=1)
+                
+                print(f"[NETWORK] Accounting mode: month={accounting_month}, p_start={p_start_date}, p_end={p_end_date}")
+                
+                # Собираем все node_calculate_parameter_id из результата
+                node_ids = list(set([row['node_calculate_parameter_id'] for row in result if row['node_calculate_parameter_id']]))
+                
+                if node_ids:
+                    # Запрос для получения способов учета с LEFT JOIN
+                    # Для каждого node_calculate_parameter_id получаем все способы учета, действующие в выбранный месяц
+                    acc_query = """
+                        SELECT 
+                            rat.accounting_type_name,
+                            ratn.node_calculate_parameter_id,
+                            GREATEST(COALESCE(ratn.start_date, '1970-01-01'::timestamp), %s::timestamp) as valid_start,
+                            LEAST(COALESCE(ratn.end_date, '2100-12-31'::timestamp), %s::timestamp) as valid_end
+                        FROM rul_accounting_type_node ratn
+                        JOIN rul_accounting_type rat 
+                            ON rat.accounting_type_id = ratn.accounting_type_id
+                        WHERE ratn.node_calculate_parameter_id = ANY(%s)
+                            AND (ratn.start_date IS NULL OR ratn.start_date <= %s::timestamp)
+                            AND (ratn.end_date IS NULL OR ratn.end_date >= %s::timestamp)
+                        ORDER BY rat.accounting_type_name
+                    """
+                    
+                    cur.execute(acc_query, (p_start_date, p_end_date, node_ids, p_end_date, p_start_date))
+                    acc_rows = cur.fetchall()
+                    
+                    # Группируем по node_calculate_parameter_id
+                    for acc_row in acc_rows:
+                        ncp_id = acc_row['node_calculate_parameter_id']
+                        if ncp_id not in accounting_data:
+                            accounting_data[ncp_id] = {
+                                'types': [],
+                                'valid_periods': []
+                            }
+                        accounting_data[ncp_id]['types'].append(acc_row['accounting_type_name'])
+                        accounting_data[ncp_id]['valid_periods'].append({
+                            'start': str(acc_row['valid_start']) if acc_row['valid_start'] else None,
+                            'end': str(acc_row['valid_end']) if acc_row['valid_end'] else None
+                        })
+                    
+                    print(f"[NETWORK] ✅ Found accounting data for {len(accounting_data)} nodes")
+                    
+            except Exception as acc_e:
+                print(f"[NETWORK] ❌ Error fetching accounting data: {acc_e}")
+                import traceback
+                traceback.print_exc()
         
         cur.close()
         conn.close()
         
         print(f"[NETWORK] ✅ Found {len(result)} nodes in tree")
         
-        return jsonify({
+        response_data = {
             'success': True,
             'data': result,
             'count': len(result)
-        })
+        }
+        
+        # Добавляем данные о способах учета если есть
+        if accounting_data:
+            response_data['accounting_data'] = accounting_data
+        
+        return jsonify(response_data)
         
     except Exception as e:
         print(f"[NETWORK] ❌ Error fetching network tree: {e}")
@@ -2169,6 +2306,129 @@ def get_network_info():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@app.route('/api/network/objects', methods=['GET'])
+def get_network_objects():
+    """
+    Получить список объектов для фильтрации.
+    
+    Returns:
+        JSON со списком объектов (object_id, object_name)
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        cur.execute("""
+            SELECT object_id, object_name 
+            FROM rul_object 
+            ORDER BY object_name
+        """)
+        
+        rows = cur.fetchall()
+        result = [{'object_id': row['object_id'], 'object_name': row['object_name']} for row in rows]
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'data': result})
+        
+    except Exception as e:
+        print(f"[NETWORK] Error getting objects: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/network/nodes', methods=['GET'])
+def get_network_nodes():
+    """
+    Получить список узлов для выбранного объекта.
+    
+    Query параметры:
+        object_id: ID объекта (обязательный)
+    
+    Returns:
+        JSON со списком узлов (node_id, node_name)
+    """
+    try:
+        object_id = request.args.get('object_id', type=int)
+        
+        if not object_id or object_id <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'object_id must be a positive integer'
+            }), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        cur.execute("""
+            SELECT node_id, node_name 
+            FROM rul_node 
+            WHERE object_id = %s
+            ORDER BY node_name
+        """, (object_id,))
+        
+        rows = cur.fetchall()
+        result = [{'node_id': row['node_id'], 'node_name': row['node_name']} for row in rows]
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'data': result})
+        
+    except Exception as e:
+        print(f"[NETWORK] Error getting nodes: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/network/parameters', methods=['GET'])
+def get_network_parameters():
+    """
+    Получить список расчетных параметров для выбранного узла.
+    
+    Query параметры:
+        node_id: ID узла (обязательный)
+    
+    Returns:
+        JSON со списком параметров (node_calculate_parameter_id, parameter_name)
+    """
+    try:
+        node_id = request.args.get('node_id', type=int)
+        
+        if not node_id or node_id <= 0:
+            return jsonify({
+                'success': False,
+                'error': 'node_id must be a positive integer'
+            }), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        cur.execute("""
+            SELECT rp.parameter_name || ' (' || ru.unit_name || ')' AS parameter_name,
+                   rncp.node_calculate_parameter_id
+            FROM rul_parameter rp
+            JOIN rul_node_calculate_parameter rncp
+                ON rp.parameter_id = rncp.parameter_id
+            JOIN rul_unit ru
+                ON ru.unit_id = rp.unit_id
+            WHERE rncp.node_id = %s
+            ORDER BY rp.parameter_name
+        """, (node_id,))
+        
+        rows = cur.fetchall()
+        result = [{'node_calculate_parameter_id': row['node_calculate_parameter_id'], 'parameter_name': row['parameter_name']} for row in rows]
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'data': result})
+        
+    except Exception as e:
+        print(f"[NETWORK] Error getting parameters: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # TABLE RELATIONS - Построение схемы связей таблиц

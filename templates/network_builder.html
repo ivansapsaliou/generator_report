@@ -98,6 +98,157 @@
             border-color: var(--primary);
             box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
         }
+        
+        .filter-group {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-item {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .filter-item label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 4px;
+            color: var(--text-muted);
+        }
+        
+        .filter-item select,
+        .filter-item input {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+        }
+        
+        .filter-item select:disabled,
+        .filter-item input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .filter-input-wrapper {
+            position: relative;
+        }
+        
+        .filter-input-wrapper .search-icon {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+        
+        .filter-mode-toggle {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding: 8px;
+            background: var(--bg);
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+        
+        .filter-mode-toggle label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text);
+            cursor: pointer;
+        }
+        
+        .accounting-month-selector {
+            display: none;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: var(--bg);
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+        
+        .accounting-month-selector.visible {
+            display: block !important;
+        }
+        
+        .accounting-month-selector label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        
+        .accounting-month-selector input[type="month"] {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+        }
+        
+        .filter-actions {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+        }
+        
+        /* Grid background pattern for network container */
+        #network-container {
+            position: relative;
+        }
+        
+        #network-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(var(--grid-color, rgba(255,255,255,0.05)) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color, rgba(255,255,255,0.05)) 1px, transparent 1px);
+            background-size: 20px 20px;
+            pointer-events: none;
+            z-index: 0;
+            border-radius: 8px;
+        }
+        
+        .light-theme #network-container::before {
+            background-image: 
+                linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px);
+        }
+        
+        #network-container .vis-network {
+            position: relative;
+            z-index: 1;
+        }
     </style>
 </head>
 <body>
@@ -155,18 +306,57 @@
         </div>
 
         <div class="content">
-            <!-- Параметры ввода -->
-            <div style="display: flex; gap: 12px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 250px;">
-                    <label class="form-label">Начальный узел (Node ID)</label>
-                    <input type="number" id="rootNodeId" class="form-control" placeholder="Например: 399" value="399">
+            <!-- Переключатель режимов -->
+            <div class="filter-mode-toggle">
+                <label>
+                    <input type="radio" name="buildMode" value="standard" checked onchange="onBuildModeChange()">
+                    Стандартный режим
+                </label>
+                <label>
+                    <input type="radio" name="buildMode" value="accounting" onchange="onBuildModeChange()">
+                    Использовать способ учета
+                </label>
+            </div>
+
+            <!-- Селектор месяца для режима учета -->
+            <div id="accountingMonthSelector" class="accounting-month-selector">
+                <label>Выберите месяц для построения:</label>
+                <input type="month" id="accountingMonth" onchange="onAccountingMonthChange()">
+            </div>
+
+            <!-- Каскадные фильтры -->
+            <div class="filter-group">
+                <div class="filter-item">
+                    <label>Объект</label>
+                    <div class="filter-input-wrapper">
+                        <select id="objectSelect" onchange="onObjectChange()">
+                            <option value="">Выберите объект...</option>
+                        </select>
+                    </div>
+                    <input type="text" id="objectSearch" placeholder="Поиск..." style="margin-top: 4px;" oninput="filterSelect('objectSelect', this.value)">
                 </div>
-                <button class="btn btn-primary" onclick="loadNetwork()">
-                    <i class="bi bi-arrow-repeat"></i> Загрузить сеть
-                </button>
-                <button class="btn btn-secondary" onclick="exportNetwork()">
-                    <i class="bi bi-download"></i> Экспорт CSV
-                </button>
+                <div class="filter-item">
+                    <label>Узел</label>
+                    <select id="nodeSelect" onchange="onNodeChange()" disabled>
+                        <option value="">Сначала выберите объект</option>
+                    </select>
+                    <input type="text" id="nodeSearch" placeholder="Поиск..." style="margin-top: 4px;" oninput="filterSelect('nodeSelect', this.value)" disabled>
+                </div>
+                <div class="filter-item">
+                    <label>Расчетный параметр (Node ID)</label>
+                    <select id="parameterSelect" onchange="onParameterChange()" disabled>
+                        <option value="">Сначала выберите узел</option>
+                    </select>
+                    <input type="text" id="parameterSearch" placeholder="Поиск..." style="margin-top: 4px;" oninput="filterSelect('parameterSelect', this.value)" disabled>
+                </div>
+                <div class="filter-actions">
+                    <button class="btn btn-primary" onclick="loadNetwork()">
+                        <i class="bi bi-arrow-repeat"></i> Загрузить сеть
+                    </button>
+                    <button class="btn btn-secondary" onclick="exportNetwork()">
+                        <i class="bi bi-download"></i> Экспорт CSV
+                    </button>
+                </div>
             </div>
 
             <!-- Основной контейнер -->
@@ -198,6 +388,9 @@
                         </div>
                     </div>
 
+                    <h6 style="margin-top: 16px;">Типы узлов (легенда)</h6>
+                    <div id="typeLegend" style="margin-bottom: 12px;"></div>
+
                     <h6 style="margin-top: 16px;">Выбранный элемент</h6>
                     <div id="nodeDetails" style="color: var(--text-muted); font-size: 12px;">
                         Выберите узел на графе для отображения информации
@@ -223,26 +416,43 @@
 
 <script>
 // ═════════════════════════════════════════════════════════════════════════════
+// GLOBAL VARIABLES
+// ═════════════════════════════════════════════════════════════════════════════
+let network;
+let nodesData = [];
+let edgesData = [];
+let rawData = [];
+let nodeTypeColors = {};
+let accountingData = {}; // node_calculate_parameter_id -> accounting types
+let currentBuildMode = 'standard';
+let selectedAccountingMonth = null;
+
+// ═════════════════════════════════════════════════════════════════════════════
 // THEME MANAGEMENT - Управление темой
 // ═════════════════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', function() {
     const themeToggle = document.getElementById('themeToggle');
     
-    // Получаем сохраненную тему или определяем по системе
-    let savedTheme = localStorage.getItem('theme');
-    if (!savedTheme) {
-        savedTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    // Функция применения темы (как в login.html)
+    function applyTheme(theme) {
+        if (theme === 'light') {
+            document.body.classList.add('light-theme');
+            themeToggle.innerHTML = '<i class="bi bi-moon"></i>';
+        } else {
+            document.body.classList.remove('light-theme');
+            themeToggle.innerHTML = '<i class="bi bi-sun"></i>';
+        }
     }
-    
+        
+    // Получаем сохраненную тему (по умолчанию 'dark')
+    const savedTheme = localStorage.getItem('theme') || 'dark';
     applyTheme(savedTheme);
     
     // Обработчик клика по кнопке переключения
     themeToggle.addEventListener('click', function() {
-        const currentTheme = localStorage.getItem('theme') || 'light';
-        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-        
-        localStorage.setItem('theme', newTheme);
-        applyTheme(newTheme);
+        const next = document.body.classList.contains('light-theme') ? 'dark' : 'light';
+        localStorage.setItem('theme', next);
+        applyTheme(next);
         
         // Перестраиваем граф при смене темы
         if (rawData.length > 0) {
@@ -250,44 +460,233 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    function applyTheme(theme) {
-        // Применяем класс к body
-        if (theme === 'light') {
-            document.body.classList.add('light-theme');
-        } else {
-            document.body.classList.remove('light-theme');
+    // Загружаем список объектов при загрузке страницы
+    loadObjects();
+    
+    // Устанавливаем текущий месяц по умолчанию
+    const now = new Date();
+    const monthStr = now.toISOString().slice(0, 7);
+    document.getElementById('accountingMonth').value = monthStr;
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CASCADE FILTERS - Каскадные фильтры
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function loadObjects() {
+    try {
+        console.log('[NETWORK] Loading objects...');
+        const response = await fetch('/api/network/objects');
+        console.log('[NETWORK] Response status:', response.status);
+        
+        if (!response.ok) {
+            console.error('[NETWORK] HTTP error:', response.status);
+            return;
         }
         
-        // Обновляем иконку
-        const icon = themeToggle.querySelector('i');
-        if (icon) {
-            icon.className = theme === 'dark' ? 'bi bi-moon' : 'bi bi-sun';
+        const data = await response.json();
+        console.log('[NETWORK] Objects loaded:', data);
+        
+        if (!data.success) {
+            console.error('Error loading objects:', data.error);
+            return;
         }
+        
+        const select = document.getElementById('objectSelect');
+        select.innerHTML = '<option value="">Выберите объект...</option>';
+        
+        data.data.forEach(obj => {
+            const option = document.createElement('option');
+            option.value = obj.object_id;
+            option.textContent = obj.object_name;
+            select.appendChild(option);
+        });
+        
+        console.log('[NETWORK] Objects count:', data.data.length);
+        
+    } catch (error) {
+        console.error('[NETWORK] Error loading objects:', error);
+    }
+}
+
+async function onObjectChange() {
+    const objectId = document.getElementById('objectSelect').value;
+    const nodeSelect = document.getElementById('nodeSelect');
+    const parameterSelect = document.getElementById('parameterSelect');
+    const nodeSearch = document.getElementById('nodeSearch');
+    const parameterSearch = document.getElementById('parameterSearch');
+    
+    // Сброс всех зависимых фильтров
+    nodeSelect.innerHTML = '<option value="">Сначала выберите объект</option>';
+    nodeSelect.disabled = true;
+    nodeSearch.disabled = true;
+    nodeSearch.value = '';
+    
+    parameterSelect.innerHTML = '<option value="">Сначала выберите узел</option>';
+    parameterSelect.disabled = true;
+    parameterSearch.disabled = true;
+    parameterSearch.value = '';
+    
+    if (!objectId) return;
+    
+    try {
+        const response = await fetch(`/api/network/nodes?object_id=${objectId}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            console.error('Error loading nodes:', data.error);
+            return;
+        }
+        
+        nodeSelect.innerHTML = '<option value="">Выберите узел...</option>';
+        
+        data.data.forEach(node => {
+            const option = document.createElement('option');
+            option.value = node.node_id;
+            option.textContent = node.node_name || `Node ${node.node_id}`;
+            nodeSelect.appendChild(option);
+        });
+        
+        nodeSelect.disabled = false;
+        nodeSearch.disabled = false;
+        
+    } catch (error) {
+        console.error('Error loading nodes:', error);
+    }
+}
+
+async function onNodeChange() {
+    const nodeId = document.getElementById('nodeSelect').value;
+    const parameterSelect = document.getElementById('parameterSelect');
+    const parameterSearch = document.getElementById('parameterSearch');
+    
+    // Сброс зависимого фильтра
+    parameterSelect.innerHTML = '<option value="">Сначала выберите узел</option>';
+    parameterSelect.disabled = true;
+    parameterSearch.disabled = true;
+    parameterSearch.value = '';
+    
+    if (!nodeId) return;
+    
+    try {
+        const response = await fetch(`/api/network/parameters?node_id=${nodeId}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            console.error('Error loading parameters:', data.error);
+            return;
+        }
+        
+        parameterSelect.innerHTML = '<option value="">Выберите параметр...</option>';
+        
+        data.data.forEach(param => {
+            const option = document.createElement('option');
+            option.value = param.node_calculate_parameter_id;
+            option.textContent = param.parameter_name;
+            parameterSelect.appendChild(option);
+        });
+        
+        parameterSelect.disabled = false;
+        parameterSearch.disabled = false;
+        
+    } catch (error) {
+        console.error('Error loading parameters:', error);
+    }
+}
+
+function onParameterChange() {
+    const paramId = document.getElementById('parameterSelect').value;
+    // Можно добавить дополнительную логику при выборе параметра
+    console.log('Selected parameter ID:', paramId);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FILTER FUNCTIONS - Функции фильтрации
+// ═════════════════════════════════════════════════════════════════════════════
+
+function filterSelect(selectId, searchText) {
+    const select = document.getElementById(selectId);
+    const search = searchText.toLowerCase();
+    
+    for (let i = 0; i < select.options.length; i++) {
+        const option = select.options[i];
+        const text = option.text.toLowerCase();
+        option.style.display = text.includes(search) ? '' : 'none';
+    }
+}
+
+function onBuildModeChange() {
+    const mode = document.querySelector('input[name="buildMode"]:checked').value;
+    currentBuildMode = mode;
+    console.log('[NETWORK] Build mode changed to:', mode);
+    
+    const monthSelector = document.getElementById('accountingMonthSelector');
+    console.log('[NETWORK] Month selector element:', monthSelector);
+    console.log('[NETWORK] Current classes:', monthSelector.className);
+    
+    if (mode === 'accounting') {
+        monthSelector.classList.add('visible');
+    } else {
+        monthSelector.classList.remove('visible');
     }
     
-    // Загружаем сеть при загрузке страницы
-    loadNetwork();
-});
+    console.log('[NETWORK] New classes:', monthSelector.className);
+    
+    // Сбрасываем данные
+    rawData = [];
+    accountingData = {};
+    if (network) {
+        network.destroy();
+        network = null;
+    }
+    document.getElementById('nodeCount').textContent = '0';
+    document.getElementById('lineCount').textContent = '0';
+    document.getElementById('maxLevel').textContent = '0';
+    document.getElementById('edgeCount').textContent = '0';
+    document.getElementById('typeLegend').innerHTML = '';
+}
+
+function onAccountingMonthChange() {
+    const monthInput = document.getElementById('accountingMonth').value;
+    if (monthInput) {
+        selectedAccountingMonth = monthInput; // format: YYYY-MM
+    } else {
+        selectedAccountingMonth = null;
+    }
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // NETWORK BUILDER - Конструктор сети
 // ═════════════════════════════════════════════════════════════════════════════
-let network;
-let nodesData = [];
-let edgesData = [];
-let rawData = [];
 
 async function loadNetwork() {
-    const rootNodeId = parseInt(document.getElementById('rootNodeId').value);
+    // Получаем root_node_id из выпадающего списка
+    const rootNodeId = document.getElementById('parameterSelect').value;
     
     if (!rootNodeId || rootNodeId <= 0) {
-        alert('Пожалуйста, введите корректный Node ID');
+        alert('Пожалуйста, выберите расчетный параметр');
         return;
     }
     
+    // Если выбран режим "Использовать способ учета", проверяем месяц
+    if (currentBuildMode === 'accounting') {
+        if (!selectedAccountingMonth) {
+            alert('Пожалуйста, выберите месяц для построения');
+            return;
+        }
+    }
+        
     try {
-        console.log(`[NETWORK] Loading network tree for node ${rootNodeId}`);
-        const response = await fetch(`/api/network/tree?root_node_id=${rootNodeId}`);
+        console.log(`[NETWORK] Loading network tree for node ${rootNodeId}, mode: ${currentBuildMode}`);
+        
+        let url = `/api/network/tree?root_node_id=${rootNodeId}`;
+        
+        // Добавляем параметры для режима с способами учета
+        if (currentBuildMode === 'accounting' && selectedAccountingMonth) {
+            url += `&accounting_month=${selectedAccountingMonth}&use_accounting=true`;
+        }
+        
+        const response = await fetch(url);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -301,8 +700,16 @@ async function loadNetwork() {
         }
         
         rawData = data.data;
+        
+        // Сохраняем данные о способах учета, если они есть
+        if (data.accounting_data) {
+            accountingData = data.accounting_data;
+            console.log(`[NETWORK] ✅ Loaded accounting data for ${Object.keys(accountingData).length} nodes`);
+        }
+        
         buildNetworkGraph(data.data);
         updateNetworkStats();
+        updateTypeLegend();
         console.log(`[NETWORK] ✅ Network loaded successfully with ${data.data.length} nodes`);
         
     } catch (error) {
@@ -316,13 +723,36 @@ function buildNetworkGraph(treeData) {
     const edges = new vis.DataSet();
     
     const nodeMap = new Map(); // node_id -> vis node id
-    const levelColors = generateColorPalette(10);
+    
+    // Цвета для типов узлов
+    const typeColorPalette = [
+        '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+        '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B88B', '#A8E6CF',
+        '#E74C3C', '#3498DB', '#9B59B6', '#1ABC9C', '#F39C12'
+    ];
     
     // Определяем цвета в зависимости от темы
     const isDark = !document.body.classList.contains('light-theme');
     const edgeColor = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)';
     const fontColor = isDark ? '#ffffff' : '#000000';
     const borderColor = isDark ? '#666666' : '#333333';
+    const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+    
+    // Собираем уникальные типы узлов
+    const uniqueTypes = new Set();
+    treeData.forEach(item => {
+        if (item.node_type_name) {
+            uniqueTypes.add(item.node_type_name);
+        }
+    });
+    
+    // Назначаем цвета типам
+    nodeTypeColors = {};
+    let colorIndex = 0;
+    uniqueTypes.forEach(type => {
+        nodeTypeColors[type] = typeColorPalette[colorIndex % typeColorPalette.length];
+        colorIndex++;
+    });
     
     // Добавляем корневой узел
     const rootNode = treeData[0];
@@ -331,23 +761,55 @@ function buildNetworkGraph(treeData) {
         return;
     }
     
-    const rootVisId = `node-${rootNode.node_id}`;
-    nodeMap.set(rootNode.node_id, rootVisId);
+    const rootVisId = `node-${rootNode.node_calculate_parameter_id || rootNode.node_id}`;
+    nodeMap.set(rootNode.node_calculate_parameter_id || rootNode.node_id, rootVisId);
     
     // Функция для получения отображаемого имени узла
     const getNodeLabel = (node) => {
         if (!document.getElementById('showLabels').checked) return '';
-        const name = node.node_name || `Node ${node.node_id}`;
+        const name = node.node_name || `Node ${node.node_calculate_parameter_id || node.node_id}`;
         return name.length > 20 ? name.substring(0, 17) + '...' : name;
+    };
+    
+    // Функция для получения tooltip с информацией об узле
+    const getNodeTitle = (node, nodeId) => {
+        let html = `<strong>Node ID:</strong> ${nodeId}<br>`;
+        html += `<strong>Name:</strong> ${node.node_name || 'N/A'}<br>`;
+        html += `<strong>Line:</strong> ${node.line_name || 'N/A'}<br>`;
+        html += `<strong>Type:</strong> ${node.node_type_name || 'N/A'}<br>`;
+        html += `<strong>Level:</strong> ${node.level}<br>`;
+        
+        // Добавляем информацию о способах учета в режиме accounting
+        if (currentBuildMode === 'accounting' && accountingData[nodeId]) {
+            const accInfo = accountingData[nodeId];
+            if (accInfo.types && accInfo.types.length > 0) {
+                html += `<br><strong>Способы учета:</strong><br>`;
+                accInfo.types.forEach(t => {
+                    html += `<span style="color: #4ECDC4;">• ${t}</span><br>`;
+                });
+            }
+        }
+        
+        return html;
+    };
+    
+    // Получаем цвет для узла по его типу
+    const getNodeColor = (node) => {
+        const typeName = node.node_type_name;
+        if (typeName && nodeTypeColors[typeName]) {
+            return nodeTypeColors[typeName];
+        }
+        // Для корневого узла без типа - специальный цвет
+        return '#FF6B6B';
     };
     
     nodes.add({
         id: rootVisId,
         label: getNodeLabel(rootNode),
-        title: `<strong>Node ID:</strong> ${rootNode.node_id}<br><strong>Name:</strong> ${rootNode.node_name || 'N/A'}<br><strong>Line:</strong> ${rootNode.line_name || 'N/A'}`,
+        title: getNodeTitle(rootNode, rootNode.node_calculate_parameter_id || rootNode.node_id),
         level: 0,
         color: {
-            background: levelColors[0],
+            background: getNodeColor(rootNode),
             border: borderColor,
             highlight: {
                 background: '#FF6B6B',
@@ -362,24 +824,30 @@ function buildNetworkGraph(treeData) {
             bold: {
                 color: fontColor
             }
-        }
+        },
+        x: 0,
+        y: 0
     });
     
     // Обрабатываем остальные узлы
     treeData.forEach(item => {
         if (item.level === 0) return; // Пропускаем корень
         
-        const nodeId = item.child_id;
+        const nodeId = item.child_id || item.node_calculate_parameter_id;
         const visId = `node-${nodeId}`;
         
         if (!nodeMap.has(nodeId)) {
             nodeMap.set(nodeId, visId);
             
-            const color = levelColors[Math.min(item.level, levelColors.length - 1)];
+            const color = getNodeColor(item);
+            // Вычисляем начальные координаты на основе level (для начального размещения)
+            const xOffset = (item.level - 1) * 150;
+            const yOffset = (Math.random() - 0.5) * 200;
+            
             nodes.add({
                 id: visId,
                 label: getNodeLabel(item),
-                title: `<strong>Node ID:</strong> ${nodeId}<br><strong>Name:</strong> ${item.node_name || 'N/A'}<br><strong>Line:</strong> ${item.line_name}<br><strong>Level:</strong> ${item.level}<br><strong>Path:</strong> ${item.path_str}`,
+                title: getNodeTitle(item, nodeId),
                 level: item.level,
                 color: {
                     background: color,
@@ -397,7 +865,9 @@ function buildNetworkGraph(treeData) {
                     bold: {
                         color: fontColor
                     }
-                }
+                },
+                x: xOffset + (Math.random() - 0.5) * 50,
+                y: yOffset
             });
         }
     });
@@ -407,8 +877,11 @@ function buildNetworkGraph(treeData) {
     treeData.forEach(item => {
         if (item.level === 0) return;
         
-        const fromId = `node-${item.node_id}`;
-        const toId = `node-${item.child_id}`;
+        const fromNodeId = item.node_calculate_parameter_id || item.node_id;
+        const toNodeId = item.child_id || item.node_calculate_parameter_id;
+        
+        const fromId = `node-${fromNodeId}`;
+        const toId = `node-${toNodeId}`;
         const edgeKey = `${fromId}-${toId}`;
         
         if (!processedEdges.has(edgeKey)) {
@@ -439,25 +912,42 @@ function buildNetworkGraph(treeData) {
     const options = {
         physics: {
             enabled: document.getElementById('showPhysics').checked,
+            solver: 'forceAtlas2Based',
+            forceAtlas2Based: {
+                gravitationalConstant: -50,
+                centralGravity: 0.01,
+                springLength: 150,
+                springConstant: 0.08,
+                damping: 0.4,
+                avoidOverlap: 0.5
+            },
             stabilization: {
                 iterations: 200
             }
         },
+        // Отключаем иерархическую раскладку для свободного перемещения
         layout: {
-            hierarchical: {
-                enabled: true,
-                direction: 'UD',
-                sortMethod: 'directed'
-            }
+            improvedLayout: true,
+            randomSeed: 42
         },
         interaction: {
             hover: true,
             navigationButtons: true,
-            keyboard: true
+            keyboard: true,
+            dragNodes: true,
+            dragView: true,
+            zoomView: true
         },
         nodes: {
             borderWidth: 2,
             borderWidthSelected: 3
+        },
+        // Добавляем сетку на фон
+        grid: {
+            enabled: true,
+            color: gridColor,
+            size: 20,
+            drawInterval: 30
         }
     };
     
@@ -472,6 +962,35 @@ function buildNetworkGraph(treeData) {
         if (params.nodes.length > 0) {
             const nodeId = params.nodes[0];
             showNodeDetails(nodeId);
+        }
+    });
+    
+    // При наведении обновляем tooltip с данными accounting
+    network.on('hoverNode', function(params) {
+        if (currentBuildMode === 'accounting' && accountingData) {
+            const nodeId = parseInt(params.node.split('-')[1]);
+            const node = nodes.get(params.node);
+            if (node && accountingData[nodeId]) {
+                const accInfo = accountingData[nodeId];
+                if (accInfo.types && accInfo.types.length > 0) {
+                    // Обновляем title с информацией о способах учета
+                    const rawNode = rawData.find(r => 
+                        (r.node_calculate_parameter_id === nodeId) || 
+                        (r.child_id === nodeId)
+                    );
+                    if (rawNode) {
+                        let titleHtml = node.title;
+                        // Дополняем информацию если её нет
+                        if (!titleHtml.includes('Способы учета')) {
+                            titleHtml += `<br><br><strong>Способы учета:</strong><br>`;
+                            accInfo.types.forEach(t => {
+                                titleHtml += `<span style="color: #4ECDC4;">• ${t}</span><br>`;
+                            });
+                            nodes.update({id: params.node, title: titleHtml});
+                        }
+                    }
+                }
+            }
         }
     });
 }
@@ -492,6 +1011,9 @@ function showNodeDetails(visNodeId) {
             </div>
             <div class="node-info">
                 <strong>Line ID:</strong> ${item.line_id || 'N/A'}
+            </div>
+            <div class="node-info">
+                <strong>Type:</strong> ${item.node_type_name || 'N/A'}
             </div>
             <div class="node-info">
                 <strong>Level:</strong> ${item.level}
@@ -516,6 +1038,29 @@ function updateNetworkStats() {
     document.getElementById('lineCount').textContent = uniqueLines.size;
     document.getElementById('maxLevel').textContent = maxLevel;
     document.getElementById('edgeCount').textContent = edgesData ? edgesData.length : 0;
+}
+
+function updateTypeLegend() {
+    const legendContainer = document.getElementById('typeLegend');
+    const types = Object.keys(nodeTypeColors);
+    
+    if (types.length === 0) {
+        legendContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 12px;">Нет данных о типах</div>';
+        return;
+    }
+    
+    let html = '';
+    types.forEach(type => {
+        const color = nodeTypeColors[type];
+        html += `
+            <div class="legend-item">
+                <div class="legend-color" style="background: ${color};"></div>
+                <span>${type}</span>
+            </div>
+        `;
+    });
+    
+    legendContainer.innerHTML = html;
 }
 
 function updateNetworkOptions() {

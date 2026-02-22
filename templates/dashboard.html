@@ -596,6 +596,9 @@ const ProfileManager = {
                     <button class="profile-tile-action-btn connect" onclick="event.stopPropagation(); ProfileManager.connectAndGo(${p.id})">
                         <i class="bi bi-arrow-right"></i> Подключиться
                     </button>
+                    <button class="profile-tile-action-btn" onclick="event.stopPropagation(); ProfileManager.exportSchema(${p.id})" title="Экспорт схемы БД (SQL)">
+                        <i class="bi bi-filetype-sql"></i>
+                    </button>
                     <button class="profile-tile-action-btn" onclick="event.stopPropagation(); ProfileManager.editProfile(${p.id})">
                         <i class="bi bi-pencil"></i>
                     </button>
@@ -686,6 +689,103 @@ const ProfileManager = {
                     openProfileModal();
                 }
             });
+    },
+
+    async exportSchema(profileId) {
+        // Экспорт схемы БД в SQL файл
+        try {
+            const btn = event.target.closest('button');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin"></i>';
+            }
+            
+            // Показываем уведомление о начале
+            this.showNotification('Начинаем экспорт схемы БД...', 'info');
+            
+            const url = `/api/db-profiles/${profileId}/schema`;
+            
+            // Скачиваем файл
+            window.location.href = url;
+            
+            // Ждём немного и восстанавливаем кнопку
+            setTimeout(() => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-filetype-sql"></i>';
+                }
+                this.showNotification('Экспорт схемы завершён!', 'success');
+            }, 3000);
+            
+        } catch (error) {
+            this.showNotification('Ошибка: ' + error.message, 'error');
+            const btn = event.target.closest('button');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-filetype-sql"></i>';
+            }
+        }
+    },
+
+    showNotification(message, type = 'info') {
+        // Показать уведомление
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            background: ${type === 'success' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--primary)'};
+            color: white;
+            border-radius: 6px;
+            z-index: 10000;
+            animation: slideIn 0.3s ease;
+        `;
+        notification.innerHTML = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 4000);
+    },
+
+    showSchemaModal(schema, dbType) {
+        // Показать модальное окно со схемой
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.display = 'flex';
+        
+        const dbLabel = dbType === 'oracle' ? 'Oracle' : 'PostgreSQL';
+        const tableCount = schema.tables ? schema.tables.length : 0;
+        const viewCount = schema.views ? schema.views.length : 0;
+        
+        let content = `<pre style="max-height: 400px; overflow: auto; background: var(--bg-2); padding: 12px; border-radius: 6px; font-size: 12px;">`;
+        content += JSON.stringify(schema, null, 2);
+        content += `</pre>`;
+        
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 800px;">
+                <div class="modal-header">
+                    <h5><i class="bi bi-database"></i> Структура БД (${dbLabel})</h5>
+                    <button type="button" class="modal-close" onclick="this.closest('.modal').remove()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div style="margin-bottom: 12px; display: flex; gap: 12px;">
+                        <span class="badge">Таблиц: ${tableCount}</span>
+                        <span class="badge">Представлений: ${viewCount}</span>
+                    </div>
+                    ${content}
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Закрытие по клику вне модального
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
     },
 
     async deleteProfile(profileId) {
