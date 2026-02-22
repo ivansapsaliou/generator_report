@@ -18,6 +18,7 @@ from functools import wraps
 from auth_manager import AuthManager
 
 from pg_sessions import PostgreSQLSessionManager
+from monitoring_db import MonitoringDB
 
 
 
@@ -1472,156 +1473,119 @@ def _get_system_stats_via_db(cur):
     return sys_stats
 
 
-@app.route('/api/monitoring/stats')
+@app.route('/api/monitoring/stats', methods=['GET'])
 def get_monitoring_stats():
     """
-    Получить статистику сервера и БД — адаптивно для PostgreSQL и Oracle
+    API endpoint для получения статистики мониторинга.
+    ✅ Читает из SQLite (собрано фоновым скриптом)
+    ⚡ Быстрый ответ, не блокирует UI
     """
-    from db_monitoring import DatabaseMonitoring, ServerMonitoring
-    from db_connection import get_ssh_tunnels, get_db_connection_by_profile
-    
-    # ✅ ИСПРАВЛЕНО: Возвращаем в старом формате для совместимости
-    result = {
-        'success': True,
-        'data': {
-            'timestamp': None,
-            'system': {},
-            'postgres': None
-        },
-        'db_type': 'postgresql'  # Новое поле для определения типа БД
-    }
-
     try:
-        import datetime
-        result['data']['timestamp'] = datetime.datetime.now().isoformat()
-        
+        # Определяем активный профиль
         profile_id = session.get('active_profile_id')
         
-        if profile_id:
-            # Используем профиль
-            from db_profiles import DatabaseProfileManager
-            profile = DatabaseProfileManager.get_profile(profile_id)
-            
-            if profile:
-                db_type = profile.get('db_type', 'postgresql')
-                ssh_enabled = profile.get('ssh_enabled', False)
-                
-                print(f"[Monitoring] Using profile {profile_id}: {db_type}, SSH: {ssh_enabled}")
-                
-                # ✅ ИСПРАВЛЕНО: Подключаемся к БД через профиль, а не к основной БД приложения
-                conn = get_db_connection_by_profile(profile_id)
-                
-                # ✅ ИСПРАВЛЕНО: Получаем статистику БД
-                db_stats = DatabaseMonitoring.get_database_stats(conn, db_type)
-                
-                # ✅ ИСПРАВЛЕНО: Сохраняем в правильное поле
-                if db_type == 'oracle':
-                    result['db_type'] = 'oracle'
-                    result['data']['oracle'] = db_stats
-                    # Для обратной совместимости оставляем пустой postgres
-                    result['data']['postgres'] = None
-                else:
-                    result['db_type'] = 'postgresql'
-                    result['data']['postgres'] = db_stats
-                
-                conn.close()
-                
-                # ── Статистика сервера ──────────────────────────────
-                if ssh_enabled:
-                    print(f"[Monitoring] Getting server stats via SSH")
-                    
-                    ssh_tunnels = get_ssh_tunnels()
-                    ssh_client = None
-                    
-                    for tunnel_key, tunnel_data in ssh_tunnels.items():
-                        if profile['ssh_host'] in tunnel_key and profile['ssh_user'] in tunnel_key:
-                            ssh_client = tunnel_data.get('client')
-                            break
-                    
-                    if ssh_client:
-                        server_stats = ServerMonitoring.get_server_stats_via_ssh(ssh_client)
-                        result['data']['system'] = server_stats
-                    else:
-                        print(f"[Monitoring] SSH tunnel not found, using local stats")
-                        result['data']['system'] = ServerMonitoring.get_local_server_stats()
-                else:
-                    print(f"[Monitoring] Using local server stats")
-                    result['data']['system'] = ServerMonitoring.get_local_server_stats()
-            else:
-                # Профиль не найден - используем конфиг по умолчанию (PostgreSQL)
-                print(f"[Monitoring] Profile {profile_id} not found, using default DB")
-                conn = get_db_connection()
-                db_stats = DatabaseMonitoring.get_database_stats(conn, 'postgresql')
-                result['data']['postgres'] = db_stats
-                result['data']['system'] = ServerMonitoring.get_local_server_stats()
-                conn.close()
-        else:
-            # Нет активного профиля - используем конфиг по умолчанию
-            print(f"[Monitoring] No active profile, using default DB")
-            conn = get_db_connection()
-            db_stats = DatabaseMonitoring.get_database_stats(conn, 'postgresql')
-            result['data']['postgres'] = db_stats
-            result['data']['system'] = ServerMonitoring.get_local_server_stats()
-            conn.close()
-            
+        if not profile_id:
+            return jsonify({
+                'success': False,
+                'error': 'No active database profile'
+            }), 400
+        
+        # Получаем статистику из SQLite
+        stats = MonitoringDB.get_stats(profile_id)
+        
+        if not stats:
+            return jsonify({
+                'success': False,
+                'error': 'Monitoring data not available. Please wait for collector to gather metrics.',
+                'data': {}
+            }), 202  # 202 = Accepted (данные будут позже)
+        
+        return jsonify({
+            'success': True,
+            'data': stats,
+            'timestamp': datetime.now().isoformat()
+        })
+    
     except Exception as e:
-        print(f"[Monitoring] Error: {e}")
+        print(f"[Monitoring API] Error: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# Добавить после /api/monitoring/stats:
+
+@app.route('/api/monitoring/status', methods=['GET'])
+def get_monitoring_status():
+    """
+    Получить статус мониторинга для всех профилей.
+    Показывает когда последний раз была сборка, ошибки и т.д.
+    """
+    try:
+        profiles = MonitoringDB.get_all_profiles()
         
-        # В случае ошибки возвращаем пустые данные но с success=True
-        result['data']['postgres'] = {
-            'version': 'N/A',
-            'uptime': 'N/A',
-            'db_size_pretty': '0 MB',
-            'db_size': '0 MB',
-            'db_size_bytes': 0,
-            'connections': {
-                'total': 0,
-                'active': 0,
-                'idle': 0,
-                'idle_in_tx': 0,
-                'max_connections': 0
-            },
-            'waiting_locks': 0,
-            'db_stats': {
-                'commits': 0,
-                'rollbacks': 0,
-                'deadlocks': 0,
-                'conflicts': 0,
-                'rows_inserted': 0,
-                'rows_updated': 0,
-                'rows_deleted': 0,
-                'rows_fetched': 0,
-                'cache_reads': 0,
-                'disk_reads': 0
-            },
-            'cache_hit_ratio': 0,
-            'bgwriter': {},
-            'table_stats': [],
-            'slow_queries': [],
-            'top_queries': []
+        status = {
+            'profiles': [],
+            'total': len(profiles),
+            'active': sum(1 for p in profiles if p['enabled'])
         }
-        result['data']['system'] = {
-            'cpu_percent': 0,
-            'memory_used_mb': 0,
-            'memory_total_mb': 0,
-            'memory_used_gb': 0,
-            'memory_total_gb': 0,
-            'memory_percent': 0,
-            'disk_used': '0G',
-            'disk_total': '0G',
-            'disk_used_gb': 0,
-            'disk_total_gb': 0,
-            'disk_percent': 0,
-            'net_recv_mb': 0,
-            'net_sent_mb': 0
-        }
+        
+        for profile in profiles:
+            status['profiles'].append({
+                'profile_id': profile['profile_id'],
+                'profile_name': profile['profile_name'],
+                'db_type': profile['db_type'],
+                'enabled': profile['enabled'],
+                'last_collection': profile['last_collection'],
+                'last_error': profile['last_error'],
+                'status': 'healthy' if not profile['last_error'] else 'error'
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': status
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
-    return jsonify(result)
 
-
-
+@app.route('/api/monitoring/refresh', methods=['POST'])
+def trigger_monitoring_refresh():
+    """
+    Принудительно запустить сборку метрик (опционально).
+    Вызывает collector.py --once в фоне.
+    """
+    try:
+        import subprocess
+        import threading
+        
+        def run_collector():
+            subprocess.run(
+                [sys.executable, 'monitoring_collector.py', '--once'],
+                cwd=os.path.dirname(__file__)
+            )
+        
+        # Запускаем в фоне
+        thread = threading.Thread(target=run_collector, daemon=True)
+        thread.start()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Monitoring refresh triggered'
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # ─────────────────────────────────────────────
 # SETTINGS

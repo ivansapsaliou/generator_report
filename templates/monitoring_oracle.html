@@ -339,131 +339,176 @@ async function loadStats() {
         var r = await fetch('/api/monitoring/stats');
         var d = await r.json();
         
-        console.log('[Oracle] Response:', d);
+        console.log('[Oracle] Full Response:', d);
+        console.log('[Oracle] Data keys:', Object.keys(d.data));
         
-        if (!d.success) throw new Error(d.error || 'Ошибка сервера');
+        if (!d.success) {
+            if (d.error && d.error.includes('not available')) {
+                console.warn('[Oracle] Data not collected yet, retrying...');
+                setTimeout(loadStats, 3000);
+                return;
+            }
+            throw new Error(d.error || 'Ошибка сервера');
+        }
         
-        var data = d.data;
-        var sys = data.system || {};
-        var ora = data.oracle || {};
+        // ✅ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ:
+        // Данные приходят напрямую в d.data, БЕЗ поля .oracle
+        var ora = d.data;  // Это правильно!
+        var sys = {};  // Система данных пока не собирается
         
-        console.log('[Oracle] ora data:', ora);
+        console.log('[Oracle] Stats object:', ora);
+        console.log('[Oracle] Has version:', !!ora.version);
+        console.log('[Oracle] Has load_profile:', !!ora.load_profile);
+        console.log('[Oracle] Has top_sql:', ora.top_sql ? ora.top_sql.length : 0, 'items');
         
-        var ts = data.timestamp ? new Date(data.timestamp).toLocaleTimeString('ru-RU') : '—';
-        var lastUpdateEl = document.getElementById('lastUpdateTime');
-        if (lastUpdateEl) lastUpdateEl.textContent = 'Обновлено: ' + ts;
+        // Обновляем timestamp
+        if (ora._meta && ora._meta.collected_at) {
+            var ts = new Date(ora._meta.collected_at).toLocaleTimeString('ru-RU');
+            var lastUpdateEl = document.getElementById('lastUpdateTime');
+            if (lastUpdateEl) lastUpdateEl.textContent = 'Обновлено: ' + ts;
+        } else if (d.timestamp) {
+            var ts = new Date(d.timestamp).toLocaleTimeString('ru-RU');
+            var lastUpdateEl = document.getElementById('lastUpdateTime');
+            if (lastUpdateEl) lastUpdateEl.textContent = 'Обновлено: ' + ts;
+        }
         
-        // Версия
+        // Версия Oracle
         var versionBadge = document.getElementById('oracleVersionBadge');
         if (versionBadge && ora.version) {
+            console.log('[Oracle] Setting version:', ora.version);
             versionBadge.textContent = '🔴 ' + ora.version.substring(0, 50);
         }
 
-        // CPU
-        if (sys.cpu_percent != null) {
-            setMC('cpu', sys.cpu_percent.toFixed(1) + '%', sys.cpu_percent,
-                  sys.cpu_percent > 70, sys.cpu_percent > 90);
-        }
+        // Рендер всех блоков Oracle
+        if (ora && Object.keys(ora).length > 2) {  // > 2 чтобы не считать _meta
+            console.log('[Oracle] Rendering all blocks...');
+            
+            // 1. МЕТРИКИ ВВЕРХУ (5 карточек)
+            // CPU (пока нет данных)
+            setMC('cpu', '—', 0, false, false);
 
-        // RAM
-        if (sys.memory_percent != null) {
-            var memUsedGb = sys.memory_used_gb || (sys.memory_used_mb / 1024).toFixed(1);
-            var memTotalGb = sys.memory_total_gb || (sys.memory_total_mb / 1024).toFixed(1);
-            setMC('ram', memUsedGb + ' / ' + memTotalGb + ' GB',
-                  sys.memory_percent, sys.memory_percent > 70, sys.memory_percent > 90);
-        }
+            // RAM (пока нет данных)
+            setMC('ram', '—', 0, false, false);
 
-        // Disk
-        if (sys.disk_percent != null) {
-            setMC('disk', sys.disk_used + ' / ' + sys.disk_total,
-                  sys.disk_percent, sys.disk_percent > 75, sys.disk_percent > 90);
-        }
+            // DISK (пока нет данных)
+            setMC('disk', '—', 0, false, false);
 
-        // Если нет данных Oracle
-        if (!ora || Object.keys(ora).length === 0 || ora.error) {
-            console.warn('[Oracle] No data or error:', ora);
-            document.getElementById('v-dbsize').textContent = ora.error ? 'Ошибка' : 'Нет данных';
-            document.getElementById('s-dbsize').textContent = ora.error ? ora.error : 'Проверьте профиль Oracle';
-            document.getElementById('blk-connections').innerHTML = '<div class="empty-state" style="padding:16px;color:var(--amber);">⚠️ Нет данных от Oracle. Выберите профиль Oracle.</div>';
-            return;
-        }
-
-        // Размер БД
-        var dbSize = ora.db_size_pretty || '—';
-        var dbUptime = ora.uptime || 'N/A';
-        document.getElementById('v-dbsize').textContent = dbSize;
-        document.getElementById('s-dbsize').textContent = 'datafiles · uptime: ' + dbUptime;
-
-        // Cache Hit Ratios
-        if (ora.buffer_cache_hit_ratio != null) {
-            var bhr = ora.buffer_cache_hit_ratio;
-            setMC('buffer', bhr + '%', bhr, bhr < 70, bhr < 50);
-        }
-        
-        if (ora.library_cache_hit_ratio != null) {
-            var lchr = ora.library_cache_hit_ratio;
-            setMC('library', lchr + '%', lchr, lchr < 80, lchr < 60);
-        }
-        
-        if (ora.dict_cache_hit_ratio != null) {
-            var dchr = ora.dict_cache_hit_ratio;
-            setMC('dict', dchr + '%', dchr, dchr < 70, dchr < 50);
-        }
-        
-        // SGA Memory
-        if (ora.sga) {
-            var sgaTotal = 0;
-            for (var key in ora.sga) {
-                sgaTotal += ora.sga[key];
+            // DB SIZE ✅ РАБОТАЕТ
+            if (ora.db_size_pretty) {
+                var sizeGb = ora.db_size_gb || 0;
+                var sizePct = Math.min((sizeGb / 200) * 100, 100);
+                console.log('[Oracle] Setting DB size:', ora.db_size_pretty);
+                setMC('dbsize', ora.db_size_pretty, sizePct, false, false);
             }
-            document.getElementById('v-sga').textContent = sgaTotal.toFixed(0) + ' MB';
+
+            // CONNECTIONS ✅ ДОЛЖНО РАБОТАТЬ
+            if (ora.connections) {
+                var conn = ora.connections;
+                var activePct = (conn.active / Math.max(conn.max_connections, 1)) * 100;
+                console.log('[Oracle] Setting connections:', conn.active, '/', conn.total);
+                setMC('conn', conn.active + ' / ' + conn.total + ' / ' + conn.max_connections,
+                      activePct, activePct > 70, activePct > 90);
+            }
+
+            // 2. КЭШИ ✅
+            console.log('[Oracle] Rendering cache hit ratios...');
+            renderCacheHitRatios(ora);
+
+            // 3. SESSIONS ORACLE ✅
+            console.log('[Oracle] Rendering sessions...');
+            if (ora.connections) {
+                renderSessionsOracle(ora.connections);
+            }
+
+            // 4. LOAD PROFILE ✅
+            console.log('[Oracle] Rendering load profile...');
+            if (ora.load_profile && Object.keys(ora.load_profile).length > 0) {
+                renderLoadProfile(ora.load_profile);
+            } else {
+                var el = document.getElementById('blk-load-profile');
+                if (el) el.innerHTML = '<div class="empty-state">Нет данных</div>';
+            }
+
+            // 5. DML STATISTICS ✅
+            console.log('[Oracle] Rendering DML...');
+            if (ora.dml_stats) {
+                renderDML(ora.dml_stats);
+            } else {
+                var el = document.getElementById('blk-dml');
+                if (el) el.innerHTML = '<div class="empty-state">Нет данных</div>';
+            }
+
+            // 6. WAIT EVENTS ✅
+            console.log('[Oracle] Rendering wait events, count:', ora.wait_events ? ora.wait_events.length : 0);
+            if (ora.wait_events && ora.wait_events.length > 0) {
+                renderWaitEvents(ora.wait_events);
+            } else {
+                var el = document.getElementById('blk-wait-events');
+                if (el) el.innerHTML = '<div class="empty-state">Нет данных</div>';
+            }
+
+            // 7. TOP TABLES ✅
+            console.log('[Oracle] Rendering top tables, count:', ora.top_tables ? ora.top_tables.length : 0);
+            if (ora.top_tables && ora.top_tables.length > 0) {
+                renderTopTables(ora.top_tables);
+            } else {
+                var el = document.getElementById('blk-top-tables');
+                if (el) el.innerHTML = '<div class="empty-state">Нет данных</div>';
+            }
+
+            // 8. TABLESPACES ✅
+            console.log('[Oracle] Rendering tablespaces, count:', ora.tablespaces ? ora.tablespaces.length : 0);
+            if (ora.tablespaces && ora.tablespaces.length > 0) {
+                renderTablespaces(ora.tablespaces);
+            } else {
+                var el = document.getElementById('blk-tablespaces');
+                if (el) el.innerHTML = '<div class="empty-state">Нет данных</div>';
+            }
+
+            // 9. TOP SQL ✅
+            console.log('[Oracle] Rendering top SQL, count:', ora.top_sql ? ora.top_sql.length : 0);
+            if (ora.top_sql && ora.top_sql.length > 0) {
+                renderTopSQL(ora.top_sql);
+            } else {
+                var el = document.getElementById('blk-top-sql');
+                if (el) el.innerHTML = '<div class="empty-state">Нет данных</div>';
+            }
+
+            // 10. SGA & PGA ✅
+            console.log('[Oracle] Rendering SGA/PGA...');
+            if (ora.sga && Object.keys(ora.sga).length > 0) {
+                renderSGA(ora.sga);
+            } else {
+                var el = document.getElementById('blk-sga');
+                if (el) el.innerHTML = '<div class="empty-state">Нет данных</div>';
+            }
+            
+            if (ora.pga_target != null || ora.pga_usage) {
+                renderPGA(ora.pga_target, ora.pga_usage);
+            } else {
+                var el = document.getElementById('blk-pga');
+                if (el) el.innerHTML = '<div class="empty-state">Нет данных</div>';
+            }
+
+            // 11. SLOW QUERIES ✅
+            console.log('[Oracle] Rendering slow queries, count:', ora.slow_queries ? ora.slow_queries.length : 0);
+            if (ora.slow_queries && ora.slow_queries.length > 0) {
+                renderSlowQueries(ora.slow_queries);
+            } else {
+                var el = document.getElementById('blk-slow-queries');
+                if (el) el.innerHTML = '<div class="empty-state">Нет медленных запросов</div>';
+            }
+            
+            console.log('[Oracle] ✅ All blocks rendered successfully');
+        } else {
+            console.warn('[Oracle] Not enough data to render');
         }
 
-        // Сессии
-        var conn = ora.connections || {};
-        var connTotal = conn.total || 0;
-        var connMax = conn.max_connections || 1;
-        var connPercent = connMax > 0 ? (connTotal / connMax) * 100 : 0;
-        setMC('conn', connTotal + ' / ' + connMax, connPercent, connPercent > 70, connPercent > 90);
-        
-        var connSubEl = document.getElementById('s-conn');
-        if (connSubEl) {
-            connSubEl.textContent = 'активных: ' + (conn.active || 0) + ' · заблокированных: ' + (conn.waiting_lock || 0);
-        }
-
-        // Блоки сессий
-        renderOracleConnections(ora);
-        
-        // Load Profile
-        renderLoadProfile(ora.load_profile || {});
-        
-        // DML Stats
-        renderDmlStats(ora.dml_stats || {});
-        
-        // Tablespaces
-        renderTablespaces(ora.tablespaces || []);
-        
-        // Wait Events
-        renderWaitEvents(ora.wait_events || []);
-        
-        // Медленные запросы
-        renderSlowQueries(ora.slow_queries || []);
-        
-        // Таблицы
-        renderTopTables(ora.top_tables || []);
-        
-        // TOP SQL
-        renderTopSql(ora.top_sql || []);
-        
-        // Схемы
-        renderSchemas(ora.schema_sizes || []);
-        
-        // Производительность
-        renderPerformance(ora);
-
-    } catch (e) {
-        console.error('[Oracle] Error:', e);
+    } catch (error) {
+        console.error('[Oracle] Error:', error);
+        alert('Ошибка загрузки данных мониторинга: ' + error.message);
     } finally {
+        var btn = document.getElementById('refreshBtn');
         if (btn) {
             btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Обновить';
             btn.disabled = false;
@@ -485,36 +530,289 @@ function renderOracleConnections(ora) {
         sr('Uptime Oracle', 'Время работы инстанса', ora.uptime || 'N/A', '');
 }
 
-function renderSlowQueries(queries) {
-    var el = document.getElementById('blk-slow');
-    var countEl = document.getElementById('slowQueryCount');
-    
-    if (countEl) countEl.textContent = queries ? queries.length : 0;
+// ✅ НОВЫЕ ФУНКЦИИ РЕНДЕРИНГА
+
+function renderCacheHitRatios(ora) {
+    var el = document.getElementById('blk-cache-hit');
     if (!el) return;
     
-    if (!queries || queries.length === 0) {
-        el.innerHTML = '<div class="empty-state" style="padding:16px;"><i class="bi bi-check-circle" style="color:var(--green);margin-right:6px;"></i>Медленных запросов нет</div>';
+    var bufferRatio = ora.buffer_cache_hit_ratio || 0;
+    var libraryRatio = ora.library_cache_hit_ratio || 0;
+    var dictRatio = ora.dict_cache_hit_ratio || 0;
+    
+    var html = '';
+    
+    // Buffer Cache
+    var bufferCls = bufferRatio >= 90 ? 'good' : bufferRatio >= 80 ? 'warn' : 'crit';
+    html += sr('Buffer Cache Hit Ratio', 'кэш блоков БД', 
+               bufferRatio.toFixed(2) + '%', bufferCls, bufferCls);
+    
+    // Library Cache
+    var libraryCls = libraryRatio >= 95 ? 'good' : libraryRatio >= 90 ? 'warn' : 'crit';
+    html += sr('Library Cache Hit Ratio', 'кэш объектов БД', 
+               libraryRatio.toFixed(2) + '%', libraryCls, libraryCls);
+    
+    // Dictionary Cache
+    var dictCls = dictRatio >= 90 ? 'good' : dictRatio >= 80 ? 'warn' : 'crit';
+    html += sr('Dictionary Cache Hit Ratio', 'кэш словаря', 
+               dictRatio.toFixed(2) + '%', dictCls, dictCls);
+    
+    el.innerHTML = html;
+}
+
+function renderSessionsOracle(conn) {
+    var el = document.getElementById('blk-sessions');
+    if (!el) return;
+    
+    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">';
+    
+    var items = [
+        {label: 'Всего', value: conn.total || 0, icon: 'diagram-3'},
+        {label: 'Активные', value: conn.active || 0, icon: 'lightning-charge', color: 'green'},
+        {label: 'Idle', value: conn.idle || 0, icon: 'hourglass-split'},
+        {label: 'Locks', value: conn.waiting_lock || 0, icon: 'lock', color: 'red'}
+    ];
+    
+    items.forEach(function(item) {
+        var colorClass = item.color ? 'style="color:var(--' + item.color + ');"' : '';
+        html += '<div class="card"><div class="card-body" style="text-align:center;padding:16px;">'
+            + '<div style="font-size:24px;margin-bottom:8px;"><i class="bi bi-' + item.icon + '"></i></div>'
+            + '<div style="font-size:28px;font-weight:bold;" ' + colorClass + '>' + item.value + '</div>'
+            + '<div style="font-size:11px;color:var(--text-3);">' + item.label + '</div>'
+            + '</div></div>';
+    });
+    
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+function renderDML(dml) {
+    var el = document.getElementById('blk-dml');
+    if (!el) return;
+    
+    if (!dml || Object.keys(dml).length === 0) {
+        el.innerHTML = '<div class="empty-state">Нет данных</div>';
         return;
     }
     
-    var rows = queries.map(function(q) {
-        var color = q.duration_sec > 60 ? 'var(--red)' : q.duration_sec > 10 ? 'var(--amber)' : 'var(--text-2)';
-        var dur = q.duration_str || (q.duration_sec ? q.duration_sec + 'с' : '—');
+    var html = '';
+    html += sr('User Commits', 'подтвержденные транзакции', formatNumber(dml.commits || 0), 'good', '');
+    html += sr('User Rollbacks', 'откаченные транзакции', formatNumber(dml.rollbacks || 0), 'warn', '');
+    html += sr('Block Changes', 'измененные блоки данных', formatNumber(dml.block_changes || 0), '', '');
+    
+    el.innerHTML = html;
+}
+
+function renderWaitEvents(events) {
+    var el = document.getElementById('blk-wait-events');
+    if (!el) return;
+    
+    if (!events || events.length === 0) {
+        el.innerHTML = '<div class="empty-state">Нет данных</div>';
+        return;
+    }
+    
+    var rows = events.slice(0, 10).map(function(e) {
+        var timeStr = e.time_waited_sec >= 3600 
+            ? (e.time_waited_sec / 3600).toFixed(2) + ' ч'
+            : e.time_waited_sec >= 60 
+                ? (e.time_waited_sec / 60).toFixed(2) + ' м'
+                : e.time_waited_sec.toFixed(2) + ' с';
+        
         return '<tr>'
-            +'<td>'+esc(q.pid)+'</td>'
-            +'<td>'+esc(q.user||'—')+'</td>'
-            +'<td style="font-size:10px;color:var(--text-3);">'+esc(q.app||'—')+'</td>'
-            +'<td style="color:'+color+';font-weight:700;">'+esc(dur)+'</td>'
-            +'<td><span style="background:var(--bg-3);padding:1px 6px;border-radius:2px;font-size:9px;">'+esc(q.state)+'</span></td>'
-            +'<td style="max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(q.query)+'">'+esc(q.query)+'</td>'
-            +'</tr>';
+            + '<td>' + esc(e.event) + '</td>'
+            + '<td style="text-align:right;">' + formatNumber(e.total_waits || 0) + '</td>'
+            + '<td style="text-align:right;color:var(--amber);font-weight:600;">' + timeStr + '</td>'
+            + '</tr>';
     }).join('');
     
     el.innerHTML = '<table class="mt"><thead><tr>'
-        +'<th>SID,SERIAL#</th><th>Пользователь</th><th>Программа</th><th>Длительность</th><th>Статус</th><th>SQL-запрос</th>'
-        +'</tr></thead><tbody>'+rows+'</tbody></table>';
+        + '<th>Event</th><th style="text-align:right">Waits</th><th style="text-align:right">Time</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
+function renderTopTables(tables) {
+    var el = document.getElementById('blk-top-tables');
+    if (!el) return;
+    
+    if (!tables || tables.length === 0) {
+        el.innerHTML = '<div class="empty-state">Нет данных</div>';
+        return;
+    }
+    
+    var rows = tables.slice(0, 15).map(function(t) {
+        return '<tr>'
+            + '<td><strong>' + esc(t.owner) + '</strong><br>' + esc(t.table_name) + '</td>'
+            + '<td style="text-align:right;">' + (t.size_gb || 0).toFixed(2) + ' GB</td>'
+            + '<td style="text-align:right;">' + formatNumber(t.size_mb || 0) + ' MB</td>'
+            + '<td style="text-align:right;">' + formatNumber(t.extents || 0) + '</td>'
+            + '</tr>';
+    }).join('');
+    
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        + '<th>Table</th><th style="text-align:right">Size (GB)</th><th style="text-align:right">Size (MB)</th><th style="text-align:right">Extents</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function renderTablespaces(tsp) {
+    var el = document.getElementById('blk-tablespaces');
+    if (!el) return;
+    
+    if (!tsp || tsp.length === 0) {
+        el.innerHTML = '<div class="empty-state">Нет данных</div>';
+        return;
+    }
+    
+    var rows = tsp.map(function(t) {
+        var usedPct = t.used_percent || 0;
+        var cls = usedPct > 90 ? 'crit' : usedPct > 75 ? 'warn' : 'good';
+        
+        return '<tr>'
+            + '<td>' + esc(t.tablespace_name) + '</td>'
+            + '<td style="text-align:right;">' + (t.size_gb || 0).toFixed(2) + ' GB</td>'
+            + '<td style="text-align:right;">' + (t.used_gb || 0).toFixed(2) + ' GB</td>'
+            + '<td style="text-align:right;"><span class="' + cls + '">' + usedPct.toFixed(1) + '%</span></td>'
+            + '</tr>';
+    }).join('');
+    
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        + '<th>Tablespace</th><th style="text-align:right">Size</th><th style="text-align:right">Used</th><th style="text-align:right">%</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function renderTopSQL(sqls) {
+    var el = document.getElementById('blk-top-sql');
+    if (!el) return;
+    
+    if (!sqls || sqls.length === 0) {
+        el.innerHTML = '<div class="empty-state">Нет данных</div>';
+        return;
+    }
+    
+    var rows = sqls.slice(0, 10).map(function(q) {
+        var elapsedStr = q.elapsed_sec >= 3600 
+            ? (q.elapsed_sec / 3600).toFixed(2) + ' ч'
+            : (q.elapsed_sec / 60).toFixed(2) + ' м';
+        
+        return '<tr>'
+            + '<td style="max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(q.sql_preview) + '">'
+                + esc(q.sql_preview.substring(0, 80)) + '</td>'
+            + '<td style="text-align:right;">' + esc(q.sql_id) + '</td>'
+            + '<td style="text-align:right;color:var(--amber);font-weight:600;">' + elapsedStr + '</td>'
+            + '<td style="text-align:right;">' + q.executions + '</td>'
+            + '<td style="text-align:right;">' + q.avg_elapsed_sec.toFixed(2) + ' с</td>'
+            + '</tr>';
+    }).join('');
+    
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        + '<th>SQL Preview</th><th style="text-align:right">SQL ID</th><th style="text-align:right">Elapsed</th>'
+        + '<th style="text-align:right">Executions</th><th style="text-align:right">Avg Time</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function renderSGA(sga) {
+    var el = document.getElementById('blk-sga');
+    if (!el) return;
+    
+    if (!sga || Object.keys(sga).length === 0) {
+        el.innerHTML = '<div class="empty-state">Нет данных</div>';
+        return;
+    }
+    
+    var totalSGA = Object.values(sga).reduce(function(a, b) { return a + (b || 0); }, 0);
+    
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    
+    for (var key in sga) {
+        var val = sga[key] || 0;
+        var pct = (val / Math.max(totalSGA, 1)) * 100;
+        
+        html += '<div class="card">'
+            + '<div class="card-body">'
+            + '<div style="font-size:12px;color:var(--text-3);">' + esc(key) + '</div>'
+            + '<div style="font-size:18px;font-weight:bold;">' + val.toFixed(2) + ' MB</div>'
+            + '<div style="width:100%;height:6px;background:var(--bg-3);border-radius:3px;margin-top:8px;">'
+            + '<div style="height:100%;width:' + pct + '%;background:var(--primary);border-radius:3px;"></div>'
+            + '</div>'
+            + '</div></div>';
+    }
+    
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+function renderPGA(pga_target, pga_usage) {
+    var el = document.getElementById('blk-pga');
+    if (!el) return;
+    
+    if (!pga_usage) {
+        el.innerHTML = '<div class="empty-state">Нет данных</div>';
+        return;
+    }
+    
+    var used = pga_usage.used_mb || 0;
+    var alloc = pga_usage.allocated_mb || 0;
+    var pct = (used / Math.max(alloc, 1)) * 100;
+    
+    var html = sr('PGA Used', 'используемая память', used.toFixed(2) + ' MB', 'good', '');
+    html += sr('PGA Allocated', 'выделенная память', alloc.toFixed(2) + ' MB', '', '');
+    if (pga_target > 0) {
+        html += sr('PGA Target', 'целевой размер', pga_target.toFixed(2) + ' MB', '', '');
+    }
+    
+    el.innerHTML = html;
+}
+
+function renderSlowQueries(queries) {
+    var el = document.getElementById('blk-slow-queries');
+    if (!el) return;
+    
+    if (!queries || queries.length === 0) {
+        el.innerHTML = '<div class="empty-state">Нет медленных запросов</div>';
+        return;
+    }
+    
+    var rows = queries.slice(0, 10).map(function(q) {
+        var durationStr = q.duration_str || q.duration_sec + ' с';
+        
+        return '<tr>'
+            + '<td>' + esc(q.pid || '-') + '</td>'
+            + '<td>' + esc(q.user || '-') + '</td>'
+            + '<td>' + esc(q.app || '-') + '</td>'
+            + '<td style="text-align:right;color:var(--red);font-weight:600;">' + durationStr + '</td>'
+            + '<td style="max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(q.query || '') + '">'
+                + esc((q.query || '').substring(0, 80)) + '</td>'
+            + '</tr>';
+    }).join('');
+    
+    el.innerHTML = '<table class="mt"><thead><tr>'
+        + '<th>PID</th><th>User</th><th>App</th><th style="text-align:right">Duration</th><th>Query</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function renderLoadProfile(lp) {
+    var el = document.getElementById('blk-load-profile');
+    if (!el) return;
+    
+    console.log('[Oracle] renderLoadProfile called with:', lp);
+    
+    if (!lp || Object.keys(lp).length === 0) {
+        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных</div>';
+        return;
+    }
+    
+    var html = '';
+    html += sr('Logical Reads', 'Всего логических чтений', formatNumber(lp.logical_reads || 0), '', '');
+    html += sr('Physical Reads', 'Физических чтений с диска', formatNumber(lp.physical_reads || 0), '', '');
+    html += sr('Physical Writes', 'Записей на диск', formatNumber(lp.physical_writes || 0), '', '');
+    html += sr('User Commits', 'Подтвержденных транзакций', formatNumber(lp.commits || 0), 'good', '');
+    html += sr('User Rollbacks', 'Откаченных транзакций', formatNumber(lp.rollbacks || 0), 'warn', '');
+    
+    el.innerHTML = html;
+    console.log('[Oracle] Load profile rendered');
+}
+
+// Вспомогательная функция для форматирования чисел
 function formatNumber(num) {
     if (num == null || num === 0) return '0';
     if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'G';
@@ -523,199 +821,7 @@ function formatNumber(num) {
     return num.toString();
 }
 
-function renderLoadProfile(lp) {
-    var el = document.getElementById('blk-load-profile');
-    if (!el) return;
-    
-    if (!lp || Object.keys(lp).length === 0) {
-        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных</div>';
-        return;
-    }
-    
-    el.innerHTML = 
-        sr('Logical Reads', 'Всего логических чтений', formatNumber(lp.logical_reads || 0), '', '') +
-        sr('Physical Reads', 'Физических чтений с диска', formatNumber(lp.physical_reads || 0), '', '') +
-        sr('Physical Writes', 'Записей на диск', formatNumber(lp.physical_writes || 0), '', '') +
-        sr('User Commits', 'Подтвержденных транзакций', formatNumber(lp.commits || 0), '', 'good') +
-        sr('User Rollbacks', 'Откаченных транзакций', formatNumber(lp.rollbacks || 0), '', lp.rollbacks > 1000 ? 'warn' : '');
-}
 
-function renderDmlStats(dml) {
-    var el = document.getElementById('blk-dml');
-    if (!el) return;
-    
-    if (!dml || Object.keys(dml).length === 0) {
-        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных</div>';
-        return;
-    }
-    
-    el.innerHTML = 
-        sr('Commits', 'Количество коммитов', formatNumber(dml.commits || 0), '', 'good') +
-        sr('Rollbacks', 'Количество откатов', formatNumber(dml.rollbacks || 0), '', dml.rollbacks > 1000 ? 'warn' : '') +
-        sr('Block Changes', 'Изменено блоков', formatNumber(dml.block_changes || 0), '', '');
-}
-
-function renderTablespaces(tspaces) {
-    var el = document.getElementById('blk-tablespaces');
-    var countEl = document.getElementById('tablespaceCount');
-    
-    if (countEl) countEl.textContent = tspaces ? tspaces.length : 0;
-    if (!el) return;
-    
-    if (!tspaces || tspaces.length === 0) {
-        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных о tablespaces</div>';
-        return;
-    }
-    
-    var rows = tspaces.slice(0, 10).map(function(ts) {
-        var pct = ts.used_percent || 0;
-        var cls = pct > 90 ? 'crit' : pct > 75 ? 'warn' : 'good';
-        return '<tr>'
-            +'<td>'+esc(ts.tablespace_name||'—')+'</td>'
-            +'<td>'+esc(ts.size_gb||0)+' GB</td>'
-            +'<td>'+esc(ts.used_gb||0)+' GB</td>'
-            +'<td>'+esc(ts.free_gb||0)+' GB</td>'
-            +'<td><span class="'+cls+'" style="font-weight:700;">'+pct.toFixed(1)+'%</span></td>'
-            +'</tr>';
-    }).join('');
-    
-    el.innerHTML = '<table class="mt"><thead><tr>'
-        +'<th>Tablespace</th><th>Размер</th><th>Использовано</th><th>Свободно</th><th>Использовано %</th>'
-        +'</tr></thead><tbody>'+rows+'</tbody></table>';
-}
-
-function renderWaitEvents(events) {
-    var el = document.getElementById('blk-wait-events');
-    var countEl = document.getElementById('waitEventCount');
-    
-    if (countEl) countEl.textContent = events ? events.length : 0;
-    if (!el) return;
-    
-    if (!events || events.length === 0) {
-        el.innerHTML = '<div class="empty-state" style="padding:16px;"><i class="bi bi-check-circle" style="color:var(--green);margin-right:6px;"></i>Нет событий ожидания</div>';
-        return;
-    }
-    
-    var rows = events.map(function(e) {
-        return '<tr>'
-            +'<td style="max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(e.event)+'">'+esc(e.event||'—')+'</td>'
-            +'<td>'+formatNumber(e.total_waits||0)+'</td>'
-            +'<td>'+(e.time_waited_sec ? e.time_waited_sec.toFixed(2) : '0')+' сек</td>'
-            +'</tr>';
-    }).join('');
-    
-    el.innerHTML = '<table class="mt"><thead><tr>'
-        +'<th>Событие</th><th>Всего ожиданий</th><th>Общее время</th>'
-        +'</tr></thead><tbody>'+rows+'</tbody></table>';
-}
-
-function renderTopTables(tables) {
-    var el = document.getElementById('blk-tables');
-    var countEl = document.getElementById('tableStatsCount');
-    
-    if (countEl) countEl.textContent = tables ? tables.length : 0;
-    if (!el) return;
-    
-    if (!tables || tables.length === 0) {
-        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных о таблицах</div>';
-        return;
-    }
-    
-    var rows = tables.slice(0, 15).map(function(t) {
-        return '<tr>'
-            +'<td style="max-width:150px;">'+esc(t.owner||'')+'.'+esc(t.table_name||'—')+'</td>'
-            +'<td>'+esc(t.size_gb||0)+' GB</td>'
-            +'<td>'+esc(t.size_mb||0)+' MB</td>'
-            +'<td>'+esc(t.extents||0)+'</td>'
-            +'</tr>';
-    }).join('');
-    
-    el.innerHTML = '<table class="mt"><thead><tr>'
-        +'<th>Таблица (владелец)</th><th>Размер GB</th><th>Размер MB</th><th>Extents</th>'
-        +'</tr></thead><tbody>'+rows+'</tbody></table>';
-}
-
-function renderTopSql(sqls) {
-    var el = document.getElementById('blk-top-sql');
-    var countEl = document.getElementById('topSqlCount');
-    
-    if (countEl) countEl.textContent = sqls ? sqls.length : 0;
-    if (!el) return;
-    
-    if (!sqls || sqls.length === 0) {
-        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных о SQL-запросах</div>';
-        return;
-    }
-    
-    var rows = sqls.slice(0, 10).map(function(s) {
-        return '<tr>'
-            +'<td style="font-family:var(--font-mono);font-size:10px;">'+esc(s.sql_id||'—')+'</td>'
-            +'<td>'+(s.elapsed_sec ? s.elapsed_sec.toFixed(2) : '0')+' сек</td>'
-            +'<td>'+(s.cpu_sec ? s.cpu_sec.toFixed(2) : '0')+' сек</td>'
-            +'<td>'+esc(s.executions||0)+'</td>'
-            +'<td>'+(s.avg_elapsed_sec ? s.avg_elapsed_sec.toFixed(4) : '0')+' сек</td>'
-            +'<td style="max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(s.sql_preview)+'">'+esc(s.sql_preview||'—')+'</td>'
-            +'</tr>';
-    }).join('');
-    
-    el.innerHTML = '<table class="mt"><thead><tr>'
-        +'<th>SQL ID</th><th>Общее время</th><th>CPU время</th><th>Вызовов</th><th>Среднее время</th><th>Запрос</th>'
-        +'</tr></thead><tbody>'+rows+'</tbody></table>';
-}
-
-function renderSchemas(schemas) {
-    var el = document.getElementById('blk-schemas');
-    var countEl = document.getElementById('schemaCount');
-    
-    if (countEl) countEl.textContent = schemas ? schemas.length : 0;
-    if (!el) return;
-    
-    if (!schemas || schemas.length === 0) {
-        el.innerHTML = '<div class="empty-state" style="padding:16px;">Нет данных о схемах</div>';
-        return;
-    }
-    
-    var rows = schemas.slice(0, 10).map(function(s) {
-        return '<tr>'
-            +'<td>'+esc(s.owner||'—')+'</td>'
-            +'<td>'+esc(s.size_gb||0)+' GB</td>'
-            +'</tr>';
-    }).join('');
-    
-    el.innerHTML = '<table class="mt"><thead><tr>'
-        +'<th>Схема (Owner)</th><th>Размер</th>'
-        +'</tr></thead><tbody>'+rows+'</tbody></table>';
-}
-
-function renderPerformance(ora) {
-    var el = document.getElementById('blk-performance');
-    if (!el) return;
-    
-    var bhr = ora.buffer_cache_hit_ratio || 0;
-    var lchr = ora.library_cache_hit_ratio || 0;
-    var dchr = ora.dict_cache_hit_ratio || 0;
-    var pga = ora.pga_target || 0;
-    var pgaUsed = (ora.pga_usage || {}).used_mb || 0;
-    
-    var bhrCls = bhr > 80 ? 'good' : bhr > 60 ? 'warn' : 'crit';
-    var lchrCls = lchr > 90 ? 'good' : lchr > 80 ? 'warn' : 'crit';
-    var dchrCls = dchr > 90 ? 'good' : dchr > 80 ? 'warn' : 'crit';
-    
-    el.innerHTML = 
-        sr('Buffer Cache Hit Ratio', 'Эффективность кэша буферов', bhr + '%', '', bhrCls) +
-        sr('Library Cache Hit Ratio', 'Эффективность кэша библиотеки', lchr + '%', '', lchrCls) +
-        sr('Dictionary Cache Hit Ratio', 'Эффективность кэша словаря', dchr + '%', '', dchrCls) +
-        sr('PGA Target', 'Целевой размер PGA', pga.toFixed(0) + ' MB', '', '') +
-        sr('PGA Used', 'Текущее использование PGA', pgaUsed.toFixed(0) + ' MB', '', '');
-    
-    // Flash Recovery Area
-    if (ora.flash_recovery_area) {
-        var fra = ora.flash_recovery_area;
-        var fraPct = fra.used_percent || 0;
-        var fraCls = fraPct > 90 ? 'crit' : fraPct > 75 ? 'warn' : 'good';
-        el.innerHTML += sr('Flash Recovery Area', 'Область восстановления', fraPct.toFixed(1) + '% (' + fra.used_gb + '/' + fra.limit_gb + ' GB)', '', fraCls);
-    }
-}
 
 loadStats();
 setInterval(loadStats, 60000);
