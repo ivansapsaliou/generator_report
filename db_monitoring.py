@@ -315,7 +315,8 @@ class DatabaseMonitoring:
                     row = cur.fetchone()
                     stats['db_size_gb'] = row[0] if row and row[0] else 0
                     stats['db_size_pretty'] = f"{stats['db_size_gb']} GB"
-                except:
+                except Exception as e:
+                    print(f"[Oracle] Error getting DB size: {e}")
                     stats['db_size_gb'] = 0
                     stats['db_size_pretty'] = 'N/A'
                 
@@ -405,8 +406,16 @@ class DatabaseMonitoring:
                 
                 # 12. Tablespaces
                 try:
-                    #cur.execute("SELECT /*+parallel(4) */ df.tablespace_name,ROUND(df.bytes/1024/1024/1024,2),ROUND((df.bytes-NVL(SUM(fs.bytes),0))/1024/1024/1024,2),ROUND(NVL(SUM(fs.bytes),0)/1024/1024/1024,2),ROUND(((df.bytes-NVL(SUM(fs.bytes),0))/df.bytes)*100,2) FROM dba_data_files df LEFT JOIN dba_free_space fs ON df.tablespace_name=fs.tablespace_name GROUP BY df.tablespace_name,df.bytes ORDER BY 5 DESC")
-                    cur.execute("SELECT '1',1,1,1,1,1 FROM dual")
+                    cur.execute("""SELECT /*+parallel(4) */ 
+                        df.tablespace_name,
+                        ROUND(df.bytes/1024/1024/1024,2),
+                        ROUND((df.bytes-NVL(SUM(fs.bytes),0))/1024/1024/1024,2),
+                        ROUND(NVL(SUM(fs.bytes),0)/1024/1024/1024,2),
+                        ROUND(((df.bytes-NVL(SUM(fs.bytes),0))/df.bytes)*100,2) 
+                    FROM dba_data_files df 
+                    LEFT JOIN dba_free_space fs ON df.tablespace_name=fs.tablespace_name 
+                    GROUP BY df.tablespace_name,df.bytes 
+                    ORDER BY 5 DESC""")
                     tsp = []
                     for row in cur.fetchall():
                         tsp.append({'tablespace_name': row[0], 'size_gb': row[1] or 0, 'used_gb': row[2] or 0, 'free_gb': row[3] or 0, 'used_percent': row[4] or 0})

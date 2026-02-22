@@ -536,28 +536,51 @@ function renderCacheHitRatios(ora) {
     var el = document.getElementById('blk-cache-hit');
     if (!el) return;
     
-    var bufferRatio = ora.buffer_cache_hit_ratio || 0;
-    var libraryRatio = ora.library_cache_hit_ratio || 0;
-    var dictRatio = ora.dict_cache_hit_ratio || 0;
+    console.log('[Oracle] renderCacheHitRatios called with:', ora);
+    
+    if (!ora) {
+        el.innerHTML = '<div class="empty-state">Нет данных</div>';
+        return;
+    }
+    
+    var bufferRatio = ora.buffer_cache_hit_ratio;
+    var libraryRatio = ora.library_cache_hit_ratio;
+    var dictRatio = ora.dict_cache_hit_ratio;
+    
+    if (bufferRatio === null && libraryRatio === null && dictRatio === null) {
+        el.innerHTML = '<div class="empty-state">Нет данных кэшей</div>';
+        return;
+    }
     
     var html = '';
     
     // Buffer Cache
-    var bufferCls = bufferRatio >= 90 ? 'good' : bufferRatio >= 80 ? 'warn' : 'crit';
-    html += sr('Buffer Cache Hit Ratio', 'кэш блоков БД', 
-               bufferRatio.toFixed(2) + '%', bufferCls, bufferCls);
+    if (bufferRatio !== null && bufferRatio !== undefined) {
+        var bufferCls = bufferRatio >= 90 ? 'good' : bufferRatio >= 80 ? 'warn' : 'crit';
+        html += sr('Buffer Cache Hit Ratio', 'эффективность кэша блоков', 
+                   bufferRatio.toFixed(2) + '%', bufferCls, bufferCls);
+    }
     
     // Library Cache
-    var libraryCls = libraryRatio >= 95 ? 'good' : libraryRatio >= 90 ? 'warn' : 'crit';
-    html += sr('Library Cache Hit Ratio', 'кэш объектов БД', 
-               libraryRatio.toFixed(2) + '%', libraryCls, libraryCls);
+    if (libraryRatio !== null && libraryRatio !== undefined) {
+        var libraryCls = libraryRatio >= 95 ? 'good' : libraryRatio >= 90 ? 'warn' : 'crit';
+        html += sr('Library Cache Hit Ratio', 'кэш библиотеки объектов', 
+                   libraryRatio.toFixed(2) + '%', libraryCls, libraryCls);
+    }
     
     // Dictionary Cache
-    var dictCls = dictRatio >= 90 ? 'good' : dictRatio >= 80 ? 'warn' : 'crit';
-    html += sr('Dictionary Cache Hit Ratio', 'кэш словаря', 
-               dictRatio.toFixed(2) + '%', dictCls, dictCls);
+    if (dictRatio !== null && dictRatio !== undefined) {
+        var dictCls = dictRatio >= 90 ? 'good' : dictRatio >= 80 ? 'warn' : 'crit';
+        html += sr('Dictionary Cache Hit Ratio', 'кэш словаря данных', 
+                   dictRatio.toFixed(2) + '%', dictCls, dictCls);
+    }
     
-    el.innerHTML = html;
+    if (html) {
+        el.innerHTML = html;
+        console.log('[Oracle] Cache ratios rendered');
+    } else {
+        el.innerHTML = '<div class="empty-state">Нет доступных данных кэшей</div>';
+    }
 }
 
 function renderSessionsOracle(conn) {
@@ -824,6 +847,11 @@ function formatNumber(num) {
 
 
 loadStats();
+// Автоматически запускаем сбор данных при первой загрузке
+fetch('/api/monitoring/refresh', { method: 'POST' }).then(() => {
+    // После запуска сбора ждём немного и перезагружаем данные
+    setTimeout(loadStats, 3000);
+});
 setInterval(loadStats, 60000);
 </script>
 

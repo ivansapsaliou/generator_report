@@ -57,7 +57,9 @@ class MonitoringCollector:
                 conn = get_db_connection_by_profile(profile_id)
                 
                 # Собираем статистику
+                print(f"[Collector] Collecting stats for {db_type}...")
                 stats = DatabaseMonitoring.get_database_stats(conn, db_type)
+                print(f"[Collector] Collected keys: {list(stats.keys()) if stats else 'None'}")
                 conn.close()
                 
                 # Сохраняем в SQLite

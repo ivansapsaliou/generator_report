@@ -576,6 +576,11 @@ function switchTab(tabName) {
     
     if (tabName === 'system' || tabName === 'queries') {
         loadStats();
+        // Автоматически запускаем сбор данных при первой загрузке
+        fetch('/api/monitoring/refresh', { method: 'POST' }).then(() => {
+            // После запуска сбора ждём немного и перезагружаем данные
+            setTimeout(loadStats, 3000);
+        });
     } else if (tabName === 'sessions') {
         loadSessionsData();
         startSessionAutoRefresh(currentSessionRefreshRate);
@@ -645,16 +650,80 @@ async function loadStats() {
             if (versionBadge) versionBadge.textContent = '🟢 ' + pg.version;
         }
 
+
         // СИСТЕМА (метрики CPU, RAM, DISK если доступны)
         if (sys && Object.keys(sys).length > 0) {
-            renderSystemStats(sys);
+            console.log('[Monitoring] Rendering system stats...');
+            
+            // CPU
+            if (sys.cpu_percent != null) {
+                setMC('cpu', sys.cpu_percent.toFixed(1) + '%', sys.cpu_percent,
+                      sys.cpu_percent > 70, sys.cpu_percent > 90);
+            } else {
+                setMC('cpu', '—', 0, false, false);
+            }
+
+            // RAM
+            if (sys.memory_used_mb != null && sys.memory_total_mb != null) {
+                var memUsedGb = (sys.memory_used_mb / 1024).toFixed(1);
+                var memTotalGb = (sys.memory_total_mb / 1024).toFixed(1);
+                setMC('ram', memUsedGb + ' / ' + memTotalGb + ' GB',
+                      sys.memory_percent || 0, sys.memory_percent > 70, sys.memory_percent > 90);
+            } else if (sys.memory_percent != null) {
+                setMC('ram', sys.memory_percent.toFixed(1) + '%', sys.memory_percent,
+                      sys.memory_percent > 70, sys.memory_percent > 90);
+            } else {
+                setMC('ram', '—', 0, false, false);
+            }
+
+            // DISK
+            if (sys.disk_used != null && sys.disk_total != null) {
+                setMC('disk', sys.disk_used + ' / ' + sys.disk_total,
+                      sys.disk_percent || 0, sys.disk_percent > 75, sys.disk_percent > 90);
+            } else if (sys.disk_percent != null) {
+                setMC('disk', sys.disk_percent.toFixed(1) + '%', sys.disk_percent,
+                      sys.disk_percent > 75, sys.disk_percent > 90);
+            } else {
+                setMC('disk', '—', 0, false, false);
+            }
+        } else {
+            // Нет системных данных - показываем прочерк
+            setMC('cpu', '—', 0, false, false);
+            setMC('ram', '—', 0, false, false);
+            setMC('disk', '—', 0, false, false);
         }
 
+        // ✅ Рендерим PostgreSQL-специфичные метрики в верхних карточках
+        // DB SIZE
+        if (pg.db_size_pretty) {
+            var sizeStr = pg.db_size_pretty;
+            var sizeMatch = sizeStr.match(/(\d+(?:\.\d+)?)\s*([KMGT]?B)/i);
+            var sizeBytes = 0;
+            if (sizeMatch) {
+                var num = parseFloat(sizeMatch[1]);
+                var unit = sizeMatch[2].toUpperCase();
+                if (unit === 'KB') sizeBytes = num * 1024;
+                else if (unit === 'MB') sizeBytes = num * 1024 * 1024;
+                else if (unit === 'GB') sizeBytes = num * 1024 * 1024 * 1024;
+                else if (unit === 'TB') sizeBytes = num * 1024 * 1024 * 1024 * 1024;
+                else sizeBytes = num;
+            }
+            var sizePct = Math.min((sizeBytes / (50 * 1024 * 1024 * 1024)) * 100, 100); // 50 GB baseline
+            setMC('dbsize', pg.db_size_pretty, sizePct, false, false);
+        }
+        
+        // CONNECTIONS - Sessions
+        if (pg.connections) {
+            var conn = pg.connections;
+            var connPct = (conn.total / Math.max(conn.max_connections, 1)) * 100;
+            setMC('conn', conn.total + ' / ' + conn.max_connections, connPct, connPct > 70, connPct > 90);
+        }
+        
         // POSTGRESQL СТАТИСТИКА
         if (pg && Object.keys(pg).length > 0) {
             renderPostgresStats(pg);
         }
-        
+
         // Запуск обратного отсчёта до следующего обновления
         startCountdown();
 
