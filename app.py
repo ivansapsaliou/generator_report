@@ -2959,6 +2959,262 @@ def get_chart_data():
         import traceback
         return jsonify({'success': False, 'error': str(e), 'details': traceback.format_exc()}), 500
 
+@app.route('/sql-editor')
+@login_required
+def sql_editor():
+    return render_template('sql_editor.html', user=request.user)
+
+@app.route('/api/sql/execute', methods=['POST'])
+@login_required
+def sql_execute():
+    import re
+    data = request.json or {}
+    sql  = (data.get('sql') or '').strip()
+    limit = int(data.get('limit') or 100)
+ 
+    if not sql:
+        return jsonify({'success': False, 'error': 'SQL запрос не может быть пустым'}), 400
+ 
+    profile_id = session.get('active_profile_id')
+    if not profile_id:
+        return jsonify({'success': False, 'error': 'Нет активного подключения к БД'}), 400
+ 
+    profile = DatabaseProfileManager.get_profile(profile_id)
+    if not profile:
+        return jsonify({'success': False, 'error': 'Профиль подключения не найден'}), 400
+ 
+    if profile.get('db_type', 'postgresql') != 'postgresql':
+        return jsonify({'success': False, 'error': 'SQL-редактор поддерживает только PostgreSQL'}), 400
+ 
+    sql_upper = sql.upper().lstrip()
+    is_select = bool(re.match(r'^\\s*(SELECT|WITH|EXPLAIN|SHOW|TABLE)\\b', sql_upper))
+ 
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+ 
+        exec_sql = sql
+        if is_select and limit > 0 and not re.match(r'^\\s*EXPLAIN\\b', sql_upper):
+            if not re.search(r'\\bLIMIT\\s+\\d+', sql_upper):
+                exec_sql = sql.rstrip().rstrip(';') + f'\\nLIMIT {limit};'
+ 
+        cur.execute(exec_sql)
+ 
+        if is_select:
+            rows    = cur.fetchall()
+            columns = [desc[0] for desc in cur.description]
+            cur.close(); conn.close()
+            return jsonify({'success': True, 'data': {'columns': columns, 'rows': [dict(r) for r in rows]}})
+        else:
+            affected = cur.rowcount
+            conn.commit(); cur.close(); conn.close()
+            return jsonify({'success': True, 'rows_affected': affected})
+ 
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'success': False, 'error': str(e)}), 200
+
+@app.route('/api/sql/schema-objects', methods=['GET'])
+@login_required
+def sql_schema_objects():
+    obj_type = request.args.get('type', 'views')
+    try:
+        conn = get_db_connection()
+        cur  = conn.cursor()
+ 
+        queries = {
+            'views':      "SELECT table_name FROM information_schema.views WHERE table_schema='public' ORDER BY table_name",
+            'matviews':   "SELECT matviewname AS table_name FROM pg_matviews WHERE schemaname='public' ORDER BY matviewname",
+            'functions':  "SELECT routine_name AS table_name FROM information_schema.routines WHERE routine_schema='public' AND routine_type='FUNCTION' ORDER BY routine_name",
+            'procedures': "SELECT routine_name AS table_name FROM information_schema.routines WHERE routine_schema='public' AND routine_type='PROCEDURE' ORDER BY routine_name",
+            'sequences':  "SELECT sequence_name AS table_name FROM information_schema.sequences WHERE sequence_schema='public' ORDER BY sequence_name",
+            'triggers':   "SELECT trigger_name AS table_name FROM information_schema.triggers WHERE trigger_schema='public' ORDER BY trigger_name",
+            'types':      "SELECT typname AS table_name FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname='public' AND t.typtype='c' ORDER BY typname",
+            'extensions': "SELECT extname AS table_name FROM pg_extension ORDER BY extname",
+        }
+        q = queries.get(obj_type)
+        if not q:
+            return jsonify({'success': False, 'error': 'Unknown type'}), 400
+ 
+        cur.execute(q)
+        items = [row[0] for row in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({'success': True, 'data': items})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 200
+
+
+@app.route('/api/sql/table-detail', methods=['GET'])
+@login_required
+def sql_table_detail():
+    table_name = request.args.get('table', '').strip()
+    tab        = request.args.get('tab', 'columns')
+ 
+    if not table_name:
+        return jsonify({'success': False, 'error': 'table parameter required'}), 400
+ 
+    try:
+        conn = get_db_connection()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+ 
+        # ── COLUMNS ──────────────────────────────────────────────
+        if tab == 'columns':
+            cur.execute('''
+                SELECT
+                    c.column_name,
+                    c.data_type || CASE
+                        WHEN c.character_maximum_length IS NOT NULL
+                        THEN '(' || c.character_maximum_length || ')'
+                        WHEN c.numeric_precision IS NOT NULL AND c.numeric_scale IS NOT NULL
+                        THEN '(' || c.numeric_precision || ',' || c.numeric_scale || ')'
+                        ELSE '' END                          AS data_type,
+                    c.is_nullable = 'YES'                   AS is_nullable,
+                    c.column_default,
+                    EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu
+                            ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+                        WHERE tc.table_schema = 'public'
+                          AND tc.table_name   = c.table_name
+                          AND tc.constraint_type = 'PRIMARY KEY'
+                          AND kcu.column_name = c.column_name
+                    )                                       AS is_pk,
+                    EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu
+                            ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+                        WHERE tc.table_schema = 'public'
+                          AND tc.table_name   = c.table_name
+                          AND tc.constraint_type = 'FOREIGN KEY'
+                          AND kcu.column_name = c.column_name
+                    )                                       AS is_fk,
+                    EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu
+                            ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+                        WHERE tc.table_schema = 'public'
+                          AND tc.table_name   = c.table_name
+                          AND tc.constraint_type = 'UNIQUE'
+                          AND kcu.column_name = c.column_name
+                    )                                       AS is_unique
+                FROM information_schema.columns c
+                WHERE c.table_schema = 'public'
+                  AND c.table_name   = %s
+                ORDER BY c.ordinal_position
+            ''', (table_name,))
+            rows = [dict(r) for r in cur.fetchall()]
+            cur.close(); conn.close()
+            return jsonify({'success': True, 'data': rows})
+ 
+        # ── INDEXES ───────────────────────────────────────────────
+        elif tab == 'indexes':
+            cur.execute('''
+                SELECT
+                    i.relname                           AS indexname,
+                    am.amname                           AS index_type,
+                    ix.indisunique                      AS is_unique,
+                    pg_get_indexdef(ix.indexrelid)      AS indexdef,
+                    string_agg(a.attname, ', ' ORDER BY array_position(ix.indkey, a.attnum)) AS columns
+                FROM pg_index ix
+                JOIN pg_class t  ON t.oid  = ix.indrelid
+                JOIN pg_class i  ON i.oid  = ix.indexrelid
+                JOIN pg_am    am ON am.oid = i.relam
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+                WHERE t.relname = %s AND n.nspname = 'public'
+                GROUP BY i.relname, am.amname, ix.indisunique, ix.indexrelid
+                ORDER BY i.relname
+            ''', (table_name,))
+            rows = [dict(r) for r in cur.fetchall()]
+            cur.close(); conn.close()
+            return jsonify({'success': True, 'data': rows})
+ 
+        # ── CONSTRAINTS ───────────────────────────────────────────
+        elif tab == 'constraints':
+            cur.execute('''
+                SELECT
+                    tc.constraint_name,
+                    tc.constraint_type,
+                    kcu.column_name,
+                    ccu.table_name  AS foreign_table,
+                    ccu.column_name AS foreign_column
+                FROM information_schema.table_constraints tc
+                LEFT JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+                LEFT JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+                WHERE tc.table_schema = 'public' AND tc.table_name = %s
+                ORDER BY tc.constraint_type, tc.constraint_name
+            ''', (table_name,))
+            rows = [dict(r) for r in cur.fetchall()]
+            cur.close(); conn.close()
+            return jsonify({'success': True, 'data': rows})
+ 
+        # ── DDL ───────────────────────────────────────────────────
+        elif tab == 'ddl':
+            # Build CREATE TABLE DDL manually
+            cur.execute('''
+                SELECT
+                    c.column_name,
+                    c.data_type,
+                    c.character_maximum_length,
+                    c.numeric_precision,
+                    c.numeric_scale,
+                    c.is_nullable,
+                    c.column_default,
+                    c.ordinal_position
+                FROM information_schema.columns c
+                WHERE c.table_schema = 'public' AND c.table_name = %s
+                ORDER BY c.ordinal_position
+            ''', (table_name,))
+            cols = cur.fetchall()
+ 
+            # Get constraints
+            cur.execute('''
+                SELECT tc.constraint_type, tc.constraint_name, kcu.column_name,
+                       ccu.table_name AS f_table, ccu.column_name AS f_col
+                FROM information_schema.table_constraints tc
+                LEFT JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema
+                LEFT JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name=tc.constraint_name AND ccu.table_schema=tc.table_schema
+                WHERE tc.table_schema='public' AND tc.table_name=%s
+                ORDER BY tc.constraint_type
+            ''', (table_name,))
+            constraints = cur.fetchall()
+            cur.close(); conn.close()
+ 
+            # Build DDL string
+            lines = []
+            for col in cols:
+                dt = col['data_type'].upper()
+                if col['character_maximum_length']:
+                    dt += f"({col['character_maximum_length']})"
+                elif col['numeric_precision'] and col['numeric_scale'] is not None:
+                    dt += f"({col['numeric_precision']},{col['numeric_scale']})"
+                nn = ' NOT NULL' if col['is_nullable'] == 'NO' else ''
+                df = f" DEFAULT {col['column_default']}" if col['column_default'] else ''
+                lines.append(f"    {col['column_name']} {dt}{nn}{df}")
+ 
+            for c in constraints:
+                if c['constraint_type'] == 'PRIMARY KEY':
+                    lines.append(f"    CONSTRAINT {c['constraint_name']} PRIMARY KEY ({c['column_name']})")
+                elif c['constraint_type'] == 'FOREIGN KEY':
+                    lines.append(f"    CONSTRAINT {c['constraint_name']} FOREIGN KEY ({c['column_name']}) REFERENCES {c['f_table']}({c['f_col']})")
+                elif c['constraint_type'] == 'UNIQUE':
+                    lines.append(f"    CONSTRAINT {c['constraint_name']} UNIQUE ({c['column_name']})")
+ 
+            ddl = f"CREATE TABLE public.{table_name} (\n" + ',\n'.join(lines) + "\n);"
+            return jsonify({'success': True, 'data': {'ddl': ddl}})
+ 
+        return jsonify({'success': False, 'error': 'Unknown tab'}), 400
+ 
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 200
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

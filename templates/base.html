@@ -51,6 +51,12 @@
                 <i class="bi bi-diagram-3"></i>
             </a>
 
+            <a href="{{ url_for('sql_editor') }}"
+                class="sidebar-link {% if request.endpoint == 'sql_editor' %}active{% endif %}"
+                title="SQL Редактор">
+                    <i class="bi bi-terminal"></i>
+            </a>
+
             
 
             </a>
