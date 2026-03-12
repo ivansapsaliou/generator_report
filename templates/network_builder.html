@@ -463,10 +463,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Загружаем список объектов при загрузке страницы
     loadObjects();
     
-    // Устанавливаем текущий месяц по умолчанию
     const now = new Date();
     const monthStr = now.toISOString().slice(0, 7);
-    document.getElementById('accountingMonth').value = monthStr;
+    const monthEl = document.getElementById('accountingMonth');
+    if (monthEl) {
+        monthEl.value = monthStr;
+    }
+
+    // ✅ ВАЖНО: синхронизируем глобальную переменную selectedAccountingMonth,
+    // иначе при первом запуске loadNetwork() в режиме accounting будет ругаться,
+    // хотя в input месяц визуально уже выбран.
+    onAccountingMonthChange();
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -721,197 +728,163 @@ async function loadNetwork() {
 function buildNetworkGraph(treeData) {
     const nodes = new vis.DataSet();
     const edges = new vis.DataSet();
-    
-    const nodeMap = new Map(); // node_id -> vis node id
-    
-    // Цвета для типов узлов
+
+    const processedNodes = new Set();
+    const processedEdges = new Set();
+
+    // node_type_name -> color
+    const nodeTypeColorsLocal = {};
     const typeColorPalette = [
         '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
-        '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B88B', '#A8E6CF',
-        '#E74C3C', '#3498DB', '#9B59B6', '#1ABC9C', '#F39C12'
+        '#F7B801', '#A06CD5', '#5DD39E', '#EF476F', '#118AB2'
     ];
-    
-    // Определяем цвета в зависимости от темы
-    const isDark = !document.body.classList.contains('light-theme');
-    const edgeColor = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)';
-    const fontColor = isDark ? '#ffffff' : '#000000';
-    const borderColor = isDark ? '#666666' : '#333333';
-    const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
-    
-    // Собираем уникальные типы узлов
-    const uniqueTypes = new Set();
-    treeData.forEach(item => {
-        if (item.node_type_name) {
-            uniqueTypes.add(item.node_type_name);
+    let typeColorIndex = 0;
+
+    const getTypeColor = (typeName) => {
+        const key = typeName || 'N/A';
+        if (!nodeTypeColorsLocal[key]) {
+            nodeTypeColorsLocal[key] = typeColorPalette[typeColorIndex % typeColorPalette.length];
+            typeColorIndex++;
         }
-    });
-    
-    // Назначаем цвета типам
-    nodeTypeColors = {};
-    let colorIndex = 0;
-    uniqueTypes.forEach(type => {
-        nodeTypeColors[type] = typeColorPalette[colorIndex % typeColorPalette.length];
-        colorIndex++;
-    });
-    
-    // Добавляем корневой узел
-    const rootNode = treeData[0];
-    if (!rootNode) {
-        console.warn('[NETWORK] No data received');
-        return;
-    }
-    
-    const rootVisId = `node-${rootNode.node_calculate_parameter_id || rootNode.node_id}`;
-    nodeMap.set(rootNode.node_calculate_parameter_id || rootNode.node_id, rootVisId);
-    
-    // Функция для получения отображаемого имени узла
-    const getNodeLabel = (node) => {
-        if (!document.getElementById('showLabels').checked) return '';
-        const name = node.node_name || `Node ${node.node_calculate_parameter_id || node.node_id}`;
+        return nodeTypeColorsLocal[key];
+    };
+
+    const getNodeLabel = (row, nodeId) => {
+        const name = row?.node_name || `Node ${nodeId}`;
         return name.length > 20 ? name.substring(0, 17) + '...' : name;
     };
-    
-    // Функция для получения tooltip с информацией об узле
-    const getNodeTitle = (node, nodeId) => {
-        let html = `<strong>Node ID:</strong> ${nodeId}<br>`;
-        html += `<strong>Name:</strong> ${node.node_name || 'N/A'}<br>`;
-        html += `<strong>Line:</strong> ${node.line_name || 'N/A'}<br>`;
-        html += `<strong>Type:</strong> ${node.node_type_name || 'N/A'}<br>`;
-        html += `<strong>Level:</strong> ${node.level}<br>`;
-        
-        // Добавляем информацию о способах учета в режиме accounting
-        if (currentBuildMode === 'accounting' && accountingData[nodeId]) {
-            const accInfo = accountingData[nodeId];
-            if (accInfo.types && accInfo.types.length > 0) {
-                html += `<br><strong>Способы учета:</strong><br>`;
-                accInfo.types.forEach(t => {
-                    html += `<span style="color: #4ECDC4;">• ${t}</span><br>`;
-                });
-            }
+
+    const formatRuDateTime = (dtStr) => {
+        // "2026-02-01 00:00:00" -> readable ru-RU
+        if (!dtStr) return '';
+        const iso = String(dtStr).replace(' ', 'T');
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return String(dtStr);
+        return d.toLocaleString('ru-RU', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    const buildAccountingHtml = (nodeId) => {
+        if (!accountingData) return '';
+        // accountingData keys may be strings ("409") even if nodeId is number
+        const acc = accountingData[String(nodeId)] || accountingData[nodeId];
+        if (!acc) return '';
+
+        let html = `<hr style="margin:6px 0;opacity:.25;">`;
+        html += `<strong>Способы учета:</strong> ${
+            Array.isArray(acc.types) && acc.types.length ? acc.types.join(', ') : '—'
+        }<br>`;
+
+        if (Array.isArray(acc.valid_periods) && acc.valid_periods.length > 0) {
+            html += `<strong>Периоды действия:</strong><br>`;
+            acc.valid_periods.forEach((p, idx) => {
+                const start = formatRuDateTime(p.start);
+                const end = formatRuDateTime(p.end);
+                html += `&nbsp;&nbsp;${idx + 1}) ${start} — ${end}<br>`;
+            });
         }
-        
+
         return html;
     };
-    
-    // Получаем цвет для узла по его типу
-    const getNodeColor = (node) => {
-        const typeName = node.node_type_name;
-        if (typeName && nodeTypeColors[typeName]) {
-            return nodeTypeColors[typeName];
+
+    const buildNodeTitle = (row, nodeId) => {
+        let html = `<strong>Node ID:</strong> ${nodeId}<br>`;
+        html += `<strong>Name:</strong> ${row?.node_name || 'N/A'}<br>`;
+        html += `<strong>Line:</strong> ${row?.line_name || 'N/A'}<br>`;
+        html += `<strong>Type:</strong> ${row?.node_type_name || 'N/A'}<br>`;
+        html += `<strong>Level:</strong> ${row?.level ?? 'N/A'}<br>`;
+
+        if (currentBuildMode === 'accounting') {
+            html += buildAccountingHtml(nodeId);
         }
-        // Для корневого узла без типа - специальный цвет
-        return '#FF6B6B';
+        return html;
     };
-    
-    nodes.add({
-        id: rootVisId,
-        label: getNodeLabel(rootNode),
-        title: getNodeTitle(rootNode, rootNode.node_calculate_parameter_id || rootNode.node_id),
-        level: 0,
-        color: {
-            background: getNodeColor(rootNode),
-            border: borderColor,
-            highlight: {
-                background: '#FF6B6B',
-                border: borderColor
+
+    const ensureNode = (nodeId, rowHint) => {
+        if (nodeId == null) return;
+        const visNodeId = `node-${nodeId}`;
+        if (processedNodes.has(visNodeId)) return;
+
+        const row =
+            rowHint ||
+            treeData.find(r => r.child_id === nodeId) ||
+            treeData.find(r => r.node_id === nodeId) ||
+            {};
+
+        const typeName = row.node_type_name || 'N/A';
+        const color = getTypeColor(typeName);
+
+        processedNodes.add(visNodeId);
+        nodes.add({
+            id: visNodeId,
+            label: getNodeLabel(row, nodeId),
+            title: buildNodeTitle(row, nodeId),
+            shape: 'dot',
+            size: 22,
+            color: {
+                background: color,
+                border: '#2C2C2C',
+                highlight: { background: color, border: '#FF6B6B' },
+                hover: { background: color, border: '#FFD166' }
+            },
+            font: {
+                color: document.body.classList.contains('light-theme') ? '#111827' : '#E5E7EB',
+                size: 12,
+                face: 'Arial'
             }
-        },
-        shape: 'dot',
-        size: 30,
-        font: {
-            size: 14,
-            color: fontColor,
-            bold: {
-                color: fontColor
-            }
-        },
-        x: 0,
-        y: 0
+        });
+    };
+
+    // 1) Create nodes primarily from child_id (these represent the actual nodes shown per level)
+    treeData.forEach(row => {
+        const nodeId = row.child_id ?? row.node_calculate_parameter_id ?? row.node_id;
+        ensureNode(nodeId, row);
     });
-    
-    // Обрабатываем остальные узлы
-    treeData.forEach(item => {
-        if (item.level === 0) return; // Пропускаем корень
-        
-        const nodeId = item.child_id || item.node_calculate_parameter_id;
-        const visId = `node-${nodeId}`;
-        
-        if (!nodeMap.has(nodeId)) {
-            nodeMap.set(nodeId, visId);
-            
-            const color = getNodeColor(item);
-            // Вычисляем начальные координаты на основе level (для начального размещения)
-            const xOffset = (item.level - 1) * 150;
-            const yOffset = (Math.random() - 0.5) * 200;
-            
-            nodes.add({
-                id: visId,
-                label: getNodeLabel(item),
-                title: getNodeTitle(item, nodeId),
-                level: item.level,
-                color: {
-                    background: color,
-                    border: borderColor,
-                    highlight: {
-                        background: '#FF6B6B',
-                        border: borderColor
-                    }
-                },
-                shape: 'dot',
-                size: 25 - (item.level * 2),
-                font: {
-                    size: 12,
-                    color: fontColor,
-                    bold: {
-                        color: fontColor
-                    }
-                },
-                x: xOffset + (Math.random() - 0.5) * 50,
-                y: yOffset
-            });
-        }
+
+    // 2) Create edges strictly parent(node_id) -> child(child_id), skipping self-loops
+    treeData.forEach(row => {
+        const parentId = row.node_id;
+        const childId = row.child_id;
+
+        if (parentId == null || childId == null) return;
+        if (parentId === childId) return; // skip root self relation and any accidental loops
+
+        ensureNode(parentId, null);
+        ensureNode(childId, row);
+
+        const fromId = `node-${parentId}`;
+        const toId = `node-${childId}`;
+        const edgeKey = `${fromId}->${toId}`;
+        if (processedEdges.has(edgeKey)) return;
+        processedEdges.add(edgeKey);
+
+        edges.add({
+            from: fromId,
+            to: toId,
+            arrows: 'to',
+            color: {
+                color: '#9CA3AF',
+                highlight: '#FF6B6B'
+            },
+            smooth: { type: 'continuous' },
+            title: row.line_name ? String(row.line_name) : ''
+        });
     });
-    
-    // Добавляем связи между узлами
-    const processedEdges = new Set();
-    treeData.forEach(item => {
-        if (item.level === 0) return;
-        
-        const fromNodeId = item.node_calculate_parameter_id || item.node_id;
-        const toNodeId = item.child_id || item.node_calculate_parameter_id;
-        
-        const fromId = `node-${fromNodeId}`;
-        const toId = `node-${toNodeId}`;
-        const edgeKey = `${fromId}-${toId}`;
-        
-        if (!processedEdges.has(edgeKey)) {
-            processedEdges.add(edgeKey);
-            edges.add({
-                from: fromId,
-                to: toId,
-                arrows: 'to',
-                color: {
-                    color: edgeColor,
-                    highlight: '#FF6B6B'
-                },
-                smooth: {
-                    type: 'continuous'
-                },
-                title: `${item.line_name}`
-            });
-        }
-    });
-    
+
     nodesData = nodes;
     edgesData = edges;
-    
-    // Инициализируем граф
+
     const container = document.getElementById('network-container');
-    const data = { nodes: nodes, edges: edges };
-    
+    const data = { nodes, edges };
+
     const options = {
         physics: {
-            enabled: document.getElementById('showPhysics').checked,
+            enabled: document.getElementById('showPhysics')?.checked ?? true,
             solver: 'forceAtlas2Based',
             forceAtlas2Based: {
                 gravitationalConstant: -50,
@@ -919,80 +892,87 @@ function buildNetworkGraph(treeData) {
                 springLength: 150,
                 springConstant: 0.08,
                 damping: 0.4,
-                avoidOverlap: 0.5
+                avoidOverlap: 0.7
             },
-            stabilization: {
-                iterations: 200
+            stabilization: { iterations: 150 }
+        },
+        layout: { improvedLayout: true },
+        nodes: {
+            borderWidth: 2,
+            shadow: {
+                enabled: true,
+                color: 'rgba(0,0,0,0.2)',
+                size: 5,
+                x: 1,
+                y: 1
             }
         },
-        // Отключаем иерархическую раскладку для свободного перемещения
-        layout: {
-            improvedLayout: true,
-            randomSeed: 42
+        edges: {
+            width: 2,
+            shadow: {
+                enabled: true,
+                color: 'rgba(0,0,0,0.1)',
+                size: 3,
+                x: 1,
+                y: 1
+            },
+            arrows: {
+                to: { enabled: true, scaleFactor: 1, type: 'arrow' }
+            }
         },
         interaction: {
             hover: true,
+            tooltipDelay: 200,
             navigationButtons: true,
-            keyboard: true,
-            dragNodes: true,
-            dragView: true,
-            zoomView: true
-        },
-        nodes: {
-            borderWidth: 2,
-            borderWidthSelected: 3
-        },
-        // Добавляем сетку на фон
-        grid: {
-            enabled: true,
-            color: gridColor,
-            size: 20,
-            drawInterval: 30
+            keyboard: true
         }
     };
-    
+
+    // Destroy previous network if exists
     if (network) {
         network.destroy();
+        network = null;
     }
-    
+
     network = new vis.Network(container, data, options);
-    
-    // Событие клика на узел
+
+    // Click node -> details
     network.on('click', function(params) {
         if (params.nodes.length > 0) {
-            const nodeId = params.nodes[0];
-            showNodeDetails(nodeId);
+            const nodeVisId = params.nodes[0]; // "node-409"
+            // showNodeDetails ожидает, судя по вашему коду, числовой ID
+            const nodeIdNum = parseInt(String(nodeVisId).split('-')[1], 10);
+            showNodeDetails(nodeIdNum);
         }
     });
-    
-    // При наведении обновляем tooltip с данными accounting
+
+    // Ensure tooltips update on hover in accounting mode (if you update accountingData dynamically)
     network.on('hoverNode', function(params) {
-        if (currentBuildMode === 'accounting' && accountingData) {
-            const nodeId = parseInt(params.node.split('-')[1]);
-            const node = nodes.get(params.node);
-            if (node && accountingData[nodeId]) {
-                const accInfo = accountingData[nodeId];
-                if (accInfo.types && accInfo.types.length > 0) {
-                    // Обновляем title с информацией о способах учета
-                    const rawNode = rawData.find(r => 
-                        (r.node_calculate_parameter_id === nodeId) || 
-                        (r.child_id === nodeId)
-                    );
-                    if (rawNode) {
-                        let titleHtml = node.title;
-                        // Дополняем информацию если её нет
-                        if (!titleHtml.includes('Способы учета')) {
-                            titleHtml += `<br><br><strong>Способы учета:</strong><br>`;
-                            accInfo.types.forEach(t => {
-                                titleHtml += `<span style="color: #4ECDC4;">• ${t}</span><br>`;
-                            });
-                            nodes.update({id: params.node, title: titleHtml});
-                        }
-                    }
-                }
-            }
-        }
+        if (currentBuildMode !== 'accounting') return;
+
+        const nodeVisId = params.node;
+        const nodeIdNum = parseInt(String(nodeVisId).split('-')[1], 10);
+
+        const node = nodes.get(nodeVisId);
+        if (!node) return;
+
+        // Rebuild title to include fresh accounting periods
+        // Find a hint row for display fields
+        const hintRow = treeData.find(r => r.child_id === nodeIdNum) || treeData.find(r => r.node_id === nodeIdNum) || {};
+        const newTitle = buildNodeTitle(hintRow, nodeIdNum);
+
+        nodes.update({ id: nodeVisId, title: newTitle });
     });
+
+    // Update stats if you have these functions
+    if (typeof updateNetworkStats === 'function') updateNetworkStats();
+    if (typeof updateTypeLegend === 'function') {
+        // keep compatibility with existing legend logic if it reads global nodeTypeColors
+        nodeTypeColors = { ...nodeTypeColorsLocal };
+        updateTypeLegend();
+    } else {
+        nodeTypeColors = { ...nodeTypeColorsLocal };
+    }
 }
 
 function showNodeDetails(visNodeId) {
