@@ -2986,8 +2986,35 @@ def sql_execute():
     if profile.get('db_type', 'postgresql') != 'postgresql':
         return jsonify({'success': False, 'error': 'SQL-редактор поддерживает только PostgreSQL'}), 400
  
-    sql_upper = sql.upper().lstrip()
-    is_select = bool(re.match(r'^\\s*(SELECT|WITH|EXPLAIN|SHOW|TABLE)\\b', sql_upper))
+    # ✅ УЛУЧШЕННОЕ определение типа запроса
+    def get_first_sql_keyword(sql_text):
+        """
+        Извлекает первое SQL ключевое слово, игнорируя:
+        - Однострочные комментарии (-- ...)
+        - Многострочные комментарии (/* ... */)
+        - Пробелы и переводы строк
+        """
+        # Удаляем многострочные комментарии /* ... */
+        sql_clean = re.sub(r'/\*.*?\*/', '', sql_text, flags=re.DOTALL)
+        
+        # Удаляем однострочные комментарии -- ...
+        sql_clean = re.sub(r'--.*?(\n|$)', '\n', sql_clean)
+        
+        # Убираем лишние пробелы и переводы строк
+        sql_clean = sql_clean.strip()
+        
+        # Извлекаем первое слово
+        match = re.match(r'^\s*(\w+)', sql_clean, re.IGNORECASE)
+        if match:
+            return match.group(1).upper()
+        return None
+    
+    first_keyword = get_first_sql_keyword(sql)
+    
+    # Список команд, которые возвращают данные
+    select_keywords = {'SELECT', 'WITH', 'TABLE', 'SHOW', 'EXPLAIN', 'ANALYZE', 'VALUES'}
+    
+    is_select = first_keyword in select_keywords
  
     conn = None
     try:
@@ -2995,25 +3022,66 @@ def sql_execute():
         cur  = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
  
         exec_sql = sql
-        if is_select and limit > 0 and not re.match(r'^\\s*EXPLAIN\\b', sql_upper):
-            if not re.search(r'\\bLIMIT\\s+\\d+', sql_upper):
-                exec_sql = sql.rstrip().rstrip(';') + f'\\nLIMIT {limit};'
+        
+        # ✅ Добавляем LIMIT только для обычных SELECT
+        if first_keyword == 'SELECT' and limit > 0:
+            # Проверяем, нет ли уже LIMIT в запросе
+            if not re.search(r'\bLIMIT\s+\d+', sql, re.IGNORECASE):
+                exec_sql = sql.rstrip().rstrip(';') + f'\nLIMIT {limit};'
  
+        print(f"[SQL EXECUTE] First keyword: {first_keyword}")
+        print(f"[SQL EXECUTE] Query type: {'SELECT' if is_select else 'DML'}")
+        print(f"[SQL EXECUTE] Executing: {exec_sql[:200]}...")
+        
         cur.execute(exec_sql)
  
+        # ✅ Если это запрос, возвращающий данные
         if is_select:
-            rows    = cur.fetchall()
-            columns = [desc[0] for desc in cur.description]
-            cur.close(); conn.close()
-            return jsonify({'success': True, 'data': {'columns': columns, 'rows': [dict(r) for r in rows]}})
+            rows = cur.fetchall()
+            columns = [desc[0] for desc in cur.description] if cur.description else []
+            
+            print(f"[SQL EXECUTE] ✅ Fetched {len(rows)} rows, {len(columns)} columns")
+            
+            # ✅ Преобразуем DictRow в обычные словари
+            result_rows = [dict(r) for r in rows]
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                'success': True, 
+                'data': {
+                    'columns': columns, 
+                    'rows': result_rows
+                }
+            })
         else:
+            # ✅ Для INSERT/UPDATE/DELETE
             affected = cur.rowcount
-            conn.commit(); cur.close(); conn.close()
-            return jsonify({'success': True, 'rows_affected': affected})
+            conn.commit()
+            
+            print(f"[SQL EXECUTE] ✅ Affected {affected} rows")
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                'success': True, 
+                'rows_affected': affected
+            })
  
     except Exception as e:
-        try: conn.rollback(); conn.close()
-        except: pass
+        print(f"[SQL EXECUTE] ❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        try: 
+            if conn:
+                conn.rollback()
+                conn.close()
+        except: 
+            pass
+        
         return jsonify({'success': False, 'error': str(e)}), 200
 
 @app.route('/api/sql/schema-objects', methods=['GET'])

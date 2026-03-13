@@ -86,24 +86,20 @@
 .pane-hdr{display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:var(--bg-2);border-bottom:1px solid var(--line);font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;flex-shrink:0;}
 .pane-hdr i{color:var(--amber);margin-right:4px;}
 
-/* KEY FIX: use a fixed monospace font so line-height is predictable */
 .code-wrap{
     display:flex; flex:1; overflow:hidden; background:var(--bg);
     font-family:'Geist Mono','Consolas','Courier New',monospace;
     font-size:13px;
-    /* CRITICAL: line-height as px so textarea and line numbers stay in sync */
     line-height:20px;
 }
 
 #lineNums {
-    /* Must use same font/size/padding as textarea */
     background:var(--bg-1); border-right:1px solid var(--line);
     color:var(--text-3); font-family:'Geist Mono','Consolas','Courier New',monospace;
     font-size:13px; line-height:20px;
     text-align:right; padding:8px 8px 8px 6px;
     user-select:none; overflow:hidden; flex-shrink:0;
     min-width:42px; white-space:pre;
-    /* no highlight layer, no transparency tricks */
 }
 
 #sqlInput {
@@ -111,9 +107,7 @@
     color:var(--text); caret-color:var(--amber);
     font-family:'Geist Mono','Consolas','Courier New',monospace;
     font-size:13px; line-height:20px;
-    /* same top/bottom padding as lineNums */
     padding:8px 14px; overflow:auto; tab-size:4; white-space:pre; word-wrap:normal;
-    /* No mixed-mode, plain text — NO overlay, NO transparency */
     background-color:var(--bg);
 }
 #sqlInput::selection{background:rgba(240,168,67,.2);}
@@ -378,12 +372,13 @@ async function checkConn() {
         ov.classList.remove('show');
         badge.textContent = `${p.ssh_enabled?'🔒 ':''}${p.user}@${p.host}:${p.port}/${p.database}`;
         badge.style.display = 'block';
-    } catch(e) {}
+    } catch(e) {
+        console.error('[checkConn] Error:', e);
+    }
 }
 
 // ══════════════════════════════════════════════════════════
-// EDITOR — no syntax overlay, plain textarea
-// Line numbers rely on identical font metrics
+// EDITOR
 // ══════════════════════════════════════════════════════════
 function initEditor() {
     const ta = document.getElementById('sqlInput');
@@ -509,7 +504,10 @@ async function buildTree() {
             { label:'Extensions',          icon:'bi-plug ico-ext',            lazy:'extensions' },
         ], 0);
         bindTree();
-    } catch(e){body.innerHTML='<div class="tree-loading">'+eh(e.message)+'</div>';}
+    } catch(e){
+        console.error('[buildTree] Error:', e);
+        body.innerHTML='<div class="tree-loading">'+eh(e.message)+'</div>';
+    }
 }
 
 function renderGroup(label, icon, groups, depth) {
@@ -547,19 +545,33 @@ function bindTree() {
     document.querySelectorAll('#treeBody .tn').forEach(node => {
         node.addEventListener('click', function(e) {
             const tc = this.nextElementSibling;
+            
+            // ✅ Раскрытие/скрытие узла
             if (tc && tc.classList.contains('tc')) {
                 const isOpen = tc.classList.contains('open');
                 if (!isOpen) {
-                    tc.classList.add('open'); this.classList.add('open');
+                    tc.classList.add('open'); 
+                    this.classList.add('open');
                     const lazy = tc.dataset.lazy || this.dataset.lazy;
-                    if (lazy && tc.children.length === 0) loadLazy(tc, lazy);
-                } else { tc.classList.remove('open'); this.classList.remove('open'); }
+                    if (lazy && tc.children.length === 0) {
+                        loadLazy(tc, lazy);
+                    }
+                } else { 
+                    tc.classList.remove('open'); 
+                    this.classList.remove('open'); 
+                }
             }
+            
+            // ✅ Выделение узла
             document.querySelectorAll('#treeBody .tn.sel').forEach(n=>n.classList.remove('sel'));
             this.classList.add('sel');
-            const tableName = this.dataset.table;
-            if (this.dataset.type==='table' && tableName) insertText(tableName);
+            
+            // ❌ УБРАНА автоматическая вставка имени таблицы при клике
+            // const tableName = this.dataset.table;
+            // if (this.dataset.type==='table' && tableName) insertText(tableName);
         });
+        
+        // ✅ Двойной клик для открытия деталей таблицы
         if (node.dataset.type === 'table' && node.dataset.table) {
             node.addEventListener('dblclick', function(e) {
                 e.stopPropagation();
@@ -579,18 +591,39 @@ const LAZY_ICONS = {
 async function loadLazy(container, type) {
     container.innerHTML='<div class="tree-loading" style="padding-left:42px"><span class="loading"></span></div>';
     try {
-        const r=await fetch('/api/sql/schema-objects?type='+type);
-        const d=await r.json();
-        const items=d.success?d.data:[];
-        if(!items.length){container.innerHTML=`<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--text-3);font-family:var(--font-mono);">Нет объектов</div>`;return;}
-        const icon=LAZY_ICONS[type]||'bi-circle';
-        container.innerHTML=items.map(name=>`
+        const r = await fetch('/api/sql/schema-objects?type=' + type);
+        const d = await r.json();
+        
+        if (!d.success) {
+            console.error('[loadLazy] Error:', d.error);
+            container.innerHTML = `<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--red);font-family:var(--font-mono);">Ошибка: ${eh(d.error)}</div>`;
+            return;
+        }
+        
+        const items = d.data || [];
+        
+        if (!items.length) {
+            container.innerHTML = `<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--text-3);font-family:var(--font-mono);">Нет объектов</div>`;
+            return;
+        }
+        
+        const icon = LAZY_ICONS[type] || 'bi-circle';
+        container.innerHTML = items.map(name => `
             <div class="tn" style="padding-left:42px" data-type="obj">
                 <span class="arr" style="visibility:hidden">▶</span>
                 <span class="ico"><i class="bi ${icon}"></i></span>
-                <span class="lbl">${eh(name)}</span></div>`).join('');
-        container.querySelectorAll('.tn').forEach(n=>{n.addEventListener('click',()=>insertText(n.querySelector('.lbl').textContent));});
-    } catch(e){container.innerHTML=`<div style="padding:6px 10px;font-size:11px;color:var(--red);">Ошибка</div>`;}
+                <span class="lbl">${eh(name)}</span>
+            </div>`).join('');
+        
+        // ❌ УБРАНА автоматическая вставка имени при клике
+        // container.querySelectorAll('.tn').forEach(n=>{
+        //     n.addEventListener('click',()=>insertText(n.querySelector('.lbl').textContent));
+        // });
+        
+    } catch(e) {
+        console.error('[loadLazy] Exception:', e);
+        container.innerHTML = `<div style="padding:6px 10px;font-size:11px;color:var(--red);">Ошибка: ${eh(e.message)}</div>`;
+    }
 }
 
 function filterTree(q) {
@@ -628,7 +661,10 @@ async function loadDetailTab(tab, tbl) {
         else if(tab==='indexes')     renderIdxs(body,d.data);
         else if(tab==='constraints') renderCons(body,d.data);
         else if(tab==='ddl')         renderDDL(body,d.data);
-    } catch(e){body.innerHTML=`<pre class="err-blk">${eh(e.message)}</pre>`;}
+    } catch(e){
+        console.error('[loadDetailTab] Error:', e);
+        body.innerHTML=`<pre class="err-blk">${eh(e.message)}</pre>`;
+    }
 }
 function renderCols(body,data){
     if(!data.length){body.innerHTML='<div style="padding:16px;font-size:12px;color:var(--text-3);">Нет колонок</div>';return;}
@@ -677,160 +713,342 @@ function renderDDL(body,data){
 }
 
 // ══════════════════════════════════════════════════════════
-// RUN QUERY
+// RUN QUERY - ✅ ИСПРАВЛЕНО
 // ══════════════════════════════════════════════════════════
 async function runQuery() {
-    const ta=document.getElementById('sqlInput');
-    let sql=ta.value.trim();
-    const sel=ta.value.substring(ta.selectionStart,ta.selectionEnd).trim();
-    if(sel)sql=sel;
-    if(!sql)return;
-    const limit=parseInt(document.getElementById('rowLimit').value)||100;
-    const btn=document.getElementById('runBtn');
-    btn.innerHTML='<span class="loading"></span> Выполняется...';btn.disabled=true;
-    setSt('run','⟳ Выполняется...','','');
-    document.getElementById('rfbar').style.display='none';
-    document.getElementById('exportStrip').style.display='none';
-    document.getElementById('resultsContent').innerHTML='<div class="empty-hint"><span class="loading"></span></div>';
-    const t0=performance.now();
+    const ta = document.getElementById('sqlInput');
+    let sql = ta.value.trim();
+    const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+    if (sel) sql = sel;
+    if (!sql) return;
+    
+    const limit = parseInt(document.getElementById('rowLimit').value) || 100;
+    const btn = document.getElementById('runBtn');
+    btn.innerHTML = '<span class="loading"></span> Выполняется...';
+    btn.disabled = true;
+    setSt('run', '⟳ Выполняется...', '', '');
+    document.getElementById('rfbar').style.display = 'none';
+    document.getElementById('exportStrip').style.display = 'none';
+    document.getElementById('resultsContent').innerHTML = '<div class="empty-hint"><span class="loading"></span></div>';
+    
+    const t0 = performance.now();
+    
     try {
-        const resp=await fetch('/api/sql/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sql,limit})});
-        const data=await resp.json();
-        const el=((performance.now()-t0)/1000).toFixed(3);
-        S.history.unshift({sql:sql.substring(0,200),ts:new Date().toLocaleTimeString('ru-RU'),elapsed:el,ok:data.success,rows:data.data?.rows?.length??data.rows_affected??0});
-        if(S.history.length>50)S.history.pop();
-        localStorage.setItem('sqlhist3',JSON.stringify(S.history));
-        if(data.success){
-            if(data.data?.columns){
-                S.master=data.data.rows;S.display=[...S.master];S.cols=data.data.columns;S.sortCol=null;S.sortDir='asc';
-                document.getElementById('rowCnt').textContent=`${S.master.length} строк`;
-                document.getElementById('filtCnt').textContent='';
-                document.getElementById('resultFilter').value='';
-                document.getElementById('rfbar').style.display='flex';
-                document.getElementById('exportStrip').style.display='flex';
-                setSt('ok','✓ Выполнено',el+'s',S.master.length+' строк');
+        const resp = await fetch('/api/sql/execute', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({sql, limit})
+        });
+        
+        const data = await resp.json();
+        const el = ((performance.now() - t0) / 1000).toFixed(3);
+        
+        // ✅ Сохраняем в историю
+        S.history.unshift({
+            sql: sql.substring(0, 200),
+            ts: new Date().toLocaleTimeString('ru-RU'),
+            elapsed: el,
+            ok: data.success,
+            rows: data.data?.rows?.length ?? data.rows_affected ?? 0
+        });
+        if (S.history.length > 50) S.history.pop();
+        localStorage.setItem('sqlhist3', JSON.stringify(S.history));
+        
+        if (data.success) {
+            // ✅ Проверяем, есть ли результат с колонками (SELECT)
+            if (data.data && data.data.columns && data.data.rows) {
+                S.master = data.data.rows;
+                S.display = [...S.master];
+                S.cols = data.data.columns;
+                S.sortCol = null;
+                S.sortDir = 'asc';
+                
+                document.getElementById('rowCnt').textContent = `${S.master.length} строк`;
+                document.getElementById('filtCnt').textContent = '';
+                document.getElementById('resultFilter').value = '';
+                document.getElementById('rfbar').style.display = 'flex';
+                document.getElementById('exportStrip').style.display = 'flex';
+                setSt('ok', '✓ Выполнено', el + 's', S.master.length + ' строк');
+                
+                // ✅ Отображаем таблицу с данными
                 renderTable();
-            } else {
-                S.master=[];S.display=[];S.cols=[];
-                setSt('ok','✓ Выполнено',el+'s','затронуто: '+(data.rows_affected??'?'));
-                document.getElementById('resultsContent').innerHTML=`<div class="msg-ok"><div class="mi"><i class="bi bi-check-circle-fill"></i></div><div><div class="mt2">Запрос выполнен успешно</div>Затронуто строк: <strong>${data.rows_affected??'?'}</strong><div class="md">${eh(sql.substring(0,120))}${sql.length>120?'…':''}</div></div></div>`;
+            } 
+            // ✅ Для INSERT/UPDATE/DELETE показываем количество строк
+            else {
+                S.master = [];
+                S.display = [];
+                S.cols = [];
+                const affected = data.rows_affected ?? 0;
+                setSt('ok', '✓ Выполнено', el + 's', 'затронуто: ' + affected);
+                document.getElementById('resultsContent').innerHTML = `
+                    <div class="msg-ok">
+                        <div class="mi"><i class="bi bi-check-circle-fill"></i></div>
+                        <div>
+                            <div class="mt2">Запрос выполнен успешно</div>
+                            Затронуто строк: <strong>${affected}</strong>
+                            <div class="md">${eh(sql.substring(0, 120))}${sql.length > 120 ? '…' : ''}</div>
+                        </div>
+                    </div>`;
             }
         } else {
-            S.master=[];S.display=[];S.cols=[];
-            setSt('err','✗ Ошибка',el+'s','');
-            document.getElementById('resultsContent').innerHTML=`<pre class="err-blk">${eh(data.error||'Неизвестная ошибка')}</pre>`;
+            // ❌ Ошибка выполнения
+            S.master = [];
+            S.display = [];
+            S.cols = [];
+            setSt('err', '✗ Ошибка', el + 's', '');
+            document.getElementById('resultsContent').innerHTML = `<pre class="err-blk">${eh(data.error || 'Неизвестная ошибка')}</pre>`;
         }
-    } catch(e){setSt('err','✗ Сетевая ошибка','','');document.getElementById('resultsContent').innerHTML=`<pre class="err-blk">${eh(e.message)}</pre>`;}
-    finally{btn.innerHTML='<i class="bi bi-play-fill"></i> Выполнить <kbd style="font-size:9px;opacity:.7;margin-left:4px;">Ctrl+Enter</kbd>';btn.disabled=false;}
+    } catch (e) {
+        console.error('[runQuery] Exception:', e);
+        setSt('err', '✗ Сетевая ошибка', '', '');
+        document.getElementById('resultsContent').innerHTML = `<pre class="err-blk">${eh(e.message)}</pre>`;
+    } finally {
+        btn.innerHTML = '<i class="bi bi-play-fill"></i> Выполнить <kbd style="font-size:9px;opacity:.7;margin-left:4px;">Ctrl+Enter</kbd>';
+        btn.disabled = false;
+    }
 }
 
-function setSt(t,text,time,rows){
-    const e=document.getElementById('stText');
-    e.className=t==='ok'?'st-ok':t==='err'?'st-err':'st-run';
-    e.textContent=text;
-    document.getElementById('stTime').textContent=time;
-    document.getElementById('stRows').textContent=rows;
+function setSt(t, text, time, rows) {
+    const e = document.getElementById('stText');
+    e.className = t === 'ok' ? 'st-ok' : t === 'err' ? 'st-err' : 'st-run';
+    e.textContent = text;
+    document.getElementById('stTime').textContent = time;
+    document.getElementById('stRows').textContent = rows;
 }
 
 // ══════════════════════════════════════════════════════════
 // RESULT TABLE
 // ══════════════════════════════════════════════════════════
-function renderTable(){
-    const c=document.getElementById('resultsContent');
-    if(!S.cols.length){c.innerHTML='<div style="padding:14px;font-size:12px;color:var(--text-3);">Нет данных</div>';return;}
-    const ths=S.cols.map((col,i)=>{let cl=S.sortCol===i?(S.sortDir==='asc'?'sa':'sd'):'';return`<th class="${cl}" onclick="sortBy(${i})">${eh(col)}</th>`;}).join('');
-    const trs=S.display.map(row=>{
-        const tds=S.cols.map(c=>{
-            const v=row[c];
-            if(v===null||v===undefined)return`<td class="vn">NULL</td>`;
-            if(typeof v==='number')return`<td class="vnum">${v}</td>`;
-            if(typeof v==='boolean')return`<td class="vbool">${v}</td>`;
-            const s=String(v);return`<td title="${eh(s)}">${eh(s.length>200?s.substring(0,200)+'…':s)}</td>`;
-        }).join('');
-        return`<tr>${tds}</tr>`;
+function renderTable() {
+    const c = document.getElementById('resultsContent');
+    if (!S.cols.length) {
+        c.innerHTML = '<div style="padding:14px;font-size:12px;color:var(--text-3);">Нет данных</div>';
+        return;
+    }
+    
+    const ths = S.cols.map((col, i) => {
+        let cl = S.sortCol === i ? (S.sortDir === 'asc' ? 'sa' : 'sd') : '';
+        return `<th class="${cl}" onclick="sortBy(${i})">${eh(col)}</th>`;
     }).join('');
-    c.innerHTML=`<table class="rt"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+    
+    const trs = S.display.map(row => {
+        const tds = S.cols.map(c => {
+            const v = row[c];
+            if (v === null || v === undefined) return `<td class="vn">NULL</td>`;
+            if (typeof v === 'number') return `<td class="vnum">${v}</td>`;
+            if (typeof v === 'boolean') return `<td class="vbool">${v}</td>`;
+            const s = String(v);
+            return `<td title="${eh(s)}">${eh(s.length > 200 ? s.substring(0, 200) + '…' : s)}</td>`;
+        }).join('');
+        return `<tr>${tds}</tr>`;
+    }).join('');
+    
+    c.innerHTML = `<table class="rt"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
 }
 
-function sortBy(i){
-    S.sortDir=S.sortCol===i?(S.sortDir==='asc'?'desc':'asc'):'asc';S.sortCol=i;
-    const col=S.cols[i],dir=S.sortDir==='asc'?1:-1;
-    S.display.sort((a,b)=>{const av=a[col],bv=b[col];if(av==null)return 1*dir;if(bv==null)return -1*dir;if(!isNaN(av)&&!isNaN(bv))return(parseFloat(av)-parseFloat(bv))*dir;return String(av).localeCompare(String(bv))*dir;});
+function sortBy(i) {
+    S.sortDir = S.sortCol === i ? (S.sortDir === 'asc' ? 'desc' : 'asc') : 'asc';
+    S.sortCol = i;
+    const col = S.cols[i], dir = S.sortDir === 'asc' ? 1 : -1;
+    S.display.sort((a, b) => {
+        const av = a[col], bv = b[col];
+        if (av == null) return 1 * dir;
+        if (bv == null) return -1 * dir;
+        if (!isNaN(av) && !isNaN(bv)) return (parseFloat(av) - parseFloat(bv)) * dir;
+        return String(av).localeCompare(String(bv)) * dir;
+    });
     renderTable();
 }
-function applyFilter(){
-    const q=document.getElementById('resultFilter').value.toLowerCase().trim();
-    S.display=q?S.master.filter(r=>S.cols.some(c=>String(r[c]??'').toLowerCase().includes(q))):[...S.master];
-    document.getElementById('filtCnt').textContent=q?`Найдено: ${S.display.length}`:'';
-    S.sortCol=null;renderTable();
+
+function applyFilter() {
+    const q = document.getElementById('resultFilter').value.toLowerCase().trim();
+    S.display = q ? S.master.filter(r => S.cols.some(c => String(r[c] ?? '').toLowerCase().includes(q))) : [...S.master];
+    document.getElementById('filtCnt').textContent = q ? `Найдено: ${S.display.length}` : '';
+    S.sortCol = null;
+    renderTable();
 }
 
 // ══════════════════════════════════════════════════════════
 // TABS
 // ══════════════════════════════════════════════════════════
-function switchTab(tab){
-    S.activeTab=tab;
-    document.querySelectorAll('.rtab').forEach(b=>b.classList.toggle('active',b.id==='tab-'+tab));
-    if(tab==='history')renderHist();
-    else{
-        if(S.cols.length)renderTable();
-        else document.getElementById('resultsContent').innerHTML='<div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос для просмотра результатов</span></div>';
+function switchTab(tab) {
+    S.activeTab = tab;
+    document.querySelectorAll('.rtab').forEach(b => b.classList.toggle('active', b.id === 'tab-' + tab));
+    if (tab === 'history') {
+        renderHist();
+    } else {
+        if (S.cols.length) {
+            renderTable();
+        } else {
+            document.getElementById('resultsContent').innerHTML = '<div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос для просмотра результатов</span></div>';
+        }
     }
 }
-function openHistoryTab(){switchTab('history');}
-function renderHist(){
-    const c=document.getElementById('resultsContent');
-    if(!S.history.length){c.innerHTML='<div style="padding:16px;font-size:12px;color:var(--text-3);">История пуста</div>';return;}
-    c.innerHTML='<div class="hi-list">'+S.history.map((h,i)=>`<div class="hi-it" onclick="loadHist(${i})"><div class="hi-meta">${h.ts} · ${h.elapsed}s · <span class="${h.ok?'hi-ok':'hi-err'}">${h.ok?'✓':'✗'}</span> ${h.rows} строк</div>${eh(h.sql)}</div>`).join('')+'</div>';
-}
-function loadHist(i){const h=S.history[i];if(!h)return;document.getElementById('sqlInput').value=h.sql;syncNums();switchTab('data');}
 
-// ══════════════════════════════════════════════════════════
+function openHistoryTab() {
+    switchTab('history');
+}
+
+function renderHist() {
+    const c = document.getElementById('resultsContent');
+    if (!S.history.length) {
+        c.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--text-3);">История пуста</div>';
+        return;
+    }
+    c.innerHTML = '<div class="hi-list">' + S.history.map((h, i) => `
+        <div class="hi-it" onclick="loadHist(${i})">
+            <div class="hi-meta">${h.ts} · ${h.elapsed}s · <span class="${h.ok ? 'hi-ok' : 'hi-err'}">${h.ok ? '✓' : '✗'}</span> ${h.rows} строк</div>
+            ${eh(h.sql)}
+        </div>`).join('') + '</div>';
+}
+
+function loadHist(i) {
+    const h = S.history[i];
+    if (!h) return;
+    document.getElementById('sqlInput').value = h.sql;
+    syncNums();
+    switchTab('data');
+}
+
+// ═══════════════════════════════��══════════════════════════
 // SNIPPETS / CLEAR / FORMAT
 // ══════════════════════════════════════════════════════════
-function insertSnippet(key){const ta=document.getElementById('sqlInput');const s=ta.selectionStart;ta.value=ta.value.substring(0,s)+SNIPS[key]+ta.value.substring(ta.selectionEnd);ta.selectionStart=ta.selectionEnd=s+SNIPS[key].length;syncNums();ta.focus();}
-function clearEditor(){document.getElementById('sqlInput').value='';syncNums();}
-function insertText(name){const ta=document.getElementById('sqlInput');const p=ta.selectionStart;ta.value=ta.value.substring(0,p)+name+ta.value.substring(p);ta.selectionStart=ta.selectionEnd=p+name.length;syncNums();ta.focus();}
-function formatSQL(){
-    const ta=document.getElementById('sqlInput');let sql=ta.value;
-    ['SELECT','FROM','WHERE','JOIN','LEFT JOIN','RIGHT JOIN','INNER JOIN','OUTER JOIN','ORDER BY','GROUP BY','HAVING','LIMIT','OFFSET','UNION','UNION ALL','INSERT INTO','VALUES','UPDATE','SET','DELETE FROM','RETURNING'].forEach(kw=>{
-        sql=sql.replace(new RegExp(`\\b${kw}\\b`,'gi'),'\n'+kw.toUpperCase());
+function insertSnippet(key) {
+    const ta = document.getElementById('sqlInput');
+    const s = ta.selectionStart;
+    ta.value = ta.value.substring(0, s) + SNIPS[key] + ta.value.substring(ta.selectionEnd);
+    ta.selectionStart = ta.selectionEnd = s + SNIPS[key].length;
+    syncNums();
+    ta.focus();
+}
+
+function clearEditor() {
+    document.getElementById('sqlInput').value = '';
+    syncNums();
+}
+
+function insertText(name) {
+    const ta = document.getElementById('sqlInput');
+    const p = ta.selectionStart;
+    ta.value = ta.value.substring(0, p) + name + ta.value.substring(p);
+    ta.selectionStart = ta.selectionEnd = p + name.length;
+    syncNums();
+    ta.focus();
+}
+
+function formatSQL() {
+    const ta = document.getElementById('sqlInput');
+    let sql = ta.value;
+    ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'UNION ALL', 'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'RETURNING'].forEach(kw => {
+        sql = sql.replace(new RegExp(`\\b${kw}\\b`, 'gi'), '\n' + kw.toUpperCase());
     });
-    ta.value=sql.replace(/\n{3,}/g,'\n\n').trim();syncNums();
+    ta.value = sql.replace(/\n{3,}/g, '\n\n').trim();
+    syncNums();
 }
 
 // ══════════════════════════════════════════════════════════
 // EXPORT
 // ══════════════════════════════════════════════════════════
-function exportResult(fmt){
-    if(!S.cols.length)return;const rows=S.display,cols=S.cols;
-    if(fmt==='json'){dl(new Blob([JSON.stringify(rows,null,2)],{type:'application/json'}),'result.json');}
-    else if(fmt==='csv'){let csv=cols.map(c=>`"${c}"`).join(',')+'\n';rows.forEach(r=>{csv+=cols.map(c=>{const v=r[c];if(v==null)return'';return`"${String(v).replace(/"/g,'""')}"`;}).join(',')+'\n';});dl(new Blob(['\uFEFF'+csv],{type:'text/csv'}),'result.csv');}
-    else if(fmt==='xlsx'){if(typeof XLSX==='undefined')return;const ws=XLSX.utils.aoa_to_sheet([cols,...rows.map(r=>cols.map(c=>r[c]??''))]);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Результат');XLSX.writeFile(wb,'result.xlsx');}
+function exportResult(fmt) {
+    if (!S.cols.length) return;
+    const rows = S.display, cols = S.cols;
+    
+    if (fmt === 'json') {
+        dl(new Blob([JSON.stringify(rows, null, 2)], {type: 'application/json'}), 'result.json');
+    } else if (fmt === 'csv') {
+        let csv = cols.map(c => `"${c}"`).join(',') + '\n';
+        rows.forEach(r => {
+            csv += cols.map(c => {
+                const v = r[c];
+                if (v == null) return '';
+                return `"${String(v).replace(/"/g, '""')}"`;
+            }).join(',') + '\n';
+        });
+        dl(new Blob(['\uFEFF' + csv], {type: 'text/csv'}), 'result.csv');
+    } else if (fmt === 'xlsx') {
+        if (typeof XLSX === 'undefined') {
+            alert('Библиотека XLSX не загружена. Экспорт в Excel недоступен.');
+            return;
+        }
+        const ws = XLSX.utils.aoa_to_sheet([cols, ...rows.map(r => cols.map(c => r[c] ?? ''))]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Результат');
+        XLSX.writeFile(wb, 'result.xlsx');
+    }
 }
-function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();}
+
+function dl(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+}
 
 // ══════════════════════════════════════════════════════════
 // SPLITTERS
 // ══════════════════════════════════════════════════════════
-function initSplitters(){
+function initSplitters() {
     // H resizer (editor/results)
-    const hr=document.getElementById('hResizer'),ep=document.getElementById('editorPane'),vs=document.getElementById('vSplit');
-    let dH=false,sY=0,sHH=0;
-    hr.addEventListener('mousedown',e=>{dH=true;sY=e.clientY;sHH=ep.offsetHeight;document.body.style.cursor='ns-resize';document.body.style.userSelect='none';});
-    document.addEventListener('mousemove',e=>{if(!dH)return;ep.style.height=Math.max(60,Math.min(sHH+e.clientY-sY,vs.offsetHeight-80))+'px';syncScroll();});
-    document.addEventListener('mouseup',()=>{dH=false;document.body.style.cursor='';document.body.style.userSelect='';});
+    const hr = document.getElementById('hResizer'), 
+          ep = document.getElementById('editorPane'), 
+          vs = document.getElementById('vSplit');
+    let dH = false, sY = 0, sHH = 0;
+    
+    hr.addEventListener('mousedown', e => {
+        dH = true;
+        sY = e.clientY;
+        sHH = ep.offsetHeight;
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+    });
+    
+    document.addEventListener('mousemove', e => {
+        if (!dH) return;
+        ep.style.height = Math.max(60, Math.min(sHH + e.clientY - sY, vs.offsetHeight - 80)) + 'px';
+        syncScroll();
+    });
+    
+    document.addEventListener('mouseup', () => {
+        dH = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    });
+    
     // V splitter (tree width)
-    const ts=document.getElementById('treeSplitter'),tree=document.getElementById('objectTree');
-    let dT=false,sX=0,sW=0;
-    ts.addEventListener('mousedown',e=>{dT=true;sX=e.clientX;sW=tree.offsetWidth;document.body.style.cursor='ew-resize';document.body.style.userSelect='none';});
-    document.addEventListener('mousemove',e=>{if(!dT)return;tree.style.width=Math.max(140,Math.min(sW+e.clientX-sX,500))+'px';});
-    document.addEventListener('mouseup',()=>{dT=false;document.body.style.cursor='';document.body.style.userSelect='';});
+    const ts = document.getElementById('treeSplitter'), 
+          tree = document.getElementById('objectTree');
+    let dT = false, sX = 0, sW = 0;
+    
+    ts.addEventListener('mousedown', e => {
+        dT = true;
+        sX = e.clientX;
+        sW = tree.offsetWidth;
+        document.body.style.cursor = 'ew-resize';
+        document.body.style.userSelect = 'none';
+    });
+    
+    document.addEventListener('mousemove', e => {
+        if (!dT) return;
+        tree.style.width = Math.max(140, Math.min(sW + e.clientX - sX, 500)) + 'px';
+    });
+    
+    document.addEventListener('mouseup', () => {
+        dT = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    });
 }
 
 // ══════════════════════════════════════════════════════════
 // UTIL
 // ══════════════════════════════════════════════════════════
-function eh(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function eh(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
 </script>
 {% endblock %}
