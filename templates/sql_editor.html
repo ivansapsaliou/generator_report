@@ -6,6 +6,9 @@
 <button class="btn btn-secondary btn-sm" onclick="formatSQL()">
     <i class="bi bi-magic"></i> Форматировать
 </button>
+<button class="btn btn-secondary btn-sm" id="runStmtBtn" onclick="runStatement()" title="Выполнить текущий statement (Ctrl+Shift+Enter)">
+    <i class="bi bi-play"></i> Statement
+</button>
 <button class="btn btn-primary btn-sm" id="runBtn" onclick="runQuery()">
     <i class="bi bi-play-fill"></i> Выполнить <kbd style="font-size:9px;opacity:.7;margin-left:4px;">Ctrl+Enter</kbd>
 </button>
@@ -218,6 +221,62 @@
 .ac-it.fn .ac-tp{background:rgba(121,192,255,.15);color:#79c0ff;}
 
 .tree-loading{padding:12px 10px;font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:8px;}
+
+/* ── SYNTAX HIGHLIGHTING OVERLAY ── */
+.hl-wrap{position:relative;flex:1;overflow:hidden;}
+.sql-hl{
+    position:absolute;inset:0;margin:0;
+    padding:8px 14px;
+    font-family:'Geist Mono','Consolas','Courier New',monospace;
+    font-size:13px;line-height:20px;
+    overflow:auto;white-space:pre;word-wrap:normal;tab-size:4;
+    color:var(--text);background:transparent;border:none;outline:none;
+    pointer-events:none;box-sizing:border-box;
+}
+.sql-hl::-webkit-scrollbar{display:none;}
+.hl-kw{color:#cf9fff;font-weight:600;}
+.hl-fn{color:#79c0ff;}
+.hl-str{color:#a8d9a4;}
+.hl-num{color:var(--amber);}
+.hl-cmt{color:var(--text-3);font-style:italic;}
+.hl-op{color:#f39c12;}
+#sqlInput,
+.sql-input{color:transparent;background:transparent;caret-color:var(--amber);position:absolute;inset:0;width:100%;height:100%;flex:unset;}
+#sqlInput::selection,.sql-input::selection{background:rgba(240,168,67,.3);color:var(--text);}
+
+/* ── CONTEXT MENU ── */
+#ctxMenu{display:none;position:fixed;z-index:9998;background:var(--bg-2);border:1px solid var(--line-2);border-radius:4px;box-shadow:var(--shadow-md);min-width:190px;padding:4px 0;font-family:var(--font-ui);font-size:12px;}
+.ctx-item{padding:6px 14px;cursor:pointer;color:var(--text-2);display:flex;align-items:center;gap:8px;transition:background .1s;}
+.ctx-item:hover{background:var(--amber-glow);color:var(--amber);}
+.ctx-item i{font-size:12px;width:14px;}
+.ctx-sep{height:1px;background:var(--line);margin:3px 0;}
+
+/* ── LINTER WARNINGS ── */
+.lint-bar{display:none;padding:5px 10px;background:rgba(224,168,67,.08);border-bottom:1px solid rgba(224,168,67,.25);font-size:11px;font-family:var(--font-mono);color:var(--amber);flex-shrink:0;align-items:center;gap:8px;flex-wrap:wrap;}
+.lint-bar.show{display:flex;}
+.lint-warn{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:3px;background:rgba(224,82,82,.12);color:var(--red);font-size:10px;border:1px solid rgba(224,82,82,.25);}
+.lint-warn.info{background:rgba(91,141,238,.1);color:#5b8dee;border-color:rgba(91,141,238,.2);}
+.lint-dismiss{margin-left:auto;cursor:pointer;opacity:.6;background:none;border:none;color:var(--text-3);font-size:14px;}
+.lint-dismiss:hover{opacity:1;color:var(--red);}
+
+/* ── USER SNIPPETS MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,.55);align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--bg-1);border:1px solid var(--line-2);border-radius:6px;box-shadow:var(--shadow-lg);width:560px;max-width:96vw;max-height:82vh;display:flex;flex-direction:column;overflow:hidden;}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);font-family:var(--font-ui);font-weight:700;font-size:14px;color:var(--text);}
+.modal-hdr-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-3);line-height:1;}
+.modal-hdr-close:hover{color:var(--red);}
+.modal-body{flex:1;overflow:auto;padding:10px;}
+.modal-footer{padding:10px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;}
+.snip-item{padding:9px 10px;border:1px solid var(--line);border-radius:3px;margin-bottom:6px;}
+.snip-item:hover{border-color:var(--amber-dim);}
+.snip-title{font-weight:700;font-size:12px;color:var(--text);font-family:var(--font-mono);}
+.snip-prev{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-mono);margin-top:2px;}
+.snip-actions{display:flex;align-items:center;gap:5px;margin-top:6px;}
+.snip-ts{font-size:10px;color:var(--text-3);margin-left:auto;}
+.snip-empty{padding:30px;text-align:center;font-size:12px;color:var(--text-3);}
+.ac-it.col .ac-tp{background:rgba(240,168,67,.15);color:var(--amber);}
+.ac-it.sch .ac-tp{background:rgba(30,200,200,.12);color:#1ec8c8;}
 </style>
 {% endblock %}
 
@@ -267,6 +326,9 @@
                     <button class="btn btn-secondary btn-sm" onclick="insertSnippet('explain', 'tab-1')">EXPLAIN</button>
                     <button class="btn btn-secondary btn-sm" onclick="insertSnippet('cte', 'tab-1')">WITH CTE</button>
                     <div class="tb-div"></div>
+                    <button class="btn btn-secondary btn-sm" onclick="explainQuery(false)" title="EXPLAIN текущего запроса"><i class="bi bi-search"></i> Explain</button>
+                    <button class="btn btn-secondary btn-sm" onclick="explainQuery(true)" title="EXPLAIN ANALYZE текущего запроса"><i class="bi bi-search-heart"></i> Analyze</button>
+                    <div class="tb-div"></div>
                     <span class="tb-lbl">Лимит:</span>
                     <select class="lim-sel" id="rowLimit" data-tab="tab-1">
                         <option value="50">50</option><option value="100" selected>100</option>
@@ -275,8 +337,11 @@
                     </select>
                     <div class="tb-div"></div>
                     <button class="btn btn-secondary btn-sm" onclick="clearEditor('tab-1')"><i class="bi bi-trash"></i></button>
+                    <button class="btn btn-secondary btn-sm" onclick="saveCurrentAsSnippet()" title="Сохранить как сниппет"><i class="bi bi-bookmark-plus"></i></button>
+                    <button class="btn btn-secondary btn-sm" onclick="showSnippetsModal()" title="Мои сниппеты"><i class="bi bi-collection"></i></button>
                     <button class="btn btn-secondary btn-sm" onclick="openHistoryTab()" title="История"><i class="bi bi-clock-history"></i></button>
                 </div>
+                <div class="lint-bar" id="lintBar"></div>
 
                 <div id="vSplit">
                     <div id="editorPane">
@@ -286,8 +351,11 @@
                         </div>
                         <div class="code-wrap">
                             <div id="lineNums">1</div>
-                            <textarea id="sqlInput" class="sql-input" data-tab="tab-1" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
-                                placeholder="-- Введите SQL запрос...&#10;-- Ctrl+Enter — выполнить&#10;-- Ctrl+Space — автодополнение"></textarea>
+                            <div class="hl-wrap">
+                                <pre class="sql-hl" id="sqlHighlight" aria-hidden="true"></pre>
+                                <textarea id="sqlInput" class="sql-input" data-tab="tab-1" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
+                                    placeholder="-- Введите SQL запрос...&#10;-- Ctrl+Enter — выполнить&#10;-- Ctrl+Space — автодополнение"></textarea>
+                            </div>
                         </div>
                     </div>
                     <div id="hResizer"></div>
@@ -322,6 +390,22 @@
 
 <div id="acMenu"></div>
 
+<div id="ctxMenu"></div>
+
+<div class="modal-overlay" id="snippetsModal" onclick="if(event.target===this)hideSnippetsModal()">
+    <div class="modal-box">
+        <div class="modal-hdr">
+            <span><i class="bi bi-collection" style="color:var(--amber);margin-right:8px;"></i>Мои сниппеты</span>
+            <button class="modal-hdr-close" onclick="hideSnippetsModal()">×</button>
+        </div>
+        <div class="modal-body" id="snippetsBody"></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary btn-sm" onclick="hideSnippetsModal()">Закрыть</button>
+            <button class="btn btn-primary btn-sm" onclick="saveCurrentAsSnippet()"><i class="bi bi-bookmark-plus"></i> Сохранить текущий</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const SQL_KW = 'SELECT FROM WHERE JOIN LEFT RIGHT INNER OUTER FULL CROSS ON AS AND OR NOT IN EXISTS BETWEEN LIKE ILIKE IS NULL TRUE FALSE INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE INDEX VIEW DROP ALTER ADD COLUMN PRIMARY KEY FOREIGN REFERENCES UNIQUE DEFAULT CONSTRAINT CHECK GROUP BY ORDER HAVING LIMIT OFFSET UNION ALL DISTINCT WITH RECURSIVE CASE WHEN THEN ELSE END CAST OVER PARTITION ROW_NUMBER RANK DENSE_RANK TRUNCATE BEGIN COMMIT ROLLBACK TRANSACTION EXPLAIN ANALYZE VACUUM RETURNING COALESCE NULLIF GREATEST LEAST EXTRACT DATE_TRUNC ARRAY JSONB JSON TEXT INTEGER BIGINT BOOLEAN NUMERIC TIMESTAMP DATE TIME INTERVAL SERIAL UUID VARCHAR DO LANGUAGE PLPGSQL FUNCTION PROCEDURE TRIGGER RETURNS DECLARE'.split(' ');
 const SQL_FN = 'COUNT SUM AVG MIN MAX ROUND FLOOR CEIL ABS MOD LENGTH TRIM UPPER LOWER SUBSTR SUBSTRING REPLACE SPLIT_PART CONCAT COALESCE NULLIF NOW CURRENT_DATE CURRENT_TIMESTAMP TO_CHAR TO_DATE AGE EXTRACT DATE_TRUNC DATE_PART ARRAY_AGG STRING_AGG JSON_AGG JSONB_AGG ROW_TO_JSON UNNEST GENERATE_SERIES REGEXP_REPLACE REGEXP_MATCH LEAD LAG FIRST_VALUE LAST_VALUE NTH_VALUE NTILE CUME_DIST PERCENT_RANK'.split(' ');
@@ -345,8 +429,12 @@ const S = {
     tabCounter: 1,
     tabs: {
         'tab-1': { type: 'sql', title: 'SQL Запрос', data: {} }
-    }
+    },
+    colCache: {},
+    connInfo: ''
 };
+
+const MAX_HISTORY_ITEMS = 100;
 
 document.addEventListener('DOMContentLoaded', async () => {
     await checkConn();
@@ -368,8 +456,10 @@ async function checkConn() {
         const p = d.profile;
         if ((p.db_type || 'postgresql').toLowerCase() !== 'postgresql') { ov.classList.add('show'); return; }
         ov.classList.remove('show');
-        badge.textContent = `${p.ssh_enabled?'🔒 ':''}${p.user}@${p.host}:${p.port}/${p.database}`;
+        const connStr = `${p.ssh_enabled?'🔒 ':''}${p.user}@${p.host}:${p.port}/${p.database}`;
+        badge.textContent = connStr;
         badge.style.display = 'block';
+        S.connInfo = connStr;
     } catch(e) {
         console.error('[checkConn]', e);
     }
@@ -382,7 +472,7 @@ function getActiveTA() {
 }
 
 function wireupTA(ta) {
-    ta.addEventListener('input', () => { syncNums(ta); showAC(false, ta); });
+    ta.addEventListener('input', () => { syncNums(ta); updateHighlight(ta); showAC(false, ta); });
     ta.addEventListener('keydown', onKD);
     ta.addEventListener('scroll', () => syncScroll(ta));
     ta.addEventListener('click', () => updateCursor(ta));
@@ -395,12 +485,14 @@ function initEditor() {
     wireupTA(ta);
     ta.value = '-- SQL Редактор\n-- Ctrl+Enter — выполнить  |  Ctrl+Space — автодополнение\n\nSELECT version();';
     syncNums(ta);
+    updateHighlight(ta);
 }
 
 function syncNums(ta) {
     if (!ta) ta = document.getElementById('sqlInput');
     if (!ta) return;
-    const ln = ta.previousElementSibling || document.getElementById('lineNums');
+    const wrap = ta.closest('.code-wrap');
+    const ln = wrap ? wrap.querySelector('#lineNums, .line-nums') : document.getElementById('lineNums');
     if (!ln) return;
     const n = (ta.value.match(/\n/g) || []).length + 1;
     let s = '';
@@ -411,8 +503,18 @@ function syncNums(ta) {
 function syncScroll(ta) {
     if (!ta) ta = document.getElementById('sqlInput');
     if (!ta) return;
-    const ln = ta.previousElementSibling || document.getElementById('lineNums');
-    if (ln) ln.scrollTop = ta.scrollTop;
+    // Sync line numbers
+    const wrap = ta.closest('.code-wrap');
+    if (wrap) {
+        const ln = wrap.querySelector('#lineNums, .line-nums');
+        if (ln) ln.scrollTop = ta.scrollTop;
+    }
+    // Sync highlight overlay
+    const hl = ta.previousElementSibling;
+    if (hl && hl.classList.contains('sql-hl')) {
+        hl.scrollTop = ta.scrollTop;
+        hl.scrollLeft = ta.scrollLeft;
+    }
 }
 
 function updateCursor(ta) {
@@ -434,6 +536,7 @@ function onKD(e) {
         if (e.key==='Escape'){hideAC();return;}
     }
     if ((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runQuery();return;}
+    if ((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key==='Enter'){e.preventDefault();runStatement();return;}
     if ((e.ctrlKey||e.metaKey)&&e.key===' '){e.preventDefault();showAC(true, ta);return;}
     if ((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();formatSQL();return;}
     if (e.key==='Tab'){
@@ -454,9 +557,24 @@ function showAC(force=false, ta=null){
     if(!ta) ta=getActiveTA();
     const w=getWord(ta); if(!force&&w.length<1){hideAC();return;}
     const up=w.toUpperCase(); const items=[];
-    SQL_KW.filter(k=>k.startsWith(up)).slice(0,8).forEach(k=>items.push({label:k,type:'kw'}));
-    SQL_FN.filter(f=>f.startsWith(up)).slice(0,6).forEach(f=>items.push({label:f+'(',type:'fn'}));
-    S.tables.filter(t=>t.toLowerCase().startsWith(w.toLowerCase())).slice(0,8).forEach(t=>items.push({label:t,type:'tbl'}));
+
+    // Column autocomplete: detect table.col pattern
+    const dotIdx = w.lastIndexOf('.');
+    if (dotIdx > 0) {
+        const tblPart = w.substring(0, dotIdx);
+        const colPart = w.substring(dotIdx + 1).toLowerCase();
+        const cols = S.colCache[tblPart] || S.colCache[tblPart.toLowerCase()] || [];
+        if (cols.length) {
+            cols.filter(c => c.toLowerCase().startsWith(colPart)).slice(0,12).forEach(c => items.push({label: tblPart + '.' + c, type:'col'}));
+        } else {
+            // Trigger async load then re-show
+            loadTableColumns(tblPart).then(() => showAC(force, ta));
+        }
+    } else {
+        SQL_KW.filter(k=>k.startsWith(up)).slice(0,8).forEach(k=>items.push({label:k,type:'kw'}));
+        SQL_FN.filter(f=>f.startsWith(up)).slice(0,6).forEach(f=>items.push({label:f+'(',type:'fn'}));
+        S.tables.filter(t=>t.toLowerCase().startsWith(w.toLowerCase())).slice(0,8).forEach(t=>items.push({label:t,type:'tbl'}));
+    }
     if(!items.length){hideAC();return;}
     S.acItems=items;S.acIdx=-1;
     const m=document.getElementById('acMenu');
@@ -572,6 +690,11 @@ function bindTree() {
                 e.stopPropagation();
                 openDetail(this.dataset.table);
             });
+            node.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                showContextMenu(e.clientX, e.clientY, this.dataset.table);
+            });
         }
     });
 }
@@ -681,7 +804,7 @@ function addNewSQLTab() {
     const content = createSQLTabContent(tabId);
     document.getElementById('tabsContainer').appendChild(content);
     const ta = content.querySelector('.sql-input');
-    if (ta) wireupTA(ta);
+    if (ta) { wireupTA(ta); updateHighlight(ta); }
     switchEditorTab(tabId);
 }
 
@@ -699,6 +822,9 @@ function createSQLTabContent(tabId) {
             <button class="btn btn-secondary btn-sm" onclick="insertSnippet('explain', '${tabId}')">EXPLAIN</button>
             <button class="btn btn-secondary btn-sm" onclick="insertSnippet('cte', '${tabId}')">WITH CTE</button>
             <div class="tb-div"></div>
+            <button class="btn btn-secondary btn-sm" onclick="explainQuery(false)" title="EXPLAIN"><i class="bi bi-search"></i> Explain</button>
+            <button class="btn btn-secondary btn-sm" onclick="explainQuery(true)" title="EXPLAIN ANALYZE"><i class="bi bi-search-heart"></i> Analyze</button>
+            <div class="tb-div"></div>
             <span class="tb-lbl">Лимит:</span>
             <select class="lim-sel" data-tab="${tabId}">
                 <option value="50">50</option><option value="100" selected>100</option>
@@ -707,14 +833,20 @@ function createSQLTabContent(tabId) {
             </select>
             <div class="tb-div"></div>
             <button class="btn btn-secondary btn-sm" onclick="clearEditor('${tabId}')"><i class="bi bi-trash"></i></button>
+            <button class="btn btn-secondary btn-sm" onclick="saveCurrentAsSnippet()" title="Сохранить как сниппет"><i class="bi bi-bookmark-plus"></i></button>
+            <button class="btn btn-secondary btn-sm" onclick="showSnippetsModal()" title="Мои сниппеты"><i class="bi bi-collection"></i></button>
             <button class="btn btn-primary btn-sm" onclick="runQuery()"><i class="bi bi-play-fill"></i> Выполнить</button>
         </div>
-        <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+        <div class="lint-bar" id="lintBar-${tabId}"></div>
+        <div style="flex:1;display:flex;flex-direction:column;">
             <div style="flex:1;display:flex;flex-direction:column;">
                 <div class="pane-hdr"><span><i class="bi bi-code-slash"></i>SQL запрос</span></div>
                 <div class="code-wrap">
                     <div class="line-nums">1</div>
-                    <textarea class="sql-input" data-tab="${tabId}" spellcheck="false" placeholder="-- SQL запрос..."></textarea>
+                    <div class="hl-wrap">
+                        <pre class="sql-hl" aria-hidden="true"></pre>
+                        <textarea class="sql-input" data-tab="${tabId}" spellcheck="false" placeholder="-- SQL запрос..."></textarea>
+                    </div>
                 </div>
             </div>
             <div class="results-content" data-tab="${tabId}" style="border-top:1px solid var(--line);padding:20px;"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос</span></div></div>
@@ -804,12 +936,33 @@ async function runQuery() {
     if (sel) sql = sel;
     if (!sql) return;
 
+    await executeSQL(sql, tabId);
+}
+
+async function runStatement() {
+    const tabId = S.currentEditorTab;
+    const ta = document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
+    if (!ta) return;
+
+    const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+    const sql = sel || getStatementAtCursor(ta);
+    if (!sql) return;
+
+    await executeSQL(sql, tabId);
+}
+
+async function executeSQL(sql, tabId) {
+    if (!tabId) tabId = S.currentEditorTab;
+
+    // Run linter and show warnings
+    const warnings = lintQuery(sql);
+    showLintBar(warnings, tabId);
+
     const limit = parseInt(document.querySelector(`.lim-sel[data-tab="${tabId}"]`)?.value || document.getElementById('rowLimit')?.value || 100);
     const btn = document.getElementById('runBtn');
-    if (!btn) return;
-
-    btn.innerHTML = '<span class="loading"></span> Выполняется...';
-    btn.disabled = true;
+    const stmtBtn = document.getElementById('runStmtBtn');
+    if (btn) { btn.innerHTML = '<span class="loading"></span> Выполняется...'; btn.disabled = true; }
+    if (stmtBtn) stmtBtn.disabled = true;
     setSt('run', '⟳ Выполняется...', '', '');
 
     const rfbar = document.getElementById('rfbar');
@@ -833,13 +986,15 @@ async function runQuery() {
         const el = ((performance.now() - t0) / 1000).toFixed(3);
 
         S.history.unshift({
-            sql: sql.substring(0, 200),
+            sql: sql,
+            sqlPreview: sql.substring(0, 200),
             ts: new Date().toLocaleTimeString('ru-RU'),
             elapsed: el,
             ok: data.success,
-            rows: data.data?.rows?.length ?? data.rows_affected ?? 0
+            rows: data.data?.rows?.length ?? data.rows_affected ?? 0,
+            conn: S.connInfo
         });
-        if (S.history.length > 50) S.history.pop();
+        if (S.history.length > MAX_HISTORY_ITEMS) S.history.pop();
         localStorage.setItem('sqlhist3', JSON.stringify(S.history));
 
         if (data.success) {
@@ -889,8 +1044,8 @@ async function runQuery() {
         setSt('err', '✗ Сетевая ошибка', '', '');
         if (resultsEl) resultsEl.innerHTML = `<pre class="err-blk">${eh(e.message)}</pre>`;
     } finally {
-        btn.innerHTML = '<i class="bi bi-play-fill"></i> Выполнить <kbd style="font-size:9px;opacity:.7;margin-left:4px;">Ctrl+Enter</kbd>';
-        btn.disabled = false;
+        if (btn) { btn.innerHTML = '<i class="bi bi-play-fill"></i> Выполнить <kbd style="font-size:9px;opacity:.7;margin-left:4px;">Ctrl+Enter</kbd>'; btn.disabled = false; }
+        if (stmtBtn) stmtBtn.disabled = false;
     }
 }
 
@@ -985,8 +1140,8 @@ function renderHist() {
     }
     c.innerHTML = '<div class="hi-list">' + S.history.map((h, i) => `
         <div class="hi-it" onclick="loadHist(${i})">
-            <div class="hi-meta">${h.ts} · ${h.elapsed}s · <span class="${h.ok ? 'hi-ok' : 'hi-err'}">${h.ok ? '✓' : '✗'}</span> ${h.rows} строк</div>
-            ${eh(h.sql)}
+            <div class="hi-meta">${eh(h.ts)} · ${eh(h.elapsed)}s · <span class="${h.ok ? 'hi-ok' : 'hi-err'}">${h.ok ? '✓' : '✗'}</span> ${h.rows} строк${h.conn ? ' · <span style="color:var(--text-3)">'+eh(h.conn)+'</span>' : ''}</div>
+            ${eh(h.sqlPreview || h.sql)}
         </div>`).join('') + '</div>';
 }
 
@@ -995,8 +1150,9 @@ function loadHist(i) {
     if (!h) return;
     const ta = getActiveTA();
     if (ta) {
-        ta.value = h.sql;
+        ta.value = h.sql || h.sqlPreview || '';
         syncNums(ta);
+        updateHighlight(ta);
     }
     switchTab('data');
 }
@@ -1008,6 +1164,7 @@ function insertSnippet(key, tabId) {
     ta.value = ta.value.substring(0, s) + SNIPS[key] + ta.value.substring(ta.selectionEnd);
     ta.selectionStart = ta.selectionEnd = s + SNIPS[key].length;
     syncNums(ta);
+    updateHighlight(ta);
     ta.focus();
 }
 
@@ -1016,6 +1173,7 @@ function clearEditor(tabId) {
     if (!ta) return;
     ta.value = '';
     syncNums(ta);
+    updateHighlight(ta);
 }
 
 function insertText(name) {
@@ -1025,6 +1183,7 @@ function insertText(name) {
     ta.value = ta.value.substring(0, p) + name + ta.value.substring(p);
     ta.selectionStart = ta.selectionEnd = p + name.length;
     syncNums(ta);
+    updateHighlight(ta);
     ta.focus();
 }
 
@@ -1037,6 +1196,7 @@ function formatSQL() {
     });
     ta.value = sql.replace(/\n{3,}/g, '\n\n').trim();
     syncNums(ta);
+    updateHighlight(ta);
 }
 
 function exportResult(fmt) {
@@ -1135,6 +1295,367 @@ function eh(s) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+// ═══ SYNTAX HIGHLIGHTING ═══
+(function(){
+const SQL_KW_SET = new Set(SQL_KW);
+const SQL_FN_SET = new Set(SQL_FN);
+
+window.highlightSQL = function(text) {
+    if (!text) return '\n';
+    let html = '';
+    let i = 0;
+    const len = text.length;
+
+    while (i < len) {
+        // Line comment
+        if (text[i] === '-' && i+1 < len && text[i+1] === '-') {
+            let j = i;
+            while (j < len && text[j] !== '\n') j++;
+            html += '<span class="hl-cmt">' + eh(text.slice(i, j)) + '</span>';
+            i = j;
+            continue;
+        }
+        // Block comment
+        if (text[i] === '/' && i+1 < len && text[i+1] === '*') {
+            let j = text.indexOf('*/', i + 2);
+            j = j < 0 ? len : j + 2;
+            html += '<span class="hl-cmt">' + eh(text.slice(i, j)) + '</span>';
+            i = j;
+            continue;
+        }
+        // Dollar-quoted string: $$ ... $$
+        if (text[i] === '$' && i+1 < len && text[i+1] === '$') {
+            let j = text.indexOf('$$', i + 2);
+            j = j < 0 ? len : j + 2;
+            html += '<span class="hl-str">' + eh(text.slice(i, j)) + '</span>';
+            i = j;
+            continue;
+        }
+        // Single-quoted string
+        if (text[i] === "'") {
+            let j = i + 1;
+            while (j < len) {
+                if (text[j] === "'" && j+1 < len && text[j+1] === "'") { j += 2; continue; }
+                if (text[j] === "'") { j++; break; }
+                j++;
+            }
+            html += '<span class="hl-str">' + eh(text.slice(i, j)) + '</span>';
+            i = j;
+            continue;
+        }
+        // Number
+        if (/[0-9]/.test(text[i]) || (text[i] === '.' && i+1 < len && /[0-9]/.test(text[i+1]))) {
+            let j = i;
+            while (j < len && /[\d.eExX_a-fA-F]/.test(text[j])) j++;
+            html += '<span class="hl-num">' + eh(text.slice(i, j)) + '</span>';
+            i = j;
+            continue;
+        }
+        // Identifier or keyword
+        if (/[a-zA-Z_]/.test(text[i])) {
+            let j = i;
+            while (j < len && /[\w]/.test(text[j])) j++;
+            const word = text.slice(i, j);
+            const upper = word.toUpperCase();
+            if (SQL_KW_SET.has(upper)) {
+                html += '<span class="hl-kw">' + eh(word) + '</span>';
+            } else if (SQL_FN_SET.has(upper)) {
+                html += '<span class="hl-fn">' + eh(word) + '</span>';
+            } else {
+                html += eh(word);
+            }
+            i = j;
+            continue;
+        }
+        // Operators
+        if ('=<>!+-*/%|&^~'.indexOf(text[i]) >= 0) {
+            html += '<span class="hl-op">' + eh(text[i]) + '</span>';
+            i++;
+            continue;
+        }
+        html += eh(text[i]);
+        i++;
+    }
+    return html + '\n';
+};
+})();
+
+function updateHighlight(ta) {
+    if (!ta) return;
+    const hl = ta.previousElementSibling;
+    if (!hl || !hl.classList.contains('sql-hl')) return;
+    hl.innerHTML = highlightSQL(ta.value);
+    // Keep scroll in sync
+    hl.scrollTop = ta.scrollTop;
+    hl.scrollLeft = ta.scrollLeft;
+}
+
+// ═══ STATEMENT PARSER ═══
+function splitStatements(sql) {
+    const stmts = [];
+    let start = 0;
+    let i = 0;
+    const len = sql.length;
+    while (i < len) {
+        if (sql[i] === '-' && i+1 < len && sql[i+1] === '-') {
+            while (i < len && sql[i] !== '\n') i++;
+            continue;
+        }
+        if (sql[i] === '/' && i+1 < len && sql[i+1] === '*') {
+            i += 2;
+            while (i < len && !(sql[i] === '*' && i+1 < len && sql[i+1] === '/')) i++;
+            i += 2;
+            continue;
+        }
+        if (sql[i] === '$' && i+1 < len && sql[i+1] === '$') {
+            i += 2;
+            while (i < len) {
+                if (sql[i] === '$' && i+1 < len && sql[i+1] === '$') { i += 2; break; }
+                i++;
+            }
+            continue;
+        }
+        if (sql[i] === "'") {
+            i++;
+            while (i < len) {
+                if (sql[i] === "'" && i+1 < len && sql[i+1] === "'") { i += 2; continue; }
+                if (sql[i] === "'") { i++; break; }
+                i++;
+            }
+            continue;
+        }
+        if (sql[i] === ';') {
+            const stmt = sql.slice(start, i + 1).trim();
+            if (stmt && stmt !== ';') stmts.push({ sql: stmt, start, end: i });
+            start = i + 1;
+            i++;
+            continue;
+        }
+        i++;
+    }
+    const last = sql.slice(start).trim();
+    if (last) stmts.push({ sql: last, start, end: len - 1 });
+    return stmts;
+}
+
+function getStatementAtCursor(ta) {
+    const pos = ta.selectionStart;
+    const sql = ta.value;
+    const stmts = splitStatements(sql);
+    for (const s of stmts) {
+        if (pos >= s.start && pos <= s.end + 1) return s.sql;
+    }
+    // fallback: entire text
+    return sql.trim();
+}
+
+// ═══ EXPLAIN / EXPLAIN ANALYZE ═══
+function explainQuery(analyze) {
+    const ta = getActiveTA();
+    if (!ta) return;
+    let sql = ta.value.trim();
+    const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+    if (sel) sql = sel;
+    if (!sql) return;
+    sql = sql.replace(/;\s*$/, '');
+    const prefix = analyze
+        ? 'EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)'
+        : 'EXPLAIN';
+    executeSQL(prefix + '\n' + sql, S.currentEditorTab);
+}
+
+// ═══ QUERY LINTER ═══
+function lintQuery(sql) {
+    const warnings = [];
+    // Strip comments for analysis
+    const clean = sql
+        .replace(/--[^\n]*/g, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .toUpperCase();
+
+    if (/\bUPDATE\b/.test(clean) && !/\bWHERE\b/.test(clean)) {
+        warnings.push({ level: 'danger', msg: 'UPDATE без WHERE: изменятся все строки!' });
+    }
+    if (/\bDELETE\b/.test(clean) && !/\bWHERE\b/.test(clean)) {
+        warnings.push({ level: 'danger', msg: 'DELETE без WHERE: удалятся все строки!' });
+    }
+    if (/\bTRUNCATE\b/.test(clean)) {
+        warnings.push({ level: 'danger', msg: 'TRUNCATE: необратимо удаляет все данные таблицы!' });
+    }
+    if (/\bDROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW)\b/.test(clean)) {
+        warnings.push({ level: 'danger', msg: 'DROP: необратимая операция!' });
+    }
+    if (/\bSELECT\s+\*/.test(clean)) {
+        warnings.push({ level: 'info', msg: 'SELECT *: рекомендуется явно перечислить нужные колонки' });
+    }
+    return warnings;
+}
+
+function showLintBar(warnings, tabId) {
+    const bar = document.getElementById('lintBar-' + tabId) || document.getElementById('lintBar');
+    if (!bar) return;
+    if (!warnings.length) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
+    bar.innerHTML = warnings.map(w =>
+        `<span class="lint-warn ${w.level === 'info' ? 'info' : ''}">${w.level === 'danger' ? '⚠ ' : 'ℹ '}${eh(w.msg)}</span>`
+    ).join('') + `<button class="lint-dismiss" onclick="this.parentElement.classList.remove('show')" title="Закрыть">×</button>`;
+    bar.classList.add('show');
+}
+
+// ═══ CONTEXT MENU FOR TREE ═══
+function showContextMenu(x, y, tableName) {
+    const menu = document.getElementById('ctxMenu');
+    if (!menu) return;
+    // Use data-action attributes to avoid XSS through inline event handlers
+    menu.innerHTML = `
+        <div class="ctx-item" data-action="select100"><i class="bi bi-table"></i>SELECT 100 строк</div>
+        <div class="ctx-item" data-action="count"><i class="bi bi-hash"></i>COUNT(*)</div>
+        <div class="ctx-item" data-action="insert_name"><i class="bi bi-cursor-text"></i>Вставить имя</div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item" data-action="detail"><i class="bi bi-info-circle"></i>Свойства таблицы</div>
+    `;
+    menu.dataset.table = tableName;
+    menu.querySelectorAll('.ctx-item[data-action]').forEach(item => {
+        item.addEventListener('click', function() {
+            const action = this.dataset.action;
+            const tbl = menu.dataset.table;
+            hideContextMenu();
+            if (action === 'detail') openDetail(tbl);
+            else execCtxAction(action, tbl);
+        });
+    });
+    menu.style.display = 'block';
+    menu.style.left = Math.min(x, window.innerWidth - 210) + 'px';
+    menu.style.top = Math.min(y, window.innerHeight - 160) + 'px';
+}
+
+function hideContextMenu() {
+    const m = document.getElementById('ctxMenu');
+    if (m) m.style.display = 'none';
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#ctxMenu')) hideContextMenu();
+});
+
+function execCtxAction(action, tableName) {
+    hideContextMenu();
+    const ta = getActiveTA();
+    if (!ta) return;
+    if (action === 'select100') {
+        ta.value = `SELECT *\nFROM ${tableName}\nLIMIT 100;`;
+        syncNums(ta);
+        updateHighlight(ta);
+        ta.focus();
+        executeSQL(ta.value, S.currentEditorTab);
+    } else if (action === 'count') {
+        ta.value = `SELECT COUNT(*) AS cnt\nFROM ${tableName};`;
+        syncNums(ta);
+        updateHighlight(ta);
+        ta.focus();
+        executeSQL(ta.value, S.currentEditorTab);
+    } else if (action === 'insert_name') {
+        insertText(tableName);
+    }
+}
+
+// ═══ COLUMN AUTOCOMPLETE ═══
+async function loadTableColumns(tableName) {
+    if (S.colCache[tableName]) return;
+    S.colCache[tableName] = []; // prevent duplicate requests
+    try {
+        const r = await fetch(`/api/table/${encodeURIComponent(tableName)}/columns`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.success || Array.isArray(d.data)) {
+            const cols = (d.data || []).map(c => c.column_name || c).filter(Boolean);
+            S.colCache[tableName] = cols;
+        }
+    } catch(e) { /* ignore */ }
+}
+
+// ═══ USER SNIPPETS ═══
+function getUserSnippets() {
+    try { return JSON.parse(localStorage.getItem('sqlUserSnippets') || '[]'); } catch(e) { return []; }
+}
+
+function saveUserSnippetsList(snips) {
+    localStorage.setItem('sqlUserSnippets', JSON.stringify(snips));
+}
+
+function saveCurrentAsSnippet() {
+    const ta = getActiveTA();
+    if (!ta || !ta.value.trim()) { showNotice('Редактор пуст', 'err'); return; }
+    const name = prompt('Название сниппета:', '');
+    if (name == null) return;
+    const trimName = name.trim() || ('Сниппет ' + new Date().toLocaleTimeString('ru-RU'));
+    const snips = getUserSnippets();
+    snips.unshift({ id: Date.now(), name: trimName, sql: ta.value.trim(), ts: new Date().toLocaleDateString('ru-RU') });
+    saveUserSnippetsList(snips);
+    showNotice('Сниппет «' + trimName + '» сохранён');
+}
+
+function showSnippetsModal() {
+    const m = document.getElementById('snippetsModal');
+    if (!m) return;
+    renderSnippetsList();
+    m.classList.add('show');
+}
+
+function hideSnippetsModal() {
+    document.getElementById('snippetsModal')?.classList.remove('show');
+}
+
+function renderSnippetsList() {
+    const body = document.getElementById('snippetsBody');
+    if (!body) return;
+    const snips = getUserSnippets();
+    if (!snips.length) {
+        body.innerHTML = '<div class="snip-empty"><i class="bi bi-collection" style="font-size:24px;display:block;margin-bottom:8px;"></i>Нет сохранённых сниппетов.<br>Нажмите «Сохранить текущий» чтобы добавить.</div>';
+        return;
+    }
+    body.innerHTML = snips.map((s, i) => `
+        <div class="snip-item">
+            <div class="snip-title">${eh(s.name)}</div>
+            <div class="snip-prev">${eh((s.sql||'').substring(0,120))}</div>
+            <div class="snip-actions">
+                <button class="btn btn-primary btn-sm" onclick="loadSnippet(${i})"><i class="bi bi-play-fill"></i> Загрузить</button>
+                <button class="btn btn-secondary btn-sm" onclick="deleteSnippet(${i})" title="Удалить"><i class="bi bi-trash"></i></button>
+                <span class="snip-ts">${eh(s.ts || '')}</span>
+            </div>
+        </div>`).join('');
+}
+
+function loadSnippet(i) {
+    const snips = getUserSnippets();
+    const s = snips[i];
+    if (!s) return;
+    const ta = getActiveTA();
+    if (!ta) return;
+    ta.value = s.sql;
+    syncNums(ta);
+    updateHighlight(ta);
+    ta.focus();
+    hideSnippetsModal();
+}
+
+function deleteSnippet(i) {
+    if (!confirm('Удалить сниппет?')) return;
+    const snips = getUserSnippets();
+    snips.splice(i, 1);
+    saveUserSnippetsList(snips);
+    renderSnippetsList();
+}
+
+// ═══ TOAST NOTIFICATION ═══
+function showNotice(msg, type) {
+    const d = document.createElement('div');
+    const isOk = type !== 'err';
+    d.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:9px 18px;border-radius:5px;font-size:12px;font-family:var(--font-mono);box-shadow:0 4px 16px rgba(0,0,0,.4);font-weight:600;pointer-events:none;transition:opacity .3s;' + (isOk ? 'background:var(--green,#2dba6e);color:#0d0d0d;' : 'background:var(--red,#e04545);color:#fff;');
+    d.textContent = msg;
+    document.body.appendChild(d);
+    setTimeout(() => { d.style.opacity = '0'; setTimeout(() => d.remove(), 300); }, 2200);
 }
 </script>
 {% endblock %}
