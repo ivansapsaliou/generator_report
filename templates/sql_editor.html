@@ -74,6 +74,48 @@
 /* ── MAIN ── */
 #mainArea{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;}
 
+/* ── TABS SYSTEM ── */
+.tabs-bar{display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg-2);border-bottom:1px solid var(--line);flex-shrink:0;overflow-x:auto;}
+.tabs-list{display:flex;gap:3px;flex:1;overflow-x:auto;scrollbar-width:thin;}
+.tabs-list::-webkit-scrollbar{height:4px;}
+.tabs-list::-webkit-scrollbar-thumb{background:var(--bg-4);}
+
+.tab{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--bg-3);border:1px solid var(--line);border-radius:4px 4px 0 0;cursor:pointer;user-select:none;font-size:11px;font-weight:600;color:var(--text-3);transition:all .12s;white-space:nowrap;border-bottom:2px solid transparent;}
+.tab:hover{background:var(--bg-4);color:var(--text-2);}
+.tab.active{background:var(--bg);color:var(--amber);border-bottom-color:var(--amber);}
+.tab i{font-size:13px;}
+.tab-close{background:none;border:none;color:var(--text-3);font-size:16px;cursor:pointer;padding:0 2px;margin-left:2px;line-height:1;transition:color .15s;}
+.tab-close:hover{color:var(--red);}
+.tab.active .tab-close{display:inline-block !important;}
+
+#tabsContainer{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative;}
+.tab-content{display:none;flex-direction:column;flex:1;overflow:hidden;}
+.tab-content.active{display:flex;}
+
+/* ── TABLE DETAIL IN TAB ── */
+.detail-tabs{display:flex;background:var(--bg-2);border-bottom:1px solid var(--line);flex-shrink:0;gap:2px;padding:4px 8px;}
+.detail-tab{padding:5px 12px;font-size:11px;font-weight:600;color:var(--text-3);cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;text-transform:uppercase;letter-spacing:.05em;font-family:var(--font-mono);background:var(--bg-3);border-radius:3px;}
+.detail-tab:hover{color:var(--text-2);}
+.detail-tab.active{color:var(--amber);background:var(--amber-glow);border-bottom-color:var(--amber);}
+.detail-body{flex:1;overflow:auto;background:var(--bg-1);}
+.detail-body::-webkit-scrollbar{width:5px;} .detail-body::-webkit-scrollbar-thumb{background:var(--bg-4);}
+
+.dt{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--font-mono);}
+.dt th{background:var(--bg-3);border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:5px 10px;text-align:left;font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;position:sticky;top:0;z-index:2;}
+.dt th:last-child{border-right:none;}
+.dt td{padding:4px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);color:var(--text);vertical-align:middle;}
+.dt td:last-child{border-right:none;}
+.dt tbody tr:hover td{background:var(--bg-2);}
+.tag{display:inline-flex;align-items:center;padding:1px 5px;border-radius:2px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.tpk{background:rgba(240,168,67,.15);color:var(--amber);border:1px solid rgba(240,168,67,.3);}
+.tfk{background:rgba(224,82,82,.12);color:var(--red);border:1px solid rgba(224,82,82,.25);}
+.tuq{background:rgba(91,141,238,.12);color:#5b8dee;border:1px solid rgba(91,141,238,.25);}
+.tnn{background:rgba(82,183,136,.1);color:var(--green);border:1px solid rgba(82,183,136,.2);}
+.tnull{background:var(--bg-4);color:var(--text-3);border:1px solid var(--line);}
+.ddl-wrap{padding:10px;}
+.ddl-code{background:var(--bg);border:1px solid var(--line);border-radius:3px;padding:12px 14px;font-family:var(--font-mono);font-size:12px;color:var(--text);white-space:pre;overflow:auto;line-height:1.6;max-height:calc(100vh - 200px);}
+.ddl-code::-webkit-scrollbar{width:5px;height:5px;} .ddl-code::-webkit-scrollbar-thumb{background:var(--bg-4);}
+
 .editor-toolbar{display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg-2);border-bottom:1px solid var(--line);flex-wrap:wrap;flex-shrink:0;}
 .tb-div{width:1px;height:18px;background:var(--line-2);margin:0 2px;}
 .tb-lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;}
@@ -93,7 +135,7 @@
     line-height:20px;
 }
 
-#lineNums {
+#lineNums, .line-nums {
     background:var(--bg-1); border-right:1px solid var(--line);
     color:var(--text-3); font-family:'Geist Mono','Consolas','Courier New',monospace;
     font-size:13px; line-height:20px;
@@ -102,18 +144,17 @@
     min-width:42px; white-space:pre;
 }
 
-#sqlInput {
+#sqlInput, .sql-input {
     flex:1; background:var(--bg); border:none; outline:none; resize:none;
     color:var(--text); caret-color:var(--amber);
     font-family:'Geist Mono','Consolas','Courier New',monospace;
     font-size:13px; line-height:20px;
     padding:8px 14px; overflow:auto; tab-size:4; white-space:pre; word-wrap:normal;
-    background-color:var(--bg);
 }
-#sqlInput::selection{background:rgba(240,168,67,.2);}
-#sqlInput::-webkit-scrollbar{width:5px;height:5px;}
-#sqlInput::-webkit-scrollbar-track{background:var(--bg);}
-#sqlInput::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:3px;}
+#sqlInput::selection, .sql-input::selection{background:rgba(240,168,67,.2);}
+#sqlInput::-webkit-scrollbar, .sql-input::-webkit-scrollbar{width:5px;height:5px;}
+#sqlInput::-webkit-scrollbar-track, .sql-input::-webkit-scrollbar-track{background:var(--bg);}
+#sqlInput::-webkit-scrollbar-thumb, .sql-input::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:3px;}
 
 #hResizer{height:5px;background:var(--bg-3);cursor:ns-resize;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .15s;}
 #hResizer:hover{background:var(--amber-dim);}
@@ -134,9 +175,9 @@
 .rfbar input:focus{border-color:var(--amber);}
 .rfbar input::placeholder{color:var(--text-3);}
 
-#resultsContent{flex:1;overflow:auto;background:var(--bg-1);}
-#resultsContent::-webkit-scrollbar{width:5px;height:5px;}
-#resultsContent::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:3px;}
+#resultsContent, .results-content{flex:1;overflow:auto;background:var(--bg-1);}
+#resultsContent::-webkit-scrollbar, .results-content::-webkit-scrollbar{width:5px;height:5px;}
+#resultsContent::-webkit-scrollbar-thumb, .results-content::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:3px;}
 
 .rt{width:100%;border-collapse:collapse;font-family:'Geist Mono','Consolas','Courier New',monospace;font-size:12px;}
 .rt th{position:sticky;top:0;z-index:5;background:var(--bg-3);border-bottom:2px solid var(--amber-dim);border-right:1px solid var(--line);padding:6px 10px;text-align:left;font-family:var(--font-ui);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);white-space:nowrap;cursor:pointer;user-select:none;}
@@ -166,41 +207,6 @@
 .empty-hint{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--text-3);}
 .empty-hint i{font-size:38px;opacity:.18;} .empty-hint span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;}
 
-/* ── TABLE DETAIL PANEL ── */
-#tdPanel{
-    display:none;position:fixed;top:48px;right:0;bottom:0;width:540px;
-    background:var(--bg-1);border-left:1px solid var(--line);z-index:100;
-    flex-direction:column;overflow:hidden;box-shadow:-4px 0 20px rgba(0,0,0,.4);
-}
-#tdPanel.open{display:flex;}
-.tdp-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg-2);border-bottom:1px solid var(--line);flex-shrink:0;}
-.tdp-title{font-family:var(--font-ui);font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;}
-.tdp-title i{color:var(--green);font-size:16px;}
-.tdp-close{background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;padding:0;line-height:1;transition:color .15s;}
-.tdp-close:hover{color:var(--red);}
-.tdp-tabs{display:flex;background:var(--bg-2);border-bottom:1px solid var(--line);flex-shrink:0;}
-.tdp-tab{padding:6px 14px;font-size:11px;font-weight:600;color:var(--text-3);cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;text-transform:uppercase;letter-spacing:.05em;font-family:var(--font-mono);background:none;border-right:0;border-top:0;border-left:0;}
-.tdp-tab:hover{color:var(--text-2);}
-.tdp-tab.active{color:var(--amber);border-bottom-color:var(--amber);}
-.tdp-body{flex:1;overflow:auto;}
-.tdp-body::-webkit-scrollbar{width:5px;} .tdp-body::-webkit-scrollbar-thumb{background:var(--bg-4);}
-
-.dt{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--font-mono);}
-.dt th{background:var(--bg-3);border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:5px 10px;text-align:left;font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;position:sticky;top:0;z-index:2;}
-.dt th:last-child{border-right:none;}
-.dt td{padding:4px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);color:var(--text);vertical-align:middle;}
-.dt td:last-child{border-right:none;}
-.dt tbody tr:hover td{background:var(--bg-2);}
-.tag{display:inline-flex;align-items:center;padding:1px 5px;border-radius:2px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
-.tpk{background:rgba(240,168,67,.15);color:var(--amber);border:1px solid rgba(240,168,67,.3);}
-.tfk{background:rgba(224,82,82,.12);color:var(--red);border:1px solid rgba(224,82,82,.25);}
-.tuq{background:rgba(91,141,238,.12);color:#5b8dee;border:1px solid rgba(91,141,238,.25);}
-.tnn{background:rgba(82,183,136,.1);color:var(--green);border:1px solid rgba(82,183,136,.2);}
-.tnull{background:var(--bg-4);color:var(--text-3);border:1px solid var(--line);}
-.ddl-wrap{padding:10px;}
-.ddl-code{background:var(--bg);border:1px solid var(--line);border-radius:3px;padding:12px 14px;font-family:var(--font-mono);font-size:12px;color:var(--text);white-space:pre;overflow:auto;line-height:1.6;max-height:calc(100vh - 200px);}
-.ddl-code::-webkit-scrollbar{width:5px;height:5px;} .ddl-code::-webkit-scrollbar-thumb{background:var(--bg-4);}
-
 /* ── AUTOCOMPLETE ── */
 #acMenu{position:fixed;display:none;background:var(--bg-2);border:1px solid var(--line-2);border-radius:3px;box-shadow:var(--shadow-md);z-index:9999;min-width:200px;max-width:320px;max-height:180px;overflow-y:auto;font-family:var(--font-mono);font-size:12px;}
 .ac-it{padding:4px 9px;cursor:pointer;display:flex;align-items:center;gap:7px;color:var(--text-2);border-bottom:1px solid var(--line);}
@@ -210,9 +216,6 @@
 .ac-it.kw .ac-tp{background:rgba(207,159,255,.15);color:#cf9fff;}
 .ac-it.tbl .ac-tp{background:rgba(82,183,136,.15);color:#52b788;}
 .ac-it.fn .ac-tp{background:rgba(121,192,255,.15);color:#79c0ff;}
-body.light-theme .ac-it.kw .ac-tp{background:rgba(124,58,237,.12);color:#7c3aed;}
-body.light-theme .ac-it.tbl .ac-tp{background:rgba(21,128,61,.1);color:#15803d;}
-body.light-theme .ac-it.fn .ac-tp{background:rgba(29,78,216,.1);color:#1d4ed8;}
 
 .tree-loading{padding:12px 10px;font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:8px;}
 </style>
@@ -220,8 +223,6 @@ body.light-theme .ac-it.fn .ac-tp{background:rgba(29,78,216,.1);color:#1d4ed8;}
 
 {% block content %}
 <div id="sqlEditorRoot">
-
-    <!-- OVERLAY -->
     <div id="notSupportedOverlay">
         <div class="ns-icon">🔴</div>
         <div class="ns-title">Oracle не поддерживается</div>
@@ -230,7 +231,6 @@ body.light-theme .ac-it.fn .ac-tp{background:rgba(29,78,216,.1);color:#1d4ed8;}
         <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm" style="margin-top:8px;"><i class="bi bi-database"></i> Выбрать подключение</a>
     </div>
 
-    <!-- LEFT TREE -->
     <div id="objectTree">
         <div class="tree-header">
             <span><i class="bi bi-diagram-2"></i>Объекты</span>
@@ -242,88 +242,86 @@ body.light-theme .ac-it.fn .ac-tp{background:rgba(29,78,216,.1);color:#1d4ed8;}
 
     <div id="treeSplitter"></div>
 
-    <!-- MAIN AREA -->
     <div id="mainArea">
-        <div class="editor-toolbar">
-            <span class="tb-lbl">Шаблоны:</span>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('select')">SELECT</button>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('insert')">INSERT</button>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('update')">UPDATE</button>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('delete')">DELETE</button>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('explain')">EXPLAIN</button>
-            <div class="tb-div"></div>
-            <span class="tb-lbl">Лимит:</span>
-            <select class="lim-sel" id="rowLimit">
-                <option value="50">50</option><option value="100" selected>100</option>
-                <option value="500">500</option><option value="1000">1 000</option>
-                <option value="5000">5 000</option><option value="0">Всё</option>
-            </select>
-            <div class="tb-div"></div>
-            <button class="btn btn-secondary btn-sm" onclick="clearEditor()"><i class="bi bi-trash"></i></button>
-            <button class="btn btn-secondary btn-sm" onclick="openHistoryTab()" title="История"><i class="bi bi-clock-history"></i></button>
-        </div>
-
-        <div id="vSplit">
-            <div id="editorPane">
-                <div class="pane-hdr">
-                    <span><i class="bi bi-code-slash"></i>SQL запрос</span>
-                    <span id="cursorPos" style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);">Ln 1, Col 1</span>
-                </div>
-                <div class="code-wrap">
-                    <div id="lineNums">1</div>
-                    <textarea id="sqlInput" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
-                        placeholder="-- Введите SQL запрос...&#10;-- Ctrl+Enter — выполнить&#10;-- Ctrl+Space — автодополнение"></textarea>
+        <div class="tabs-bar">
+            <div class="tabs-list" id="tabsList">
+                <div class="tab active" data-tab-id="tab-1" onclick="switchEditorTab('tab-1')">
+                    <i class="bi bi-code-slash"></i>
+                    <span>SQL Запрос</span>
+                    <button class="tab-close" onclick="closeTab(event, 'tab-1')" style="display:none">×</button>
                 </div>
             </div>
-            <div id="hResizer"></div>
-            <div id="resultsPane">
-                <div class="res-hdr">
-                    <div><i class="bi bi-table"></i>Результаты</div>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <div class="res-tabs">
-                            <button class="rtab active" id="tab-data" onclick="switchTab('data')">Данные</button>
-                            <button class="rtab" id="tab-history" onclick="switchTab('history')">История</button>
+            <button class="btn btn-secondary btn-sm" onclick="addNewSQLTab()" title="Новая вкладка SQL">
+                <i class="bi bi-plus-lg"></i>
+            </button>
+        </div>
+
+        <div id="tabsContainer">
+            <div class="tab-content active" data-tab-id="tab-1">
+                <div class="editor-toolbar">
+                    <span class="tb-lbl">Шаблоны:</span>
+                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('select', 'tab-1')">SELECT</button>
+                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('insert', 'tab-1')">INSERT</button>
+                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('update', 'tab-1')">UPDATE</button>
+                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('delete', 'tab-1')">DELETE</button>
+                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('explain', 'tab-1')">EXPLAIN</button>
+                    <div class="tb-div"></div>
+                    <span class="tb-lbl">Лимит:</span>
+                    <select class="lim-sel" id="rowLimit" data-tab="tab-1">
+                        <option value="50">50</option><option value="100" selected>100</option>
+                        <option value="500">500</option><option value="1000">1 000</option>
+                        <option value="5000">5 000</option><option value="0">Всё</option>
+                    </select>
+                    <div class="tb-div"></div>
+                    <button class="btn btn-secondary btn-sm" onclick="clearEditor('tab-1')"><i class="bi bi-trash"></i></button>
+                    <button class="btn btn-secondary btn-sm" onclick="openHistoryTab()" title="История"><i class="bi bi-clock-history"></i></button>
+                </div>
+
+                <div id="vSplit">
+                    <div id="editorPane">
+                        <div class="pane-hdr">
+                            <span><i class="bi bi-code-slash"></i>SQL запрос</span>
+                            <span id="cursorPos" style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);">Ln 1, Col 1</span>
                         </div>
-                        <div class="exp-strip" id="exportStrip" style="display:none;">
-                            <button class="btn btn-secondary btn-sm" onclick="exportResult('csv')" title="CSV"><i class="bi bi-filetype-csv"></i></button>
-                            <button class="btn btn-secondary btn-sm" onclick="exportResult('json')" title="JSON"><i class="bi bi-filetype-json"></i></button>
-                            <button class="btn btn-secondary btn-sm" onclick="exportResult('xlsx')" title="Excel"><i class="bi bi-file-earmark-excel"></i></button>
+                        <div class="code-wrap">
+                            <div id="lineNums">1</div>
+                            <textarea id="sqlInput" class="sql-input" data-tab="tab-1" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
+                                placeholder="-- Введите SQL запрос...&#10;-- Ctrl+Enter — выполнить&#10;-- Ctrl+Space — автодополнение"></textarea>
                         </div>
                     </div>
+                    <div id="hResizer"></div>
+                    <div id="resultsPane">
+                        <div class="res-hdr">
+                            <div><i class="bi bi-table"></i>Результаты</div>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <div class="res-tabs">
+                                    <button class="rtab active" id="tab-data" onclick="switchTab('data')">Данные</button>
+                                    <button class="rtab" id="tab-history" onclick="switchTab('history')">История</button>
+                                </div>
+                                <div class="exp-strip" id="exportStrip" style="display:none;">
+                                    <button class="btn btn-secondary btn-sm" onclick="exportResult('csv')" title="CSV"><i class="bi bi-filetype-csv"></i></button>
+                                    <button class="btn btn-secondary btn-sm" onclick="exportResult('json')" title="JSON"><i class="bi bi-filetype-json"></i></button>
+                                    <button class="btn btn-secondary btn-sm" onclick="exportResult('xlsx')" title="Excel"><i class="bi bi-file-earmark-excel"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="rfbar" id="rfbar" style="display:none;">
+                            <span id="rowCnt"></span>
+                            <input type="text" id="resultFilter" placeholder="Фильтр результатов..." oninput="applyFilter()">
+                            <span id="filtCnt"></span>
+                        </div>
+                        <div id="resultsContent" class="results-content" data-tab="tab-1"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос для просмотра результатов</span></div></div>
+                        <div class="stbar"><span id="stText">Готов</span><span class="st-d">|</span><span id="stTime"></span><span class="st-d">|</span><span id="stRows"></span></div>
+                    </div>
                 </div>
-                <div class="rfbar" id="rfbar" style="display:none;">
-                    <span id="rowCnt"></span>
-                    <input type="text" id="resultFilter" placeholder="Фильтр результатов..." oninput="applyFilter()">
-                    <span id="filtCnt"></span>
-                </div>
-                <div id="resultsContent"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос для просмотра результатов</span></div></div>
-                <div class="stbar"><span id="stText">Готов</span><span class="st-d">|</span><span id="stTime"></span><span class="st-d">|</span><span id="stRows"></span></div>
             </div>
         </div>
     </div>
-</div>
-
-<!-- TABLE DETAIL PANEL -->
-<div id="tdPanel">
-    <div class="tdp-hdr">
-        <div class="tdp-title" id="tdpTitle"><i class="bi bi-table"></i><span>Таблица</span></div>
-        <button class="tdp-close" onclick="closeDetail()">×</button>
-    </div>
-    <div class="tdp-tabs">
-        <button class="tdp-tab active" data-tab="columns"     onclick="switchDetailTab('columns')">Колонки</button>
-        <button class="tdp-tab"        data-tab="indexes"     onclick="switchDetailTab('indexes')">Индексы</button>
-        <button class="tdp-tab"        data-tab="constraints" onclick="switchDetailTab('constraints')">Ограничения</button>
-        <button class="tdp-tab"        data-tab="ddl"         onclick="switchDetailTab('ddl')">DDL</button>
-    </div>
-    <div class="tdp-body" id="tdpBody"><div class="tree-loading"><span class="loading"></span></div></div>
 </div>
 
 <div id="acMenu"></div>
 
 <script>
-// ══════════════════════════════════════════════════════════
-// CONSTANTS
-// ══════════════════════════════════════════════════════════
 const SQL_KW = 'SELECT FROM WHERE JOIN LEFT RIGHT INNER OUTER FULL CROSS ON AS AND OR NOT IN EXISTS BETWEEN LIKE ILIKE IS NULL TRUE FALSE INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE INDEX VIEW DROP ALTER ADD COLUMN PRIMARY KEY FOREIGN REFERENCES UNIQUE DEFAULT CONSTRAINT CHECK GROUP BY ORDER HAVING LIMIT OFFSET UNION ALL DISTINCT WITH RECURSIVE CASE WHEN THEN ELSE END CAST OVER PARTITION ROW_NUMBER RANK DENSE_RANK TRUNCATE BEGIN COMMIT ROLLBACK TRANSACTION EXPLAIN ANALYZE VACUUM RETURNING COALESCE NULLIF GREATEST LEAST EXTRACT DATE_TRUNC ARRAY JSONB JSON TEXT INTEGER BIGINT BOOLEAN NUMERIC TIMESTAMP DATE TIME INTERVAL SERIAL UUID VARCHAR DO LANGUAGE PLPGSQL FUNCTION PROCEDURE TRIGGER RETURNS DECLARE'.split(' ');
 const SQL_FN = 'COUNT SUM AVG MIN MAX ROUND FLOOR CEIL ABS MOD LENGTH TRIM UPPER LOWER SUBSTR SUBSTRING REPLACE SPLIT_PART CONCAT COALESCE NULLIF NOW CURRENT_DATE CURRENT_TIMESTAMP TO_CHAR TO_DATE AGE EXTRACT DATE_TRUNC DATE_PART ARRAY_AGG STRING_AGG JSON_AGG JSONB_AGG ROW_TO_JSON UNNEST GENERATE_SERIES REGEXP_REPLACE REGEXP_MATCH LEAD LAG FIRST_VALUE LAST_VALUE NTH_VALUE NTILE CUME_DIST PERCENT_RANK'.split(' ');
 const SNIPS = {
@@ -334,9 +332,6 @@ const SNIPS = {
     explain: 'EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)\nSELECT *\nFROM table_name\nWHERE condition;'
 };
 
-// ══════════════════════════════════════════════════════════
-// STATE
-// ══════════════════════════════════════════════════════════
 const S = {
     history: JSON.parse(localStorage.getItem('sqlhist3') || '[]'),
     tables: [],
@@ -344,12 +339,13 @@ const S = {
     sortCol: null, sortDir: 'asc',
     activeTab: 'data',
     acIdx: -1, acItems: [],
-    detailTable: null, detailTab: 'columns',
+    currentEditorTab: 'tab-1',
+    tabCounter: 1,
+    tabs: {
+        'tab-1': { type: 'sql', title: 'SQL Запрос', data: {} }
+    }
 };
 
-// ══════════════════════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
     await checkConn();
     initEditor();
@@ -373,13 +369,10 @@ async function checkConn() {
         badge.textContent = `${p.ssh_enabled?'🔒 ':''}${p.user}@${p.host}:${p.port}/${p.database}`;
         badge.style.display = 'block';
     } catch(e) {
-        console.error('[checkConn] Error:', e);
+        console.error('[checkConn]', e);
     }
 }
 
-// ══════════════════════════════════════════════════════════
-// EDITOR
-// ══════════════════════════════════════════════════════════
 function initEditor() {
     const ta = document.getElementById('sqlInput');
     ta.addEventListener('input', () => { syncNums(); showAC(); });
@@ -409,13 +402,13 @@ function updateCursor() {
     const ta = document.getElementById('sqlInput');
     const before = ta.value.substring(0, ta.selectionStart);
     const lines = before.split('\n');
-    document.getElementById('cursorPos').textContent = `Ln ${lines.length}, Col ${lines[lines.length-1].length+1}`;
+    const cp = document.getElementById('cursorPos');
+    if (cp) cp.textContent = `Ln ${lines.length}, Col ${lines[lines.length-1].length+1}`;
 }
 
 function onKD(e) {
     const ta = e.target;
     const acVis = document.getElementById('acMenu').style.display === 'block';
-
     if (acVis) {
         if (e.key==='ArrowDown'){e.preventDefault();acMove(1);return;}
         if (e.key==='ArrowUp'){e.preventDefault();acMove(-1);return;}
@@ -434,9 +427,6 @@ function onKD(e) {
     }
 }
 
-// ══════════════════════════════════════════════════════════
-// AUTOCOMPLETE
-// ══════════════════════════════════════════════════════════
 function getWord(){
     const ta=document.getElementById('sqlInput');
     const m=ta.value.substring(0,ta.selectionStart).match(/[\w.]+$/);
@@ -479,9 +469,6 @@ function applyAC(item){
     hideAC();syncNums();ta.focus();
 }
 
-// ══════════════════════════════════════════════════════════
-// OBJECT TREE
-// ══════════════════════════════════════════════════════════
 async function buildTree() {
     const body=document.getElementById('treeBody');
     body.innerHTML='<div class="tree-loading"><span class="loading"></span> Загрузка...</div>';
@@ -505,7 +492,7 @@ async function buildTree() {
         ], 0);
         bindTree();
     } catch(e){
-        console.error('[buildTree] Error:', e);
+        console.error('[buildTree]', e);
         body.innerHTML='<div class="tree-loading">'+eh(e.message)+'</div>';
     }
 }
@@ -545,33 +532,23 @@ function bindTree() {
     document.querySelectorAll('#treeBody .tn').forEach(node => {
         node.addEventListener('click', function(e) {
             const tc = this.nextElementSibling;
-            
-            // ✅ Раскрытие/скрытие узла
             if (tc && tc.classList.contains('tc')) {
                 const isOpen = tc.classList.contains('open');
                 if (!isOpen) {
-                    tc.classList.add('open'); 
+                    tc.classList.add('open');
                     this.classList.add('open');
                     const lazy = tc.dataset.lazy || this.dataset.lazy;
                     if (lazy && tc.children.length === 0) {
                         loadLazy(tc, lazy);
                     }
-                } else { 
-                    tc.classList.remove('open'); 
-                    this.classList.remove('open'); 
+                } else {
+                    tc.classList.remove('open');
+                    this.classList.remove('open');
                 }
             }
-            
-            // ✅ Выделение узла
             document.querySelectorAll('#treeBody .tn.sel').forEach(n=>n.classList.remove('sel'));
             this.classList.add('sel');
-            
-            // ❌ УБРАНА автоматическая вставка имени таблицы при клике
-            // const tableName = this.dataset.table;
-            // if (this.dataset.type==='table' && tableName) insertText(tableName);
         });
-        
-        // ✅ Двойной клик для открытия деталей таблицы
         if (node.dataset.type === 'table' && node.dataset.table) {
             node.addEventListener('dblclick', function(e) {
                 e.stopPropagation();
@@ -593,20 +570,15 @@ async function loadLazy(container, type) {
     try {
         const r = await fetch('/api/sql/schema-objects?type=' + type);
         const d = await r.json();
-        
         if (!d.success) {
-            console.error('[loadLazy] Error:', d.error);
-            container.innerHTML = `<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--red);font-family:var(--font-mono);">Ошибка: ${eh(d.error)}</div>`;
+            container.innerHTML = `<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--red);">Ошибка: ${eh(d.error)}</div>`;
             return;
         }
-        
         const items = d.data || [];
-        
         if (!items.length) {
-            container.innerHTML = `<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--text-3);font-family:var(--font-mono);">Нет объектов</div>`;
+            container.innerHTML = `<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--text-3);">Нет объектов</div>`;
             return;
         }
-        
         const icon = LAZY_ICONS[type] || 'bi-circle';
         container.innerHTML = items.map(name => `
             <div class="tn" style="padding-left:42px" data-type="obj">
@@ -614,14 +586,7 @@ async function loadLazy(container, type) {
                 <span class="ico"><i class="bi ${icon}"></i></span>
                 <span class="lbl">${eh(name)}</span>
             </div>`).join('');
-        
-        // ❌ УБРАНА автоматическая вставка имени при клике
-        // container.querySelectorAll('.tn').forEach(n=>{
-        //     n.addEventListener('click',()=>insertText(n.querySelector('.lbl').textContent));
-        // });
-        
     } catch(e) {
-        console.error('[loadLazy] Exception:', e);
         container.innerHTML = `<div style="padding:6px 10px;font-size:11px;color:var(--red);">Ошибка: ${eh(e.message)}</div>`;
     }
 }
@@ -634,116 +599,211 @@ function filterTree(q) {
     });
 }
 
-// ══════════════════════════════════════════════════════════
-// TABLE DETAIL
-// ══════════════════════════════════════════════════════════
-async function openDetail(tableName) {
-    S.detailTable=tableName; S.detailTab='columns';
-    document.getElementById('tdpTitle').innerHTML=`<i class="bi bi-table" style="color:var(--green);"></i><span>${eh(tableName)}</span>`;
-    document.querySelectorAll('.tdp-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab==='columns'));
-    document.getElementById('tdPanel').classList.add('open');
-    await loadDetailTab('columns', tableName);
-}
-function closeDetail(){document.getElementById('tdPanel').classList.remove('open');S.detailTable=null;}
-async function switchDetailTab(tab){
-    S.detailTab=tab;
-    document.querySelectorAll('.tdp-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
-    if(S.detailTable) await loadDetailTab(tab, S.detailTable);
-}
-async function loadDetailTab(tab, tbl) {
-    const body=document.getElementById('tdpBody');
-    body.innerHTML='<div class="tree-loading"><span class="loading"></span> Загрузка...</div>';
-    try {
-        const r=await fetch(`/api/sql/table-detail?table=${encodeURIComponent(tbl)}&tab=${tab}`);
-        const d=await r.json();
-        if(!d.success){body.innerHTML=`<pre class="err-blk">${eh(d.error)}</pre>`;return;}
-        if(tab==='columns')     renderCols(body,d.data);
-        else if(tab==='indexes')     renderIdxs(body,d.data);
-        else if(tab==='constraints') renderCons(body,d.data);
-        else if(tab==='ddl')         renderDDL(body,d.data);
-    } catch(e){
-        console.error('[loadDetailTab] Error:', e);
-        body.innerHTML=`<pre class="err-blk">${eh(e.message)}</pre>`;
-    }
-}
-function renderCols(body,data){
-    if(!data.length){body.innerHTML='<div style="padding:16px;font-size:12px;color:var(--text-3);">Нет колонок</div>';return;}
-    body.innerHTML=`<table class="dt"><thead><tr><th>#</th><th>Имя колонки</th><th>Тип данных</th><th>Nullable</th><th>По умолчанию</th><th>Ключи</th></tr></thead><tbody>`+
-    data.map((c,i)=>{
-        const keys=[];
-        if(c.is_pk) keys.push('<span class="tag tpk">PK</span>');
-        if(c.is_fk) keys.push('<span class="tag tfk">FK</span>');
-        if(c.is_unique) keys.push('<span class="tag tuq">UQ</span>');
+// ═══ RENDER FUNCTIONS ═══
+function renderCols(body, data) {
+    if (!data.length) { body.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--text-3);">Нет колонок</div>'; return; }
+    body.innerHTML = `<table class="dt"><thead><tr><th>#</th><th>Имя колонки</th><th>Тип данных</th><th>Nullable</th><th>По умолчанию</th><th>Ключи</th></tr></thead><tbody>` +
+    data.map((c, i) => {
+        const keys = [];
+        if (c.is_pk) keys.push('<span class="tag tpk">PK</span>');
+        if (c.is_fk) keys.push('<span class="tag tfk">FK</span>');
+        if (c.is_unique) keys.push('<span class="tag tuq">UQ</span>');
         return `<tr>
-            <td style="color:var(--text-3);font-size:11px;">${i+1}</td>
+            <td style="color:var(--text-3);font-size:11px;">${i + 1}</td>
             <td style="font-weight:600;">${eh(c.column_name)}</td>
             <td style="color:var(--amber);font-size:11px;">${eh(c.data_type)}</td>
-            <td>${c.is_nullable?'<span class="tag tnull">NULL</span>':'<span class="tag tnn">NOT NULL</span>'}</td>
-            <td style="color:var(--text-3);font-size:11px;">${eh(c.column_default||'—')}</td>
+            <td>${c.is_nullable ? '<span class="tag tnull">NULL</span>' : '<span class="tag tnn">NOT NULL</span>'}</td>
+            <td style="color:var(--text-3);font-size:11px;">${eh(c.column_default || '—')}</td>
             <td>${keys.join(' ')}</td></tr>`;
-    }).join('')+`</tbody></table>`;
-}
-function renderIdxs(body,data){
-    if(!data.length){body.innerHTML='<div style="padding:16px;font-size:12px;color:var(--text-3);">Нет индексов</div>';return;}
-    body.innerHTML=`<table class="dt"><thead><tr><th>Имя</th><th>Тип</th><th>Уникальный</th><th>Определение</th></tr></thead><tbody>`+
-    data.map(x=>`<tr>
-        <td style="font-weight:600;">${eh(x.indexname)}</td>
-        <td style="color:var(--text-3);font-size:11px;">${eh(x.index_type||'btree')}</td>
-        <td>${x.is_unique?'<span class="tag tuq">ДА</span>':'<span class="tag tnull">НЕТ</span>'}</td>
-        <td style="font-size:11px;color:var(--text-2);white-space:normal;">${eh(x.indexdef||'')}</td></tr>`).join('')+`</tbody></table>`;
-}
-function renderCons(body,data){
-    if(!data.length){body.innerHTML='<div style="padding:16px;font-size:12px;color:var(--text-3);">Нет ограничений</div>';return;}
-    const tm={p:'PK',f:'FK',u:'UNIQUE',c:'CHECK',x:'EXCLUDE'};
-    const tg={'PK':'tpk','FK':'tfk','UNIQUE':'tuq','CHECK':'tnn'};
-    body.innerHTML=`<table class="dt"><thead><tr><th>Имя</th><th>Тип</th><th>Колонки</th><th>Ссылается на</th></tr></thead><tbody>`+
-    data.map(c=>{const tp=tm[c.constraint_type]||c.constraint_type||'?';const g=tg[tp]||'tnull';return`<tr>
-        <td style="font-weight:600;">${eh(c.constraint_name)}</td>
-        <td><span class="tag ${g}">${tp}</span></td>
-        <td style="font-size:11px;">${eh(c.column_name||'—')}</td>
-        <td style="font-size:11px;color:var(--text-3);">${eh(c.foreign_table?c.foreign_table+'.'+c.foreign_column:'—')}</td></tr>`;}).join('')+`</tbody></table>`;
-}
-function renderDDL(body,data){
-    const ddl=data.ddl||'-- DDL недоступен';
-    body.innerHTML=`<div class="ddl-wrap">
-        <button class="btn btn-secondary btn-sm" style="margin-bottom:8px;" onclick="navigator.clipboard.writeText(document.getElementById('ddlc').textContent)">
-            <i class="bi bi-clipboard"></i> Копировать
-        </button>
-        <pre class="ddl-code" id="ddlc">${eh(ddl)}</pre></div>`;
+    }).join('') + `</tbody></table>`;
 }
 
-// ══════════════════════════════════════════════════════════
-// RUN QUERY - ✅ ИСПРАВЛЕНО
-// ══════════════════════════════════════════════════════════
+function renderIdxs(body, data) {
+    if (!data.length) { body.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--text-3);">Нет индексов</div>'; return; }
+    body.innerHTML = `<table class="dt"><thead><tr><th>Имя</th><th>Тип</th><th>Уникальный</th><th>Определение</th></tr></thead><tbody>` +
+    data.map(x => `<tr>
+        <td style="font-weight:600;">${eh(x.indexname)}</td>
+        <td style="color:var(--text-3);font-size:11px;">${eh(x.index_type || 'btree')}</td>
+        <td>${x.is_unique ? '<span class="tag tuq">ДА</span>' : '<span class="tag tnull">НЕТ</span>'}</td>
+        <td style="font-size:11px;color:var(--text-2);white-space:normal;">${eh(x.indexdef || '')}</td></tr>`).join('') + `</tbody></table>`;
+}
+
+function renderCons(body, data) {
+    if (!data.length) { body.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--text-3);">Нет ограничений</div>'; return; }
+    const tm = { p: 'PK', f: 'FK', u: 'UNIQUE', c: 'CHECK', x: 'EXCLUDE' };
+    const tg = { 'PK': 'tpk', 'FK': 'tfk', 'UNIQUE': 'tuq', 'CHECK': 'tnn' };
+    body.innerHTML = `<table class="dt"><thead><tr><th>Имя</th><th>Тип</th><th>Колонки</th><th>Ссылается на</th></tr></thead><tbody>` +
+    data.map(c => { const tp = tm[c.constraint_type] || c.constraint_type || '?'; const g = tg[tp] || 'tnull'; return `<tr>
+        <td style="font-weight:600;">${eh(c.constraint_name)}</td>
+        <td><span class="tag ${g}">${tp}</span></td>
+        <td style="font-size:11px;">${eh(c.column_name || '—')}</td>
+        <td style="font-size:11px;color:var(--text-3);">${eh(c.foreign_table ? c.foreign_table + '.' + c.foreign_column : '—')}</td></tr>`; }).join('') + `</tbody></table>`;
+}
+
+function renderDDL(body, data) {
+    const ddl = data.ddl || '-- DDL недоступен';
+    body.innerHTML = `<div class="ddl-wrap">
+        <button class="btn btn-secondary btn-sm" style="margin-bottom:8px;" onclick="navigator.clipboard.writeText(document.querySelector('.detail-body .ddl-code').textContent)">
+            <i class="bi bi-clipboard"></i> Копировать
+        </button>
+        <pre class="ddl-code">${eh(ddl)}</pre></div>`;
+}
+
+// ═══ TABS MANAGEMENT ═══
+function addNewSQLTab() {
+    S.tabCounter++;
+    const tabId = 'tab-' + S.tabCounter;
+    S.tabs[tabId] = { type: 'sql', title: 'SQL Запрос ' + S.tabCounter, data: {} };
+    const tabEl = document.createElement('div');
+    tabEl.className = 'tab';
+    tabEl.dataset.tabId = tabId;
+    tabEl.onclick = () => switchEditorTab(tabId);
+    tabEl.innerHTML = `<i class="bi bi-code-slash"></i><span>${S.tabs[tabId].title}</span><button class="tab-close" onclick="closeTab(event, '${tabId}')">×</button>`;
+    document.getElementById('tabsList').appendChild(tabEl);
+    const content = createSQLTabContent(tabId);
+    document.getElementById('tabsContainer').appendChild(content);
+    switchEditorTab(tabId);
+}
+
+function createSQLTabContent(tabId) {
+    const div = document.createElement('div');
+    div.className = 'tab-content';
+    div.dataset.tabId = tabId;
+    div.innerHTML = `
+        <div class="editor-toolbar">
+            <span class="tb-lbl">Шаблоны:</span>
+            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('select', '${tabId}')">SELECT</button>
+            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('insert', '${tabId}')">INSERT</button>
+            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('update', '${tabId}')">UPDATE</button>
+            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('delete', '${tabId}')">DELETE</button>
+            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('explain', '${tabId}')">EXPLAIN</button>
+            <div class="tb-div"></div>
+            <button class="btn btn-secondary btn-sm" onclick="clearEditor('${tabId}')"><i class="bi bi-trash"></i></button>
+            <button class="btn btn-primary btn-sm" onclick="runQuery()"><i class="bi bi-play-fill"></i> Выполнить</button>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+            <div style="flex:1;display:flex;flex-direction:column;">
+                <div class="pane-hdr"><span><i class="bi bi-code-slash"></i>SQL запрос</span></div>
+                <div class="code-wrap">
+                    <div class="line-nums">1</div>
+                    <textarea class="sql-input" data-tab="${tabId}" spellcheck="false" placeholder="-- SQL запрос..."></textarea>
+                </div>
+            </div>
+            <div class="results-content" data-tab="${tabId}" style="border-top:1px solid var(--line);padding:20px;"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос</span></div></div>
+        </div>
+    `;
+    return div;
+}
+
+function switchEditorTab(tabId) {
+    S.currentEditorTab = tabId;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tabId === tabId));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.dataset.tabId === tabId));
+}
+
+function closeTab(event, tabId) {
+    event.stopPropagation();
+    if (tabId === 'tab-1') return;
+    delete S.tabs[tabId];
+    document.querySelector(`.tab[data-tab-id="${tabId}"]`)?.remove();
+    document.querySelector(`.tab-content[data-tab-id="${tabId}"]`)?.remove();
+    if (S.currentEditorTab === tabId) switchEditorTab('tab-1');
+}
+
+async function openDetail(tableName) {
+    S.tabCounter++;
+    const tabId = 'detail-' + S.tabCounter;
+    S.tabs[tabId] = { type: 'detail', title: tableName, tableName, activeSubTab: 'columns' };
+    const tabEl = document.createElement('div');
+    tabEl.className = 'tab';
+    tabEl.dataset.tabId = tabId;
+    tabEl.onclick = () => switchEditorTab(tabId);
+    tabEl.innerHTML = `<i class="bi bi-table"></i><span>${tableName}</span><button class="tab-close" onclick="closeTab(event, '${tabId}')">×</button>`;
+    document.getElementById('tabsList').appendChild(tabEl);
+    const content = createDetailTabContent(tabId, tableName);
+    document.getElementById('tabsContainer').appendChild(content);
+    switchEditorTab(tabId);
+    await loadDetailTabData(tabId, 'columns', tableName);
+}
+
+function createDetailTabContent(tabId, tableName) {
+    const div = document.createElement('div');
+    div.className = 'tab-content';
+    div.dataset.tabId = tabId;
+    div.innerHTML = `
+        <div class="detail-tabs">
+            <button class="detail-tab active" data-subtab="columns" onclick="switchDetailSubTab('${tabId}', 'columns')">Колонки</button>
+            <button class="detail-tab" data-subtab="indexes" onclick="switchDetailSubTab('${tabId}', 'indexes')">Индексы</button>
+            <button class="detail-tab" data-subtab="constraints" onclick="switchDetailSubTab('${tabId}', 'constraints')">Ограничения</button>
+            <button class="detail-tab" data-subtab="ddl" onclick="switchDetailSubTab('${tabId}', 'ddl')">DDL</button>
+        </div>
+        <div class="detail-body" data-tab="${tabId}"><div class="tree-loading"><span class="loading"></span> Загрузка...</div></div>
+    `;
+    return div;
+}
+
+async function switchDetailSubTab(tabId, subtab) {
+    const content = document.querySelector(`.tab-content[data-tab-id="${tabId}"]`);
+    content.querySelectorAll('.detail-tab').forEach(t => t.classList.toggle('active', t.dataset.subtab === subtab));
+    S.tabs[tabId].activeSubTab = subtab;
+    await loadDetailTabData(tabId, subtab, S.tabs[tabId].tableName);
+}
+
+async function loadDetailTabData(tabId, subtab, tableName) {
+    const body = document.querySelector(`.detail-body[data-tab="${tabId}"]`);
+    body.innerHTML = '<div class="tree-loading"><span class="loading"></span> Загрузка...</div>';
+    try {
+        const r = await fetch(`/api/sql/table-detail?table=${encodeURIComponent(tableName)}&tab=${subtab}`);
+        const d = await r.json();
+        if (!d.success) { body.innerHTML = `<pre class="err-blk">${eh(d.error)}</pre>`; return; }
+        if (subtab === 'columns') renderCols(body, d.data);
+        else if (subtab === 'indexes') renderIdxs(body, d.data);
+        else if (subtab === 'constraints') renderCons(body, d.data);
+        else if (subtab === 'ddl') renderDDL(body, d.data);
+    } catch (e) {
+        body.innerHTML = `<pre class="err-blk">${eh(e.message)}</pre>`;
+    }
+}
+
+// ═══ RUN QUERY ═══
 async function runQuery() {
-    const ta = document.getElementById('sqlInput');
+    const tabId = S.currentEditorTab;
+    const ta = document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
+    if (!ta) return;
+
     let sql = ta.value.trim();
     const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
     if (sel) sql = sel;
     if (!sql) return;
-    
-    const limit = parseInt(document.getElementById('rowLimit').value) || 100;
+
+    const limit = parseInt(document.querySelector(`.lim-sel[data-tab="${tabId}"]`)?.value || document.getElementById('rowLimit')?.value || 100);
     const btn = document.getElementById('runBtn');
+    if (!btn) return;
+
     btn.innerHTML = '<span class="loading"></span> Выполняется...';
     btn.disabled = true;
     setSt('run', '⟳ Выполняется...', '', '');
-    document.getElementById('rfbar').style.display = 'none';
-    document.getElementById('exportStrip').style.display = 'none';
-    document.getElementById('resultsContent').innerHTML = '<div class="empty-hint"><span class="loading"></span></div>';
-    
+
+    const rfbar = document.getElementById('rfbar');
+    const exportStrip = document.getElementById('exportStrip');
+    if (rfbar) rfbar.style.display = 'none';
+    if (exportStrip) exportStrip.style.display = 'none';
+
+    const resultsEl = document.querySelector(`.results-content[data-tab="${tabId}"]`) || document.getElementById('resultsContent');
+    if (resultsEl) resultsEl.innerHTML = '<div class="empty-hint"><span class="loading"></span></div>';
+
     const t0 = performance.now();
-    
+
     try {
         const resp = await fetch('/api/sql/execute', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({sql, limit})
         });
-        
+
         const data = await resp.json();
         const el = ((performance.now() - t0) / 1000).toFixed(3);
-        
-        // ✅ Сохраняем в историю
+
         S.history.unshift({
             sql: sql.substring(0, 200),
             ts: new Date().toLocaleTimeString('ru-RU'),
@@ -753,34 +813,33 @@ async function runQuery() {
         });
         if (S.history.length > 50) S.history.pop();
         localStorage.setItem('sqlhist3', JSON.stringify(S.history));
-        
+
         if (data.success) {
-            // ✅ Проверяем, есть ли результат с колонками (SELECT)
             if (data.data && data.data.columns && data.data.rows) {
                 S.master = data.data.rows;
                 S.display = [...S.master];
                 S.cols = data.data.columns;
                 S.sortCol = null;
                 S.sortDir = 'asc';
-                
-                document.getElementById('rowCnt').textContent = `${S.master.length} строк`;
-                document.getElementById('filtCnt').textContent = '';
-                document.getElementById('resultFilter').value = '';
-                document.getElementById('rfbar').style.display = 'flex';
-                document.getElementById('exportStrip').style.display = 'flex';
+
+                const rowCnt = document.getElementById('rowCnt');
+                const filtCnt = document.getElementById('filtCnt');
+                const resultFilter = document.getElementById('resultFilter');
+                if (rowCnt) rowCnt.textContent = `${S.master.length} строк`;
+                if (filtCnt) filtCnt.textContent = '';
+                if (resultFilter) resultFilter.value = '';
+                if (rfbar) rfbar.style.display = 'flex';
+                if (exportStrip) exportStrip.style.display = 'flex';
                 setSt('ok', '✓ Выполнено', el + 's', S.master.length + ' строк');
-                
-                // ✅ Отображаем таблицу с данными
+
                 renderTable();
-            } 
-            // ✅ Для INSERT/UPDATE/DELETE показываем количество строк
-            else {
+            } else {
                 S.master = [];
                 S.display = [];
                 S.cols = [];
                 const affected = data.rows_affected ?? 0;
                 setSt('ok', '✓ Выполнено', el + 's', 'затронуто: ' + affected);
-                document.getElementById('resultsContent').innerHTML = `
+                if (resultsEl) resultsEl.innerHTML = `
                     <div class="msg-ok">
                         <div class="mi"><i class="bi bi-check-circle-fill"></i></div>
                         <div>
@@ -791,17 +850,16 @@ async function runQuery() {
                     </div>`;
             }
         } else {
-            // ❌ Ошибка выполнения
             S.master = [];
             S.display = [];
             S.cols = [];
             setSt('err', '✗ Ошибка', el + 's', '');
-            document.getElementById('resultsContent').innerHTML = `<pre class="err-blk">${eh(data.error || 'Неизвестная ошибка')}</pre>`;
+            if (resultsEl) resultsEl.innerHTML = `<pre class="err-blk">${eh(data.error || 'Неизвестная ошибка')}</pre>`;
         }
     } catch (e) {
-        console.error('[runQuery] Exception:', e);
+        console.error('[runQuery]', e);
         setSt('err', '✗ Сетевая ошибка', '', '');
-        document.getElementById('resultsContent').innerHTML = `<pre class="err-blk">${eh(e.message)}</pre>`;
+        if (resultsEl) resultsEl.innerHTML = `<pre class="err-blk">${eh(e.message)}</pre>`;
     } finally {
         btn.innerHTML = '<i class="bi bi-play-fill"></i> Выполнить <kbd style="font-size:9px;opacity:.7;margin-left:4px;">Ctrl+Enter</kbd>';
         btn.disabled = false;
@@ -810,27 +868,28 @@ async function runQuery() {
 
 function setSt(t, text, time, rows) {
     const e = document.getElementById('stText');
+    if (!e) return;
     e.className = t === 'ok' ? 'st-ok' : t === 'err' ? 'st-err' : 'st-run';
     e.textContent = text;
-    document.getElementById('stTime').textContent = time;
-    document.getElementById('stRows').textContent = rows;
+    const stTime = document.getElementById('stTime');
+    const stRows = document.getElementById('stRows');
+    if (stTime) stTime.textContent = time;
+    if (stRows) stRows.textContent = rows;
 }
 
-// ══════════════════════════════════════════════════════════
-// RESULT TABLE
-// ══════════════════════════════════════════════════════════
 function renderTable() {
-    const c = document.getElementById('resultsContent');
+    const c = document.querySelector(`.results-content[data-tab="${S.currentEditorTab}"]`) || document.getElementById('resultsContent');
+    if (!c) return;
     if (!S.cols.length) {
         c.innerHTML = '<div style="padding:14px;font-size:12px;color:var(--text-3);">Нет данных</div>';
         return;
     }
-    
+
     const ths = S.cols.map((col, i) => {
         let cl = S.sortCol === i ? (S.sortDir === 'asc' ? 'sa' : 'sd') : '';
         return `<th class="${cl}" onclick="sortBy(${i})">${eh(col)}</th>`;
     }).join('');
-    
+
     const trs = S.display.map(row => {
         const tds = S.cols.map(c => {
             const v = row[c];
@@ -842,7 +901,7 @@ function renderTable() {
         }).join('');
         return `<tr>${tds}</tr>`;
     }).join('');
-    
+
     c.innerHTML = `<table class="rt"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
 }
 
@@ -861,26 +920,26 @@ function sortBy(i) {
 }
 
 function applyFilter() {
-    const q = document.getElementById('resultFilter').value.toLowerCase().trim();
+    const q = document.getElementById('resultFilter')?.value.toLowerCase().trim() || '';
     S.display = q ? S.master.filter(r => S.cols.some(c => String(r[c] ?? '').toLowerCase().includes(q))) : [...S.master];
-    document.getElementById('filtCnt').textContent = q ? `Найдено: ${S.display.length}` : '';
+    const filtCnt = document.getElementById('filtCnt');
+    if (filtCnt) filtCnt.textContent = q ? `Найдено: ${S.display.length}` : '';
     S.sortCol = null;
     renderTable();
 }
 
-// ══════════════════════════════════════════════════════════
-// TABS
-// ══════════════════════════════════════════════════════════
 function switchTab(tab) {
     S.activeTab = tab;
     document.querySelectorAll('.rtab').forEach(b => b.classList.toggle('active', b.id === 'tab-' + tab));
+    const c = document.querySelector(`.results-content[data-tab="${S.currentEditorTab}"]`) || document.getElementById('resultsContent');
+    if (!c) return;
     if (tab === 'history') {
         renderHist();
     } else {
         if (S.cols.length) {
             renderTable();
         } else {
-            document.getElementById('resultsContent').innerHTML = '<div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос для просмотра результатов</span></div>';
+            c.innerHTML = '<div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос для просмотра результатов</span></div>';
         }
     }
 }
@@ -890,7 +949,8 @@ function openHistoryTab() {
 }
 
 function renderHist() {
-    const c = document.getElementById('resultsContent');
+    const c = document.querySelector(`.results-content[data-tab="${S.currentEditorTab}"]`) || document.getElementById('resultsContent');
+    if (!c) return;
     if (!S.history.length) {
         c.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--text-3);">История пуста</div>';
         return;
@@ -905,30 +965,44 @@ function renderHist() {
 function loadHist(i) {
     const h = S.history[i];
     if (!h) return;
-    document.getElementById('sqlInput').value = h.sql;
-    syncNums();
+    const ta = document.getElementById('sqlInput');
+    if (ta) {
+        ta.value = h.sql;
+        syncNums();
+    }
     switchTab('data');
 }
 
-// ═══════════════════════════════��══════════════════════════
-// SNIPPETS / CLEAR / FORMAT
-// ══════════════════════════════════════════════════════════
-function insertSnippet(key) {
-    const ta = document.getElementById('sqlInput');
+function insertSnippet(key, tabId) {
+    const ta = document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
+    if (!ta) return;
     const s = ta.selectionStart;
     ta.value = ta.value.substring(0, s) + SNIPS[key] + ta.value.substring(ta.selectionEnd);
     ta.selectionStart = ta.selectionEnd = s + SNIPS[key].length;
-    syncNums();
+    const lineNums = ta.previousElementSibling;
+    if (lineNums && lineNums.classList.contains('line-nums')) {
+        const n = (ta.value.match(/\n/g) || []).length + 1;
+        let txt = '';
+        for (let i = 1; i <= n; i++) txt += i + (i < n ? '\n' : '');
+        lineNums.textContent = txt;
+    } else {
+        syncNums();
+    }
     ta.focus();
 }
 
-function clearEditor() {
-    document.getElementById('sqlInput').value = '';
-    syncNums();
+function clearEditor(tabId) {
+    const ta = document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
+    if (!ta) return;
+    ta.value = '';
+    const lineNums = ta.previousElementSibling;
+    if (lineNums) lineNums.textContent = '1';
+    else syncNums();
 }
 
 function insertText(name) {
     const ta = document.getElementById('sqlInput');
+    if (!ta) return;
     const p = ta.selectionStart;
     ta.value = ta.value.substring(0, p) + name + ta.value.substring(p);
     ta.selectionStart = ta.selectionEnd = p + name.length;
@@ -938,6 +1012,7 @@ function insertText(name) {
 
 function formatSQL() {
     const ta = document.getElementById('sqlInput');
+    if (!ta) return;
     let sql = ta.value;
     ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'UNION ALL', 'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'RETURNING'].forEach(kw => {
         sql = sql.replace(new RegExp(`\\b${kw}\\b`, 'gi'), '\n' + kw.toUpperCase());
@@ -946,13 +1021,10 @@ function formatSQL() {
     syncNums();
 }
 
-// ══════════════════════════════════════════════════════════
-// EXPORT
-// ══════════════════════════════════════════════════════════
 function exportResult(fmt) {
     if (!S.cols.length) return;
     const rows = S.display, cols = S.cols;
-    
+
     if (fmt === 'json') {
         dl(new Blob([JSON.stringify(rows, null, 2)], {type: 'application/json'}), 'result.json');
     } else if (fmt === 'csv') {
@@ -984,16 +1056,14 @@ function dl(blob, name) {
     a.click();
 }
 
-// ══════════════════════════════════════════════════════════
-// SPLITTERS
-// ══════════════════════════════════════════════════════════
 function initSplitters() {
-    // H resizer (editor/results)
-    const hr = document.getElementById('hResizer'), 
-          ep = document.getElementById('editorPane'), 
+    const hr = document.getElementById('hResizer'),
+          ep = document.getElementById('editorPane'),
           vs = document.getElementById('vSplit');
+    if (!hr || !ep || !vs) return;
+
     let dH = false, sY = 0, sHH = 0;
-    
+
     hr.addEventListener('mousedown', e => {
         dH = true;
         sY = e.clientY;
@@ -1001,24 +1071,25 @@ function initSplitters() {
         document.body.style.cursor = 'ns-resize';
         document.body.style.userSelect = 'none';
     });
-    
+
     document.addEventListener('mousemove', e => {
         if (!dH) return;
         ep.style.height = Math.max(60, Math.min(sHH + e.clientY - sY, vs.offsetHeight - 80)) + 'px';
         syncScroll();
     });
-    
+
     document.addEventListener('mouseup', () => {
         dH = false;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
     });
-    
-    // V splitter (tree width)
-    const ts = document.getElementById('treeSplitter'), 
+
+    const ts = document.getElementById('treeSplitter'),
           tree = document.getElementById('objectTree');
+    if (!ts || !tree) return;
+
     let dT = false, sX = 0, sW = 0;
-    
+
     ts.addEventListener('mousedown', e => {
         dT = true;
         sX = e.clientX;
@@ -1026,12 +1097,12 @@ function initSplitters() {
         document.body.style.cursor = 'ew-resize';
         document.body.style.userSelect = 'none';
     });
-    
+
     document.addEventListener('mousemove', e => {
         if (!dT) return;
         tree.style.width = Math.max(140, Math.min(sW + e.clientX - sX, 500)) + 'px';
     });
-    
+
     document.addEventListener('mouseup', () => {
         dT = false;
         document.body.style.cursor = '';
@@ -1039,9 +1110,6 @@ function initSplitters() {
     });
 }
 
-// ══════════════════════════════════════════════════════════
-// UTIL
-// ══════════════════════════════════════════════════════════
 function eh(s) {
     if (s == null) return '';
     return String(s)
