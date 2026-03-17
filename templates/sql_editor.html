@@ -114,7 +114,7 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 .tuq{background:rgba(91,141,238,.12);color:#5b8dee;border:1px solid rgba(91,141,238,.25);}
 .tnn{background:rgba(82,183,136,.1);color:var(--green);border:1px solid rgba(82,183,136,.2);}
 .tnull{background:var(--bg-4);color:var(--text-3);border:1px solid var(--line);}
-.ddl-wrap{padding:10px;}
+.ddl-wrap{display:flex;flex-direction:column;height:100%;padding:10px;box-sizing:border-box;}
 .ddl-code{background:var(--bg);border:1px solid var(--line);border-radius:3px;padding:12px 14px;font-family:var(--font-mono);font-size:12px;color:var(--text);white-space:pre;overflow:auto;line-height:1.6;max-height:calc(100vh - 200px);}
 .ddl-code::-webkit-scrollbar{width:5px;height:5px;} .ddl-code::-webkit-scrollbar-thumb{background:var(--bg-4);}
 
@@ -367,7 +367,7 @@ body.ctrl-held .hl-proc-link{border-bottom-color:#f39c12;color:#f39c12;}
 
 /* ── MONACO EDITOR CONTAINERS ── */
 .monaco-editor-container{flex:1;overflow:hidden;min-height:0;}
-.ddl-monaco-container{height:380px;max-height:calc(100vh - 220px);border:1px solid var(--line);border-radius:3px;overflow:hidden;}
+.ddl-monaco-container{flex:1;min-height:200px;border:1px solid var(--line);border-radius:3px;overflow:hidden;}
 </style>
 {% endblock %}
 
@@ -591,6 +591,10 @@ require(['vs/editor/editor.main'], function() {
     _tryAfterBothReady();
 });
 
+function _getCurrentMonacoTheme() {
+    return document.body.classList.contains('light-theme') ? 'sql-light' : 'sql-dark';
+}
+
 function _setupMonacoTheme() {
     monaco.editor.defineTheme('sql-dark', {
         base: 'vs-dark',
@@ -619,16 +623,105 @@ function _setupMonacoTheme() {
             'scrollbarSlider.hoverBackground':   '#5d5d5d90',
         }
     });
+    monaco.editor.defineTheme('sql-light', {
+        base: 'vs',
+        inherit: true,
+        rules: [
+            { token: 'keyword',    foreground: '7c3aed', fontStyle: 'bold' },
+            { token: 'predefined', foreground: '1d4ed8' },
+            { token: 'string',     foreground: '16a34a' },
+            { token: 'number',     foreground: 'd97706' },
+            { token: 'comment',    foreground: '6b7280', fontStyle: 'italic' },
+            { token: 'operator',   foreground: 'd97706' },
+        ],
+        colors: {
+            'editor.background':                 '#f8f9fa',
+            'editor.foreground':                 '#1f2937',
+            'editor.lineHighlightBackground':    '#f1f3f5',
+            'editor.selectionBackground':        '#fde68a',
+            'editorLineNumber.foreground':       '#9ca3af',
+            'editorLineNumber.activeForeground': '#374151',
+            'editorCursor.foreground':           '#d97706',
+            'editor.inactiveSelectionBackground':'#e5e7eb',
+            'editorIndentGuide.background':      '#e5e7eb',
+            'editorBracketMatch.background':     '#d1fae5',
+            'editorBracketMatch.border':         '#059669',
+            'scrollbarSlider.background':        '#d1d5db80',
+            'scrollbarSlider.hoverBackground':   '#9ca3af90',
+        }
+    });
+    // Apply current theme and watch for changes via the theme toggle in base.html
+    monaco.editor.setTheme(_getCurrentMonacoTheme());
+    new MutationObserver(() => {
+        monaco.editor.setTheme(_getCurrentMonacoTheme());
+    }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+}
+
+// SQL keywords that can appear right after a table name in FROM/JOIN clauses
+// and must not be mistaken for aliases
+const _ALIAS_SKIP = new Set(['WHERE', 'ON', 'SET', 'AND', 'OR', 'ORDER', 'GROUP', 'HAVING',
+    'LIMIT', 'OFFSET', 'UNION', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'NATURAL',
+    'SELECT', 'FROM', 'JOIN', 'INTO', 'VALUES', 'WITH', 'BY', 'DISTINCT', 'ALL']);
+
+// Matches: FROM tableName [AS] alias  and  JOIN tableName [AS] alias
+// Captures: (1) table name/schema.table  (2) alias identifier
+const _ALIAS_RE = /(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s+(?:AS\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b(?!\s*[\(,])/gi;
+
+function _buildAliasMap(sql) {
+    const map = {};
+    _ALIAS_RE.lastIndex = 0; // reset before reuse
+    let m;
+    while ((m = _ALIAS_RE.exec(sql)) !== null) {
+        const alias = m[2].toLowerCase();
+        if (!_ALIAS_SKIP.has(alias.toUpperCase())) {
+            map[alias] = m[1];
+        }
+    }
+    return map;
 }
 
 function _registerMonacoCompletion() {
     monaco.languages.registerCompletionItemProvider('sql', {
-        provideCompletionItems: function(model, position) {
+        triggerCharacters: ['.'],
+        provideCompletionItems: async function(model, position) {
             const word = model.getWordUntilPosition(position);
             const range = {
                 startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
                 startColumn: word.startColumn, endColumn: word.endColumn
             };
+
+            // Check for dot-triggered column completion: detect "prefix." before the current word
+            const lineText = model.getLineContent(position.lineNumber);
+            const textBeforeWord = lineText.substring(0, word.startColumn - 1);
+            const dotPrefixMatch = textBeforeWord.match(/(\w+)\.$/);
+
+            if (dotPrefixMatch) {
+                const prefix = dotPrefixMatch[1];
+                const colPrefix = word.word.toLowerCase();
+
+                // Resolve alias → real table name using the full SQL
+                const aliasMap = _buildAliasMap(model.getValue());
+                const tableName = aliasMap[prefix.toLowerCase()] || prefix;
+
+                // Async load if not cached
+                if (!S.colCache[tableName] && !S.colCache[tableName.toLowerCase()]) {
+                    await loadTableColumns(tableName);
+                }
+                const cols = S.colCache[tableName] || S.colCache[tableName.toLowerCase()] || [];
+
+                return {
+                    suggestions: cols
+                        .filter(c => !colPrefix || c.toLowerCase().startsWith(colPrefix))
+                        .map(c => ({
+                            label: c,
+                            kind: monaco.languages.CompletionItemKind.Field,
+                            insertText: c,
+                            range,
+                            detail: tableName,
+                        }))
+                };
+            }
+
             const up = (word.word || '').toUpperCase();
             const suggestions = [];
             SQL_KW.filter(k => k.startsWith(up)).forEach(k => suggestions.push({
@@ -668,7 +761,7 @@ function initMonacoEditor(tabId, containerEl) {
     const editor = monaco.editor.create(containerEl, {
         value: initialValue,
         language: 'sql',
-        theme: 'sql-dark',
+        theme: _getCurrentMonacoTheme(),
         fontSize: 14,
         lineHeight: 22,
         tabSize: 4,
@@ -1352,7 +1445,7 @@ function renderDDL(body, data) {
             monaco.editor.create(containerEl, {
                 value: ddl,
                 language: 'sql',
-                theme: 'sql-dark',
+                theme: _getCurrentMonacoTheme(),
                 readOnly: true,
                 fontSize: 13,
                 lineHeight: 20,
