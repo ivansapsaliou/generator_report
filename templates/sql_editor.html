@@ -177,7 +177,7 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 .rfbar input:focus{border-color:var(--amber);}
 .rfbar input::placeholder{color:var(--text-3);}
 
-#resultsContent, .results-content{flex:1;overflow:auto;background:var(--bg-1);min-height:0;max-width:100%;}
+#resultsContent, .results-content{flex:1;overflow:auto;background:var(--bg-1);min-height:0;min-width:0;max-width:100%;}
 #resultsContent::-webkit-scrollbar, .results-content::-webkit-scrollbar{width:6px;height:6px;}
 #resultsContent::-webkit-scrollbar-track, .results-content::-webkit-scrollbar-track{background:var(--bg-2);}
 #resultsContent::-webkit-scrollbar-thumb, .results-content::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:3px;}
@@ -186,10 +186,8 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 .rt-wrap{display:block;overflow:auto;max-width:100%;}
 
 .rt{border-collapse:collapse;font-family:'Geist Mono','Consolas','Courier New',monospace;font-size:12px;table-layout:fixed;width:auto;}
-.rt th{position:sticky;top:0;z-index:5;background:var(--bg-3);border-bottom:2px solid var(--amber-dim);border-right:1px solid var(--line);padding:6px 10px;text-align:left;font-family:var(--font-ui);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);white-space:nowrap;cursor:pointer;user-select:none;overflow:hidden;text-overflow:ellipsis;position:relative;}
-.rt th:hover{background:var(--bg-4);color:var(--amber);}
-.rt th.sa::after{content:' ▲';color:var(--amber);font-size:8px;}
-.rt th.sd::after{content:' ▼';color:var(--amber);font-size:8px;}
+.rt th{position:sticky;top:0;z-index:5;background:var(--bg-3);border-bottom:2px solid var(--amber-dim);border-right:1px solid var(--line);padding:5px 10px 4px;text-align:left;font-family:var(--font-ui);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);white-space:nowrap;cursor:default;user-select:none;overflow:hidden;position:relative;vertical-align:top;}
+.rt th:hover{background:var(--bg-4);}
 .rt th:last-child{border-right:none;}
 .rt td{padding:4px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rt td:last-child{border-right:none;}
@@ -198,6 +196,17 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 /* Resizer handle on th */
 .rt-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:6;background:transparent;}
 .rt-resizer:hover,.rt-resizer.dragging{background:var(--amber-dim);}
+/* Column header inner layout */
+.rt-th-inner{display:flex;flex-direction:column;gap:3px;padding-right:8px;}
+.th-hdr-row{display:flex;align-items:center;gap:3px;overflow:hidden;}
+.th-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:var(--text-2);}
+.th-label:hover{color:var(--amber);}
+.th-sort{flex-shrink:0;color:var(--amber);font-size:9px;min-width:9px;text-align:center;}
+.rt th.sa .th-sort::after{content:'▲';}
+.rt th.sd .th-sort::after{content:'▼';}
+.th-filter{width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:2px;padding:2px 5px;font-family:var(--font-mono);font-size:10px;color:var(--text);outline:none;box-sizing:border-box;font-weight:400;text-transform:none;letter-spacing:0;}
+.th-filter:focus{border-color:var(--amber);}
+.th-filter::placeholder{color:var(--text-3);}
 
 /* ── #9 Фиксация первого столбца при горизонтальном скролле ── */
 .rt td:first-child,
@@ -260,6 +269,12 @@ body.ctrl-held .sql-input { pointer-events:none; }
 .hl-num{color:var(--amber);}
 .hl-cmt{color:var(--text-3);font-style:italic;}
 .hl-op{color:#f39c12;}
+body.light-theme .hl-kw{color:#7c3aed;}
+body.light-theme .hl-fn{color:#1d4ed8;}
+body.light-theme .hl-str{color:#16a34a;}
+body.light-theme .hl-num{color:var(--amber);}
+body.light-theme .hl-cmt{color:var(--text-3);}
+body.light-theme .hl-op{color:#b8680a;}
 
 /*
  * FIX: Textarea поверх подсветки — цвет transparent нужен чтобы
@@ -555,8 +570,8 @@ body.light-theme.ctrl-held .monaco-obj-proc {color:#92400e !important;border-bot
 
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
 <script>
-const SQL_KW = 'SELECT FROM WHERE JOIN LEFT RIGHT INNER OUTER FULL CROSS ON AS AND OR NOT IN EXISTS BETWEEN LIKE ILIKE IS NULL TRUE FALSE INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE INDEX VIEW DROP ALTER ADD COLUMN PRIMARY KEY FOREIGN REFERENCES UNIQUE DEFAULT CONSTRAINT CHECK GROUP BY ORDER HAVING LIMIT OFFSET UNION ALL DISTINCT WITH RECURSIVE CASE WHEN THEN ELSE END CAST OVER PARTITION ROW_NUMBER RANK DENSE_RANK TRUNCATE BEGIN COMMIT ROLLBACK TRANSACTION EXPLAIN ANALYZE VACUUM RETURNING COALESCE NULLIF GREATEST LEAST EXTRACT DATE_TRUNC ARRAY JSONB JSON TEXT INTEGER BIGINT BOOLEAN NUMERIC TIMESTAMP DATE TIME INTERVAL SERIAL UUID VARCHAR DO LANGUAGE PLPGSQL FUNCTION PROCEDURE TRIGGER RETURNS DECLARE'.split(' ');
-const SQL_FN = 'COUNT SUM AVG MIN MAX ROUND FLOOR CEIL ABS MOD LENGTH TRIM UPPER LOWER SUBSTR SUBSTRING REPLACE SPLIT_PART CONCAT COALESCE NULLIF NOW CURRENT_DATE CURRENT_TIMESTAMP TO_CHAR TO_DATE AGE EXTRACT DATE_TRUNC DATE_PART ARRAY_AGG STRING_AGG JSON_AGG JSONB_AGG ROW_TO_JSON UNNEST GENERATE_SERIES REGEXP_REPLACE REGEXP_MATCH LEAD LAG FIRST_VALUE LAST_VALUE NTH_VALUE NTILE CUME_DIST PERCENT_RANK'.split(' ');
+const SQL_KW = 'SELECT FROM WHERE JOIN LEFT RIGHT INNER OUTER FULL CROSS NATURAL ON AS AND OR NOT IN EXISTS BETWEEN LIKE ILIKE SIMILAR IS NULL TRUE FALSE INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE INDEX VIEW DROP ALTER ADD COLUMN PRIMARY KEY FOREIGN REFERENCES UNIQUE DEFAULT CONSTRAINT CHECK GROUP BY ORDER HAVING LIMIT OFFSET UNION EXCEPT INTERSECT ALL DISTINCT WITH RECURSIVE CASE WHEN THEN ELSE ELSIF ELSEIF END CAST OVER PARTITION ROW_NUMBER RANK DENSE_RANK TRUNCATE BEGIN COMMIT ROLLBACK TRANSACTION SAVEPOINT EXPLAIN ANALYZE VACUUM RETURNING COALESCE NULLIF GREATEST LEAST EXTRACT DATE_TRUNC ARRAY JSONB JSON TEXT INTEGER BIGINT SMALLINT INT INT2 INT4 INT8 REAL FLOAT FLOAT4 FLOAT8 DOUBLE PRECISION BOOLEAN NUMERIC DECIMAL CHAR VARCHAR BPCHAR BYTEA XML MONEY BIT VARBIT TSVECTOR TSQUERY OID TIMESTAMP TIMESTAMPTZ DATE TIME TIMETZ INTERVAL SERIAL SMALLSERIAL BIGSERIAL UUID RECORD ROW VOID SETOF DO LANGUAGE PLPGSQL FUNCTION PROCEDURE TRIGGER RETURNS RETURN DECLARE RAISE NOTICE WARNING INFO DEBUG EXCEPTION PERFORM EXECUTE OPEN CLOSE FETCH MOVE LOOP WHILE FOR FOREACH CONTINUE EXIT FOUND SQLSTATE IF SCHEMA DATABASE SEQUENCE EXTENSION ENUM TYPE DOMAIN REPLACE OWNER RENAME CASCADE RESTRICT NO ACTION MATCH SIMPLE PARTIAL MATERIALIZED CONCURRENTLY COMMENT COPY LOCK GRANT REVOKE SUPERUSER CREATEDB CREATEROLE NOINHERIT INHERIT PASSWORD TABLESPACE UNLOGGED TEMP TEMPORARY GLOBAL LOCAL INHERITS GENERATED ALWAYS STORED IDENTITY CYCLE MINVALUE MAXVALUE INCREMENT START CACHE OWNED USING INCLUDE EXCLUDE DEFERRABLE INITIALLY DEFERRED IMMEDIATE RESET SHOW CALL'.split(' ');
+const SQL_FN = 'COUNT SUM AVG MIN MAX ROUND FLOOR CEIL ABS MOD POWER SQRT LOG LN EXP SIGN TRUNC LENGTH TRIM UPPER LOWER SUBSTR SUBSTRING REPLACE SPLIT_PART CONCAT CONCAT_WS OVERLAY POSITION LPAD RPAD REPEAT REVERSE INITCAP LEFT RIGHT LTRIM RTRIM BTRIM QUOTE_IDENT QUOTE_LITERAL FORMAT MD5 ENCODE DECODE CONVERT COALESCE NULLIF IFNULL NOW CURRENT_DATE CURRENT_TIME CURRENT_TIMESTAMP LOCALTIME LOCALTIMESTAMP TRANSACTION_TIMESTAMP CLOCK_TIMESTAMP TIMEOFDAY CURRENT_USER SESSION_USER CURRENT_ROLE TO_CHAR TO_DATE TO_TIMESTAMP TO_NUMBER AGE EXTRACT DATE_TRUNC DATE_PART MAKE_DATE MAKE_TIME MAKE_TIMESTAMP MAKE_INTERVAL JUSTIFY_DAYS JUSTIFY_HOURS JUSTIFY_INTERVAL ARRAY_AGG ARRAY_LENGTH ARRAY_NDIMS ARRAY_UPPER ARRAY_LOWER ARRAY_APPEND ARRAY_PREPEND ARRAY_REMOVE ARRAY_REPLACE ARRAY_POSITION ARRAY_POSITIONS ARRAY_CAT ARRAY_DIMS STRING_AGG JSON_AGG JSON_OBJECT_AGG JSONB_AGG JSONB_OBJECT_AGG ROW_TO_JSON JSON_BUILD_OBJECT JSON_BUILD_ARRAY JSONB_BUILD_OBJECT JSONB_BUILD_ARRAY JSON_EACH JSONB_EACH JSON_EACH_TEXT JSONB_EACH_TEXT JSONB_PATH_EXISTS JSONB_PATH_QUERY JSONB_PATH_QUERY_ARRAY JSON_ARRAY_LENGTH JSONB_ARRAY_LENGTH UNNEST GENERATE_SERIES GENERATE_SUBSCRIPTS REGEXP_REPLACE REGEXP_MATCH REGEXP_MATCHES REGEXP_SPLIT_TO_ARRAY REGEXP_SPLIT_TO_TABLE LEAD LAG FIRST_VALUE LAST_VALUE NTH_VALUE NTILE CUME_DIST PERCENT_RANK ROW_NUMBER RANK DENSE_RANK PG_TYPEOF OID_RECV WIDTH_BUCKET RANDOM SETSEED GREATEST LEAST NULLIF'.split(' ').filter((v,i,a)=>a.indexOf(v)===i);
 const SNIPS = {
     select:  'SELECT *\nFROM table_name\nWHERE 1=1\nLIMIT 100;',
     insert:  'INSERT INTO table_name (col1, col2)\nVALUES (val1, val2)\nRETURNING *;',
@@ -571,6 +586,7 @@ const S = {
     tables: [],
     master: [], display: [], cols: [],
     sortCol: null, sortDir: 'asc',
+    colFilters: {},
     activeTab: 'data',
     acIdx: -1, acItems: [],
     currentEditorTab: 'tab-1',
@@ -627,7 +643,7 @@ function _setupMonacoTheme() {
             { token: 'delimiter',             foreground: 'e8e3dc' },
             { token: 'delimiter.parenthesis', foreground: 'a09890' },
             { token: 'delimiter.square',      foreground: 'a09890' },
-            { token: 'type',                  foreground: 'f0a843' },
+            { token: 'type',                  foreground: 'cf9fff' },
             { token: '',                      foreground: 'e8e3dc' },
         ],
         colors: {
@@ -673,7 +689,7 @@ function _setupMonacoTheme() {
             { token: 'delimiter',             foreground: '1a1714' },
             { token: 'delimiter.parenthesis', foreground: '5a5450' },
             { token: 'delimiter.square',      foreground: '5a5450' },
-            { token: 'type',                  foreground: 'b8680a' },
+            { token: 'type',                  foreground: '7c3aed' },
             { token: '',                      foreground: '1a1714' },
         ],
         colors: {
@@ -1714,7 +1730,7 @@ function createSQLTabContent(tabId) {
                 <div class="pane-hdr"><span><i class="bi bi-code-slash"></i>SQL запрос</span></div>
                 <div class="monaco-editor-container" data-tab="${tabId}"></div>
             </div>
-            <div class="results-content" data-tab="${tabId}" style="border-top:1px solid var(--line);padding:20px;flex:1;overflow:auto;"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос</span></div></div>
+            <div class="results-content" data-tab="${tabId}" style="border-top:1px solid var(--line);"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос</span></div></div>
         </div>
     `;
     return div;
@@ -1982,6 +1998,7 @@ async function executeSQL(sql, tabId) {
                 S.cols = data.data.columns;
                 S.sortCol = null;
                 S.sortDir = 'asc';
+                S.colFilters = {};
 
                 const rowCnt = document.getElementById('rowCnt');
                 const filtCnt = document.getElementById('filtCnt');
@@ -2108,20 +2125,30 @@ function renderTable() {
         ${S.cols.map((_, i) => `<col style="width:${getW(i)}px;min-width:40px;">`).join('')}
     </colgroup>`;
 
-    // Sort headers
-    const rowNumTh = `<th style="text-align:right;padding-right:8px;cursor:default;" data-col="-1">
+    // Compute explicit total table width for proper horizontal scroll
+    const totalW = ROW_NUM_W + S.cols.reduce((sum, _, i) => sum + getW(i), 0);
+
+    // Headers with per-column filter inputs
+    const rowNumTh = `<th style="text-align:right;padding-right:8px;cursor:default;vertical-align:middle;" data-col="-1">
         <span style="color:var(--text-3)">#</span>
         <span class="rt-resizer" data-colidx="-1"></span>
     </th>`;
     const ths = rowNumTh + S.cols.map((col, i) => {
         const cl = S.sortCol === i ? (S.sortDir === 'asc' ? 'sa' : 'sd') : '';
+        const fv = (S.colFilters[i] || '').replace(/"/g, '&quot;');
         return `<th class="${cl}" data-col="${i}">
-            <span class="th-label" onclick="sortBy(${i})" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${eh(col)}</span>
+            <div class="rt-th-inner">
+                <div class="th-hdr-row">
+                    <span class="th-label" onclick="sortBy(${i})">${eh(col)}</span>
+                    <span class="th-sort"></span>
+                </div>
+                <input class="th-filter" type="text" placeholder="Фильтр…" data-colidx="${i}" value="${fv}" oninput="applyColFilter(this)">
+            </div>
             <span class="rt-resizer" data-colidx="${i}"></span>
         </th>`;
     }).join('');
 
-    c.innerHTML = `<table class="rt" id="resultTable">${colgroup}<thead><tr>${ths}</tr></thead><tbody id="resultTbody"></tbody></table>`;
+    c.innerHTML = `<table class="rt" id="resultTable" style="width:${totalW}px;">${colgroup}<thead><tr>${ths}</tr></thead><tbody id="resultTbody"></tbody></table>`;
 
     // Wire column resizers
     c.querySelectorAll('.rt-resizer').forEach(handle => {
@@ -2165,6 +2192,10 @@ function onColResizerMousedown(e) {
             const cols = table.querySelectorAll('colgroup col');
             const colEl = cols[colIdx === -1 ? 0 : colIdx + 1];
             if (colEl) colEl.style.width = newW + 'px';
+            // Update explicit table width to keep horizontal scroll correct
+            const delta = newW - startW;
+            const curW = parseInt(table.style.width) || table.offsetWidth;
+            table.style.width = (curW + delta) + 'px';
         }
         th.style.width = newW + 'px';
     };
@@ -2222,16 +2253,70 @@ function sortBy(i) {
         if (!isNaN(av) && !isNaN(bv)) return (parseFloat(av) - parseFloat(bv)) * dir;
         return String(av).localeCompare(String(bv)) * dir;
     });
-    renderTable();
+    // Update sort indicators without full re-render
+    document.querySelectorAll('.rt th[data-col]').forEach(th => {
+        const ci = parseInt(th.dataset.col);
+        if (ci < 0) return;
+        th.classList.toggle('sa', ci === i && S.sortDir === 'asc');
+        th.classList.toggle('sd', ci === i && S.sortDir === 'desc');
+    });
+    _rebuildTbody();
+}
+
+// Apply all active filters (global + per-column) to S.display
+function _applyFilters() {
+    const q = (document.getElementById('resultFilter')?.value || '').toLowerCase().trim();
+    S.display = S.master.filter(r => {
+        if (q && !S.cols.some(c => String(r[c] ?? '').toLowerCase().includes(q))) return false;
+        for (const [idxStr, fv] of Object.entries(S.colFilters)) {
+            const col = S.cols[parseInt(idxStr)];
+            if (!col) continue;
+            if (!String(r[col] ?? '').toLowerCase().includes(fv)) return false;
+        }
+        return true;
+    });
+}
+
+// Re-render only the tbody (preserves header/filters state)
+function _rebuildTbody() {
+    S._virtRendered = 0;
+    const tbody = document.getElementById('resultTbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        _renderNextChunk();
+    }
+    const stRows = document.getElementById('stRows');
+    if (stRows && S.master.length !== S.display.length) {
+        stRows.textContent = `${S.master.length} строк (фильтр: ${S.display.length})`;
+    } else if (stRows) {
+        stRows.textContent = `${S.master.length} строк`;
+    }
+}
+
+// Clear current sort state (called before applying filters)
+function _clearSort() {
+    S.sortCol = null;
+    document.querySelectorAll('.rt th.sa, .rt th.sd').forEach(th => th.classList.remove('sa', 'sd'));
+}
+
+// Per-column filter handler (called oninput on .th-filter inputs)
+function applyColFilter(input) {
+    const idx = parseInt(input.dataset.colidx);
+    const val = input.value.trim().toLowerCase();
+    if (val) S.colFilters[idx] = val;
+    else delete S.colFilters[idx];
+    _clearSort();
+    _applyFilters();
+    _rebuildTbody();
 }
 
 function applyFilter() {
     const q = document.getElementById('resultFilter')?.value.toLowerCase().trim() || '';
-    S.display = q ? S.master.filter(r => S.cols.some(c => String(r[c] ?? '').toLowerCase().includes(q))) : [...S.master];
+    _clearSort();
+    _applyFilters();
+    _rebuildTbody();
     const filtCnt = document.getElementById('filtCnt');
     if (filtCnt) filtCnt.textContent = q ? `Найдено: ${S.display.length}` : '';
-    S.sortCol = null;
-    renderTable();
 }
 
 function switchTab(tab) {
