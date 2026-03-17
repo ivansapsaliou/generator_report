@@ -10,9 +10,35 @@
 
 {% block extra_css %}
 <style>
+/* На этой странице жёстко фиксируем правый край на уровне layout-контейнеров,
+   чтобы широкие таблицы не раздвигали весь интерфейс. */
+html, body { overflow-x: clip; }
+body { overflow-x: hidden; } /* fallback */
+
+.main-container{
+    max-width:100vw;
+    width:100vw;
+    overflow-x:hidden;
+}
+.content-wrapper{
+    /* sidebar фиксированный 48px, контент не должен расширяться */
+    width:calc(100vw - 48px);
+    max-width:calc(100vw - 48px);
+    overflow-x:hidden;
+}
+.content{
+    max-width:100%;
+    overflow-x:hidden;
+}
+
 #sqlEditorRoot {
-    display: flex; height: calc(100vh - 96px);
-    position: relative; overflow: hidden; gap: 0;
+    display:flex;
+    height:calc(100vh - 96px);
+    width:100%;
+    max-width:100vw;
+    position:relative;
+    overflow:hidden;
+    gap:0;
 }
 
 /* ── OVERLAY ── */
@@ -74,7 +100,7 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 #treeSplitter:hover{background:var(--amber-dim);}
 
 /* ── MAIN ── */
-#mainArea{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;}
+#mainArea{flex:1;display:flex;flex-direction:column;min-width:0;max-width:100%;overflow:hidden;}
 
 /* ── TABS SYSTEM ── */
 .tabs-bar{display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg-2);border-bottom:1px solid var(--line);flex-shrink:0;overflow-x:auto;}
@@ -90,7 +116,7 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 .tab-close:hover{color:var(--red);}
 .tab.active .tab-close{display:inline-block !important;}
 
-#tabsContainer{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative;}
+#tabsContainer{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;max-width:100%;overflow:hidden;position:relative;}
 .tab-content{display:none;flex-direction:column;flex:1;overflow:hidden;}
 .tab-content.active{display:flex;}
 
@@ -123,7 +149,7 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 .tb-lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;}
 .lim-sel{appearance:none;background:var(--bg-3);border:1px solid var(--line);border-radius:3px;color:var(--text-2);font-family:var(--font-mono);font-size:11px;padding:2px 6px;cursor:pointer;}
 
-#vSplit{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+#vSplit{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;max-width:100%;overflow:hidden;}
 
 /* ── CODE EDITOR ── */
 #editorPane{display:flex;flex-direction:column;height:40%;min-height:80px;flex-shrink:0;border-bottom:1px solid var(--line);}
@@ -163,7 +189,7 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 #hResizer::before{content:'⋯';font-size:9px;color:var(--text-3);letter-spacing:3px;}
 
 /* ── RESULTS ── */
-#resultsPane{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;}
+#resultsPane{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;max-width:100%;overflow:hidden;}
 .res-hdr{display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:var(--bg-2);border-bottom:1px solid var(--line);font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;flex-shrink:0;gap:6px;}
 .res-hdr i{color:var(--green);margin-right:4px;}
 .res-tabs{display:flex;gap:2px;}
@@ -173,17 +199,57 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 .exp-strip{display:flex;gap:3px;}
 
 .rfbar{display:flex;align-items:center;gap:8px;padding:4px 10px;background:var(--bg-2);border-bottom:1px solid var(--line);flex-shrink:0;font-size:10px;color:var(--text-3);font-family:var(--font-mono);}
+.rfbar{display:none !important;} /* убираем полоску фильтра результатов (как просили) */
 .rfbar input{flex:1;max-width:240px;background:var(--bg-3);border:1px solid var(--line);border-radius:3px;padding:2px 7px;font-family:var(--font-mono);font-size:11px;color:var(--text);outline:none;}
 .rfbar input:focus{border-color:var(--amber);}
 .rfbar input::placeholder{color:var(--text-3);}
 
-#resultsContent, .results-content{flex:1;overflow:auto;background:var(--bg-1);min-height:0;min-width:0;max-width:100%;width:100%;}
+#resultsContent, .results-content{
+    flex:1;
+    background:var(--bg-1);
+    min-height:0;
+    min-width:0;
+    max-width:100%;
+    width:100%;
+    overflow:hidden; /* вертикальный/горизонтальный скролл держим в .rt-wrap и в sticky-полоске */
+    position:relative;
+    display:flex;
+    flex-direction:column;
+}
 #resultsContent::-webkit-scrollbar, .results-content::-webkit-scrollbar{width:6px;height:6px;}
 #resultsContent::-webkit-scrollbar-track, .results-content::-webkit-scrollbar-track{background:var(--bg-2);}
 #resultsContent::-webkit-scrollbar-thumb, .results-content::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:3px;}
 #resultsContent::-webkit-scrollbar-corner, .results-content::-webkit-scrollbar-corner{background:var(--bg-2);}
-/* Table wrapper clips content and provides independent scroll */
-.rt-wrap{display:block;overflow:auto;max-width:100%;}
+/* Table wrapper clips content and provides independent horizontal scroll */
+.rt-wrap{
+    display:block;
+    overflow-y:auto;      /* вертикальный скролл таблицы */
+    overflow-x:scroll;    /* горизонтально скроллим, но сам скроллбар прячем (см. ниже) */
+    max-width:100%;
+    width:100%;
+    flex:1;
+    min-height:0;
+}
+
+/* Прячем именно горизонтальный скроллбар у таблицы, чтобы не было двух полос */
+.rt-wrap{ scrollbar-width: none; }                 /* Firefox */
+.rt-wrap::-webkit-scrollbar{ height: 0px; }        /* Chromium/WebKit */
+.rt-wrap::-webkit-scrollbar-thumb{ background: transparent; }
+.rt-wrap::-webkit-scrollbar-track{ background: transparent; }
+
+/* Sticky horizontal scrollbar always visible (synced with .rt-wrap) */
+.rt-xscroll{
+    position:relative;
+    z-index:20;
+    height:16px;
+    overflow-x:scroll; /* всегда показываем горизонтальный скроллбар */
+    overflow-y:hidden;
+    background:var(--bg-2);
+    border-top:1px solid var(--line);
+    flex-shrink:0;
+    scrollbar-gutter: stable;
+}
+.rt-xscroll-inner{height:1px;}
 
 .rt{border-collapse:collapse;font-family:'Geist Mono','Consolas','Courier New',monospace;font-size:12px;table-layout:fixed;width:auto;}
 .rt th{position:sticky;top:0;z-index:5;background:var(--bg-3);border-bottom:2px solid var(--amber-dim);border-right:1px solid var(--line);padding:5px 10px 4px;text-align:left;font-family:var(--font-ui);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);white-space:nowrap;cursor:default;user-select:none;overflow:hidden;position:relative;vertical-align:top;}
@@ -509,7 +575,7 @@ body.light-theme.ctrl-held .monaco-obj-proc {color:#92400e !important;border-bot
                             <span id="filtCnt"></span>
                         </div>
                         <div id="resultsContent" class="results-content" data-tab="tab-1"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос для просмотра результатов</span></div></div>
-                        <div class="stbar"><span id="stText">Готов</span><span class="st-d">|</span><span id="stTime"></span><span class="st-d">|</span><span id="stRows"></span></div>
+                        <div class="stbar"><span class="stText">Готов</span><span class="st-d">|</span><span class="stTime"></span><span class="st-d">|</span><span class="stRows"></span></div>
                     </div>
                 </div>
             </div>
@@ -1030,6 +1096,15 @@ function _monacoAdapter(editor, tabId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Lock layout width to initial viewport clientWidth (excludes scrollbars).
+    // This prevents the page from expanding when result tables are very wide.
+    const applyAppVw = () => {
+        const vw = document.documentElement.clientWidth;
+        document.documentElement.style.setProperty('--app-vw', vw + 'px');
+    };
+    applyAppVw();
+    window.addEventListener('resize', () => requestAnimationFrame(applyAppVw), { passive: true });
+
     _domContentLoaded = true;
     checkConn();
     initSplitters();
@@ -1730,7 +1805,21 @@ function createSQLTabContent(tabId) {
                 <div class="pane-hdr"><span><i class="bi bi-code-slash"></i>SQL запрос</span></div>
                 <div class="monaco-editor-container" data-tab="${tabId}"></div>
             </div>
-            <div class="results-content" data-tab="${tabId}" style="border-top:1px solid var(--line);"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос</span></div></div>
+            <div class="results-pane" style="border-top:1px solid var(--line);display:flex;flex-direction:column;min-height:0;">
+                <div class="res-hdr">
+                    <div><i class="bi bi-table"></i>Результаты</div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div class="res-tabs">
+                            <button class="rtab active" onclick="switchTab('data')">Данные</button>
+                            <button class="rtab" onclick="switchTab('history')">История</button>
+                        </div>
+                        <div class="exp-strip" style="display:none;"></div>
+                    </div>
+                </div>
+                <div class="rfbar" style="display:none;"></div>
+                <div class="results-content" data-tab="${tabId}"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос</span></div></div>
+                <div class="stbar"><span class="stText">Готов</span><span class="st-d">|</span><span class="stTime"></span><span class="st-d">|</span><span class="stRows"></span></div>
+            </div>
         </div>
     `;
     return div;
@@ -2052,13 +2141,15 @@ async function executeSQL(sql, tabId) {
     }
 }
 
-function setSt(t, text, time, rows) {
-    const e = document.getElementById('stText');
+function setSt(t, text, time, rows, tabId = null) {
+    const tid = tabId || S.currentEditorTab;
+    const scope = document.querySelector(`.tab-content[data-tab-id="${tid}"]`) || document;
+    const e = scope.querySelector('.stText');
     if (!e) return;
-    e.className = t === 'ok' ? 'st-ok' : t === 'err' ? 'st-err' : 'st-run';
+    e.className = 'stText ' + (t === 'ok' ? 'st-ok' : t === 'err' ? 'st-err' : 'st-run');
     e.textContent = text;
-    const stTime = document.getElementById('stTime');
-    const stRows = document.getElementById('stRows');
+    const stTime = scope.querySelector('.stTime');
+    const stRows = scope.querySelector('.stRows');
     if (stTime) stTime.textContent = time;
     if (stRows) stRows.textContent = rows;
 }
@@ -2148,7 +2239,26 @@ function renderTable() {
         </th>`;
     }).join('');
 
-    c.innerHTML = `<table class="rt" id="resultTable" style="width:${totalW}px;">${colgroup}<thead><tr>${ths}</tr></thead><tbody id="resultTbody"></tbody></table>`;
+    // Sticky horizontal scrollbar (always visible) + scrollable table area
+    c.innerHTML = `
+        <div class="rt-wrap"><table class="rt" style="width:${totalW}px;">${colgroup}<thead><tr>${ths}</tr></thead><tbody></tbody></table></div>
+        <div class="rt-xscroll" aria-hidden="true"><div class="rt-xscroll-inner" style="width:${totalW}px;"></div></div>
+    `;
+
+    // Sync horizontal scroll positions between sticky bar and table wrapper
+    const wrap = c.querySelector('.rt-wrap');
+    const xbar = c.querySelector('.rt-xscroll');
+    if (wrap && xbar) {
+        const syncFromWrap = () => { xbar.scrollLeft = wrap.scrollLeft; };
+        const syncFromBar = () => { wrap.scrollLeft = xbar.scrollLeft; };
+        wrap.addEventListener('scroll', syncFromWrap, { passive: true });
+        xbar.addEventListener('scroll', syncFromBar, { passive: true });
+        // keep aligned after render
+        xbar.scrollLeft = wrap.scrollLeft;
+    }
+
+    // Remember current results container for tab-scoped queries
+    S._resultsContainer = c;
 
     // Wire column resizers
     c.querySelectorAll('.rt-resizer').forEach(handle => {
@@ -2161,11 +2271,12 @@ function renderTable() {
     S._virtRendered = 0;
     _renderNextChunk();
 
+    const wrapForVirt = c.querySelector('.rt-wrap') || c;
     c._virtScrollHandler = () => {
-        if (c.scrollTop + c.clientHeight > c.scrollHeight - 300) _renderNextChunk();
+        if (wrapForVirt.scrollTop + wrapForVirt.clientHeight > wrapForVirt.scrollHeight - 300) _renderNextChunk();
     };
-    c.removeEventListener('scroll', c._virtScrollHandler);
-    c.addEventListener('scroll', c._virtScrollHandler);
+    wrapForVirt.removeEventListener('scroll', c._virtScrollHandler);
+    wrapForVirt.addEventListener('scroll', c._virtScrollHandler);
 }
 
 // ── Column resize drag ───────────────────────────────────────────────
@@ -2187,7 +2298,7 @@ function onColResizerMousedown(e) {
         const newW = Math.max(40, startW + ev.clientX - startX);
         COL_WIDTHS[`${S.currentEditorTab}_${colIdx}`] = newW;
         // Update colgroup col width live
-        const table = document.getElementById('resultTable');
+        const table = (S._resultsContainer || document).querySelector('.rt');
         if (table) {
             const cols = table.querySelectorAll('colgroup col');
             const colEl = cols[colIdx === -1 ? 0 : colIdx + 1];
@@ -2226,7 +2337,7 @@ function _buildRow(row, idx) {
 }
 
 function _renderNextChunk() {
-    const tbody = document.getElementById('resultTbody');
+    const tbody = (S._resultsContainer || document).querySelector('.rt-wrap tbody') || (S._resultsContainer || document).querySelector('tbody');
     if (!tbody) return;
     const start = S._virtRendered;
     const end = Math.min(start + VIRT_CHUNK, S.display.length);
@@ -2237,7 +2348,7 @@ function _renderNextChunk() {
     S._virtRendered = end;
     // Update status with rendered count if partial
     if (end < S.display.length) {
-        const stRows = document.getElementById('stRows');
+        const stRows = (document.querySelector(`.tab-content[data-tab-id="${S.currentEditorTab}"]`) || document).querySelector('.stRows');
         if (stRows) stRows.textContent = `${S.master.length} строк (показано ${end})`;
     }
 }
@@ -2280,12 +2391,12 @@ function _applyFilters() {
 // Re-render only the tbody (preserves header/filters state)
 function _rebuildTbody() {
     S._virtRendered = 0;
-    const tbody = document.getElementById('resultTbody');
+    const tbody = (S._resultsContainer || document).querySelector('.rt-wrap tbody') || (S._resultsContainer || document).querySelector('tbody');
     if (tbody) {
         tbody.innerHTML = '';
         _renderNextChunk();
     }
-    const stRows = document.getElementById('stRows');
+    const stRows = (document.querySelector(`.tab-content[data-tab-id="${S.currentEditorTab}"]`) || document).querySelector('.stRows');
     if (stRows && S.master.length !== S.display.length) {
         stRows.textContent = `${S.master.length} строк (фильтр: ${S.display.length})`;
     } else if (stRows) {
@@ -2321,8 +2432,13 @@ function applyFilter() {
 
 function switchTab(tab) {
     S.activeTab = tab;
-    document.querySelectorAll('.rtab').forEach(b => b.classList.toggle('active', b.id === 'tab-' + tab));
-    const c = document.querySelector(`.results-content[data-tab="${S.currentEditorTab}"]`) || document.getElementById('resultsContent');
+    const scope = document.querySelector(`.tab-content[data-tab-id="${S.currentEditorTab}"]`) || document;
+    scope.querySelectorAll('.rtab').forEach((b, idx) => {
+        const isData = (tab === 'data' && idx === 0);
+        const isHist = (tab === 'history' && idx === 1);
+        b.classList.toggle('active', isData || isHist);
+    });
+    const c = scope.querySelector(`.results-content[data-tab="${S.currentEditorTab}"]`) || scope.querySelector('.results-content') || document.getElementById('resultsContent');
     if (!c) return;
     if (tab === 'history') {
         renderHist();
