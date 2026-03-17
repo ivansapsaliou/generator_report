@@ -365,6 +365,20 @@ body.ctrl-held .hl-proc-link{border-bottom-color:#f39c12;color:#f39c12;}
 /* ── Syntax-highlighted DDL block ── */
 .ddl-hl{line-height:1.7;}
 
+/* ── MONACO object decorations (table / function / procedure links) ── */
+.monaco-obj-table{color:#3d8f65;border-bottom:1px solid rgba(82,183,136,.5);transition:color .15s,border-color .15s;}
+.monaco-obj-fn   {color:#4a7fa8;border-bottom:1px solid rgba(121,192,255,.5);transition:color .15s,border-color .15s;}
+.monaco-obj-proc {color:#9b6b20;border-bottom:1px solid rgba(243,156,18,.5);transition:color .15s,border-color .15s;}
+body.ctrl-held .monaco-obj-table{color:#52b788 !important;border-bottom-color:#52b788;cursor:pointer !important;}
+body.ctrl-held .monaco-obj-fn   {color:#79c0ff !important;border-bottom-color:#79c0ff;cursor:pointer !important;}
+body.ctrl-held .monaco-obj-proc {color:#f39c12 !important;border-bottom-color:#f39c12;cursor:pointer !important;}
+body.light-theme .monaco-obj-table{color:#166534;border-bottom-color:rgba(22,101,52,.5);}
+body.light-theme .monaco-obj-fn   {color:#1e40af;border-bottom-color:rgba(30,64,175,.5);}
+body.light-theme .monaco-obj-proc {color:#92400e;border-bottom-color:rgba(146,64,14,.5);}
+body.light-theme.ctrl-held .monaco-obj-table{color:#166534 !important;border-bottom-color:#166534;cursor:pointer !important;}
+body.light-theme.ctrl-held .monaco-obj-fn   {color:#1e40af !important;border-bottom-color:#1e40af;cursor:pointer !important;}
+body.light-theme.ctrl-held .monaco-obj-proc {color:#92400e !important;border-bottom-color:#92400e;cursor:pointer !important;}
+
 /* ── MONACO EDITOR CONTAINERS ── */
 .monaco-editor-container{flex:1;overflow:hidden;min-height:0;}
 .ddl-monaco-container{flex:1;min-height:200px;border:1px solid var(--line);border-radius:3px;overflow:hidden;}
@@ -600,54 +614,92 @@ function _setupMonacoTheme() {
         base: 'vs-dark',
         inherit: true,
         rules: [
-            { token: 'keyword',    foreground: 'cf9fff', fontStyle: 'bold' },
-            { token: 'predefined', foreground: '79c0ff' },
-            { token: 'string',     foreground: 'a8d9a4' },
-            { token: 'number',     foreground: 'f0a843' },
-            { token: 'comment',    foreground: '6a737d', fontStyle: 'italic' },
-            { token: 'operator',   foreground: 'f39c12' },
+            { token: 'keyword',               foreground: 'cf9fff', fontStyle: 'bold' },
+            { token: 'predefined',            foreground: '79c0ff' },
+            { token: 'string',                foreground: 'a8d9a4' },
+            { token: 'string.escape',         foreground: '56d364' },
+            { token: 'string.invalid',        foreground: 'ff7b72' },
+            { token: 'number',                foreground: 'f0a843' },
+            { token: 'number.float',          foreground: 'f0a843' },
+            { token: 'comment',               foreground: '6a737d', fontStyle: 'italic' },
+            { token: 'comment.quote',         foreground: '6a737d', fontStyle: 'italic' },
+            { token: 'operator',              foreground: 'f39c12' },
+            { token: 'delimiter',             foreground: 'e8e3dc' },
+            { token: 'delimiter.parenthesis', foreground: 'a09890' },
+            { token: 'delimiter.square',      foreground: 'a09890' },
+            { token: 'type',                  foreground: 'f0a843' },
+            { token: '',                      foreground: 'e8e3dc' },
         ],
         colors: {
-            'editor.background':                 '#141414',
-            'editor.foreground':                 '#cdd9e5',
-            'editor.lineHighlightBackground':    '#1a1e27',
-            'editor.selectionBackground':        '#3d3114',
-            'editorLineNumber.foreground':       '#4d5566',
-            'editorLineNumber.activeForeground': '#9e9e9e',
-            'editorCursor.foreground':           '#f0a843',
-            'editor.inactiveSelectionBackground':'#2d2d2d',
-            'editorIndentGuide.background':      '#2a2d36',
-            'editorBracketMatch.background':     '#2d4b2d',
-            'editorBracketMatch.border':         '#52b788',
-            'scrollbarSlider.background':        '#3d3d3d80',
-            'scrollbarSlider.hoverBackground':   '#5d5d5d90',
+            'editor.background':                   '#141414',
+            'editor.foreground':                   '#e8e3dc',
+            'editor.lineHighlightBackground':      '#1c1c1c',
+            'editor.lineHighlightBorder':          '#00000000',
+            'editor.selectionBackground':          '#f0a84330',
+            'editor.inactiveSelectionBackground':  '#2e2e2e',
+            'editorLineNumber.foreground':         '#5c5550',
+            'editorLineNumber.activeForeground':   '#a09890',
+            'editorCursor.foreground':             '#f0a843',
+            'editorIndentGuide.background':        '#2a2a2a',
+            'editorIndentGuide.activeBackground':  '#3d3d3d',
+            'editorBracketMatch.background':       '#2d4b2d',
+            'editorBracketMatch.border':           '#52b788',
+            'scrollbarSlider.background':          '#3d3d3d80',
+            'scrollbarSlider.hoverBackground':     '#5d5d5d90',
+            'editorWidget.background':             '#1c1c1c',
+            'editorWidget.border':                 '#2a2a2a',
+            'editorSuggestWidget.background':      '#1c1c1c',
+            'editorSuggestWidget.border':          '#2a2a2a',
+            'editorSuggestWidget.selectedBackground': '#f0a84322',
+            'editorSuggestWidget.highlightForeground': '#f0a843',
+            'editorHoverWidget.background':        '#1c1c1c',
+            'editorHoverWidget.border':            '#2a2a2a',
         }
     });
     monaco.editor.defineTheme('sql-light', {
         base: 'vs',
         inherit: true,
         rules: [
-            { token: 'keyword',    foreground: '7c3aed', fontStyle: 'bold' },
-            { token: 'predefined', foreground: '1d4ed8' },
-            { token: 'string',     foreground: '16a34a' },
-            { token: 'number',     foreground: 'd97706' },
-            { token: 'comment',    foreground: '6b7280', fontStyle: 'italic' },
-            { token: 'operator',   foreground: 'd97706' },
+            { token: 'keyword',               foreground: '7c3aed', fontStyle: 'bold' },
+            { token: 'predefined',            foreground: '1d4ed8' },
+            { token: 'string',                foreground: '16a34a' },
+            { token: 'string.escape',         foreground: '166534' },
+            { token: 'string.invalid',        foreground: 'dc2626' },
+            { token: 'number',                foreground: 'b8680a' },
+            { token: 'number.float',          foreground: 'b8680a' },
+            { token: 'comment',               foreground: '9a9490', fontStyle: 'italic' },
+            { token: 'comment.quote',         foreground: '9a9490', fontStyle: 'italic' },
+            { token: 'operator',              foreground: 'b8680a' },
+            { token: 'delimiter',             foreground: '1a1714' },
+            { token: 'delimiter.parenthesis', foreground: '5a5450' },
+            { token: 'delimiter.square',      foreground: '5a5450' },
+            { token: 'type',                  foreground: 'b8680a' },
+            { token: '',                      foreground: '1a1714' },
         ],
         colors: {
-            'editor.background':                 '#f8f9fa',
-            'editor.foreground':                 '#1f2937',
-            'editor.lineHighlightBackground':    '#f1f3f5',
-            'editor.selectionBackground':        '#fde68a',
-            'editorLineNumber.foreground':       '#9ca3af',
-            'editorLineNumber.activeForeground': '#374151',
-            'editorCursor.foreground':           '#d97706',
-            'editor.inactiveSelectionBackground':'#e5e7eb',
-            'editorIndentGuide.background':      '#e5e7eb',
-            'editorBracketMatch.background':     '#d1fae5',
-            'editorBracketMatch.border':         '#059669',
-            'scrollbarSlider.background':        '#d1d5db80',
-            'scrollbarSlider.hoverBackground':   '#9ca3af90',
+            'editor.background':                   '#eeebe6',
+            'editor.foreground':                   '#1a1714',
+            'editor.lineHighlightBackground':      '#e8e4de',
+            'editor.lineHighlightBorder':          '#00000000',
+            'editor.selectionBackground':          '#b8680a28',
+            'editor.inactiveSelectionBackground':  '#d4d0ca',
+            'editorLineNumber.foreground':         '#9a9490',
+            'editorLineNumber.activeForeground':   '#5a5450',
+            'editorCursor.foreground':             '#b8680a',
+            'editorIndentGuide.background':        '#d4d0ca',
+            'editorIndentGuide.activeBackground':  '#c4c0ba',
+            'editorBracketMatch.background':       '#d1fae5',
+            'editorBracketMatch.border':           '#059669',
+            'scrollbarSlider.background':          '#d1d5db80',
+            'scrollbarSlider.hoverBackground':     '#9ca3af90',
+            'editorWidget.background':             '#e8e4de',
+            'editorWidget.border':                 '#d0ccc6',
+            'editorSuggestWidget.background':      '#e8e4de',
+            'editorSuggestWidget.border':          '#d0ccc6',
+            'editorSuggestWidget.selectedBackground': '#b8680a18',
+            'editorSuggestWidget.highlightForeground': '#b8680a',
+            'editorHoverWidget.background':        '#e8e4de',
+            'editorHoverWidget.border':            '#d0ccc6',
         }
     });
     // Apply current theme and watch for changes via the theme toggle in base.html
@@ -655,6 +707,86 @@ function _setupMonacoTheme() {
     new MutationObserver(() => {
         monaco.editor.setTheme(_getCurrentMonacoTheme());
     }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+}
+
+// ═══ MONACO OBJECT DECORATIONS (tables / functions / procedures) ═══
+const _monacoObjDecorations = {}; // tabId → IEditorDecorationsCollection
+let _monacoDecTimer = null;
+
+// Schedule a decoration refresh for all open Monaco editors (debounced 400 ms)
+function _scheduleMonacoDecorationUpdate() {
+    clearTimeout(_monacoDecTimer);
+    _monacoDecTimer = setTimeout(() => {
+        Object.entries(monacoEditors).forEach(([tabId, editor]) => {
+            _updateMonacoObjectDecorations(editor, tabId);
+        });
+    }, 400);
+}
+
+// Apply colored inline decorations for known DB objects so they look like
+// clickable links (matching the textarea overlay .hl-obj-link / .hl-fn-link style).
+function _updateMonacoObjectDecorations(editor, tabId) {
+    if (!editor) return;
+    const model = editor.getModel();
+    if (!model) return;
+
+    const tables = S.tables   || [];
+    const fns    = S._fnList  || [];
+    const procs  = S._procList|| [];
+    if (!tables.length && !fns.length && !procs.length) {
+        if (_monacoObjDecorations[tabId]) _monacoObjDecorations[tabId].clear();
+        return;
+    }
+
+    // Build sorted list longest-first to prevent partial matches
+    const allObjs = [
+        ...tables.map(n => ({ name: n, cls: 'monaco-obj-table' })),
+        ...fns   .map(n => ({ name: n, cls: 'monaco-obj-fn'    })),
+        ...procs .map(n => ({ name: n, cls: 'monaco-obj-proc'  })),
+    ].sort((a, b) => b.name.length - a.name.length);
+
+    const text = model.getValue();
+    if (!text.trim()) {
+        if (_monacoObjDecorations[tabId]) _monacoObjDecorations[tabId].clear();
+        return;
+    }
+
+    let re;
+    try {
+        const pattern = allObjs.map(o => o.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+        re = new RegExp(`\\b(${pattern})\\b`, 'gi');
+    } catch (e) { return; }
+
+    const nameToClass = {};
+    // Tables win if a name collides with fn/proc (iterate reversed so tables overwrite)
+    for (let i = allObjs.length - 1; i >= 0; i--) {
+        nameToClass[allObjs[i].name.toLowerCase()] = allObjs[i].cls;
+    }
+
+    const decorations = [];
+    let m;
+    while ((m = re.exec(text)) !== null) {
+        // Skip tokens inside a line comment
+        const lineStart = text.lastIndexOf('\n', m.index) + 1;
+        if (text.slice(lineStart, m.index).includes('--')) continue;
+        const cls = nameToClass[m[0].toLowerCase()];
+        if (!cls) continue;
+        const sp = model.getPositionAt(m.index);
+        const ep = model.getPositionAt(m.index + m[0].length);
+        decorations.push({
+            range: new monaco.Range(sp.lineNumber, sp.column, ep.lineNumber, ep.column),
+            options: {
+                inlineClassName: cls,
+                hoverMessage: { value: '**Ctrl+Click** — открыть определение' },
+            }
+        });
+    }
+
+    if (!_monacoObjDecorations[tabId]) {
+        _monacoObjDecorations[tabId] = editor.createDecorationsCollection(decorations);
+    } else {
+        _monacoObjDecorations[tabId].set(decorations);
+    }
 }
 
 // SQL keywords that can appear right after a table name in FROM/JOIN clauses
@@ -754,7 +886,7 @@ function initMonacoEditor(tabId, containerEl) {
 
     const saved = loadTabContent(tabId);
     const defaultSql = tabId === 'tab-1'
-        ? '-- SQL Редактор\n-- F9 / Ctrl+Enter — выполнить  |  Ctrl+Space — автодополнение\n-- Ctrl+Click по таблице в дереве — открыть структуру таблицы\n\nSELECT version();'
+        ? '-- SQL Редактор\n-- F9 / Ctrl+Enter — выполнить  |  Ctrl+Space — автодополнение\n-- Ctrl+Click по таблице или функции в редакторе — открыть определение\n\nSELECT version();'
         : '';
     const initialValue = saved !== null ? saved : defaultSql;
 
@@ -792,6 +924,7 @@ function initMonacoEditor(tabId, containerEl) {
     // Save content on change
     editor.onDidChangeModelContent(() => {
         saveTabContent(tabId, editor.getValue());
+        _scheduleMonacoDecorationUpdate();
     });
 
     // Cursor position display
@@ -801,6 +934,37 @@ function initMonacoEditor(tabId, containerEl) {
             if (cp) cp.textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
         }
     });
+
+    // Ctrl+Click → navigate to table / function / procedure definition
+    editor.onMouseDown(e => {
+        if (!(e.event.ctrlKey || e.event.metaKey)) return;
+        if (e.target.type !== monaco.editor.MouseTargetType.CONTENT_TEXT) return;
+        const pos = e.target.position;
+        if (!pos) return;
+        const model = editor.getModel();
+        if (!model) return;
+        const wordInfo = model.getWordAtPosition(pos);
+        if (!wordInfo) return;
+        const name    = wordInfo.word;
+        const nameLc  = name.toLowerCase();
+        if ((S.tables   || []).some(t => t.toLowerCase() === nameLc)) {
+            e.event.preventDefault();
+            openDetail(name);
+            return;
+        }
+        if ((S._fnList  || []).some(f => f.toLowerCase() === nameLc)) {
+            e.event.preventDefault();
+            openRoutineDetail(name, 'function');
+            return;
+        }
+        if ((S._procList|| []).some(p => p.toLowerCase() === nameLc)) {
+            e.event.preventDefault();
+            openRoutineDetail(name, 'procedure');
+        }
+    });
+
+    // Initial decoration pass once the editor is fully mounted
+    requestAnimationFrame(() => _updateMonacoObjectDecorations(editor, tabId));
 
     return editor;
 }
@@ -1159,6 +1323,9 @@ async function buildTree() {
         let fnCount = null, procCount = null;
         try { const fd = await fnRes?.json(); if (fd?.success) { fnCount = fd.data.length; S._fnList = fd.data; } } catch(e){ console.warn('[buildTree] functions fetch failed', e); }
         try { const pd = await procRes?.json(); if (pd?.success) { procCount = pd.data.length; S._procList = pd.data; } } catch(e){ console.warn('[buildTree] procedures fetch failed', e); }
+
+        // Refresh Monaco decorations now that DB object lists are known
+        _scheduleMonacoDecorationUpdate();
 
         body.innerHTML = renderGroup('public', 'bi-layers ico-schema', [
             { label:'Tables', icon:'bi-table ico-group', badge:d.data.length,
@@ -1569,6 +1736,10 @@ function closeTab(event, tabId) {
     if (monacoEditors[tabId]) {
         monacoEditors[tabId].dispose();
         delete monacoEditors[tabId];
+    }
+    // Clean up decoration collection
+    if (_monacoObjDecorations[tabId]) {
+        delete _monacoObjDecorations[tabId];
     }
     delete S.tabs[tabId];
     document.querySelector(`.tab[data-tab-id="${tabId}"]`)?.remove();
