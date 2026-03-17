@@ -34,6 +34,12 @@ class AuthManager:
             )
         """)
         
+        # Миграция: добавляем is_active если её нет (для существующих БД)
+        cur.execute("PRAGMA table_info(users)")
+        columns = [row[1] for row in cur.fetchall()]
+        if 'is_active' not in columns:
+            cur.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
+        
         # Создаём таблицу сессий для отслеживания входов
         cur.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
