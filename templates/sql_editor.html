@@ -59,6 +59,11 @@
 }
 .tn:hover{background:var(--bg-3);color:var(--text);}
 .tn.sel{background:var(--amber-glow);color:var(--amber);}
+/* FIX: Visual hint for Ctrl+Click on tables */
+.tn[data-type="table"]:hover { cursor: pointer; }
+.tn[data-type="table"] .lbl::after { content: ''; }
+body.ctrl-held .tn[data-type="table"]:hover { background: var(--amber-glow); color: var(--amber); }
+body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-size:10px; opacity:.5; }
 .tn .arr{width:16px;min-width:16px;text-align:center;font-size:8px;color:var(--text-3);transition:transform .15s;flex-shrink:0;}
 .tn.open>.arr{transform:rotate(90deg);}
 .tn .ico{width:18px;min-width:18px;text-align:center;font-size:13px;flex-shrink:0;}
@@ -178,20 +183,38 @@
 .rfbar input:focus{border-color:var(--amber);}
 .rfbar input::placeholder{color:var(--text-3);}
 
-#resultsContent, .results-content{flex:1;overflow:auto;background:var(--bg-1);}
-#resultsContent::-webkit-scrollbar, .results-content::-webkit-scrollbar{width:5px;height:5px;}
+#resultsContent, .results-content{flex:1;overflow:auto;background:var(--bg-1);min-height:0;max-width:100%;}
+#resultsContent::-webkit-scrollbar, .results-content::-webkit-scrollbar{width:6px;height:6px;}
+#resultsContent::-webkit-scrollbar-track, .results-content::-webkit-scrollbar-track{background:var(--bg-2);}
 #resultsContent::-webkit-scrollbar-thumb, .results-content::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:3px;}
+#resultsContent::-webkit-scrollbar-corner, .results-content::-webkit-scrollbar-corner{background:var(--bg-2);}
+/* Table wrapper clips content and provides independent scroll */
+.rt-wrap{display:block;overflow:auto;max-width:100%;}
 
-.rt{width:100%;border-collapse:collapse;font-family:'Geist Mono','Consolas','Courier New',monospace;font-size:12px;}
-.rt th{position:sticky;top:0;z-index:5;background:var(--bg-3);border-bottom:2px solid var(--amber-dim);border-right:1px solid var(--line);padding:6px 10px;text-align:left;font-family:var(--font-ui);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);white-space:nowrap;cursor:pointer;user-select:none;}
+.rt{border-collapse:collapse;font-family:'Geist Mono','Consolas','Courier New',monospace;font-size:12px;table-layout:fixed;width:auto;}
+.rt th{position:sticky;top:0;z-index:5;background:var(--bg-3);border-bottom:2px solid var(--amber-dim);border-right:1px solid var(--line);padding:6px 10px;text-align:left;font-family:var(--font-ui);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);white-space:nowrap;cursor:pointer;user-select:none;overflow:hidden;text-overflow:ellipsis;position:relative;}
 .rt th:hover{background:var(--bg-4);color:var(--amber);}
 .rt th.sa::after{content:' ▲';color:var(--amber);font-size:8px;}
 .rt th.sd::after{content:' ▼';color:var(--amber);font-size:8px;}
 .rt th:last-child{border-right:none;}
-.rt td{padding:4px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);color:var(--text);white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis;}
+.rt td{padding:4px 10px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rt td:last-child{border-right:none;}
 .rt td.vn{color:var(--text-3);font-style:italic;} .rt td.vnum{color:var(--amber);} .rt td.vbool{color:#5b8dee;}
 .rt tbody tr:hover td{background:var(--bg-2);}
+/* Resizer handle on th */
+.rt-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:6;background:transparent;}
+.rt-resizer:hover,.rt-resizer.dragging{background:var(--amber-dim);}
+
+/* ── #9 Фиксация первого столбца при горизонтальном скролле ── */
+.rt td:first-child,
+.rt th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+}
+.rt th:first-child { background: var(--bg-3); }
+.rt td:first-child { background: var(--bg-1); }
+.rt tbody tr:hover td:first-child { background: var(--bg-2); }
 
 .stbar{display:flex;align-items:center;gap:12px;padding:3px 10px;background:var(--bg-2);border-top:1px solid var(--line);font-size:10px;color:var(--text-3);font-family:var(--font-mono);flex-shrink:0;flex-wrap:wrap;}
 .st-ok{color:var(--green);font-weight:600;} .st-err{color:var(--red);font-weight:600;} .st-run{color:var(--amber);font-weight:600;} .st-d{opacity:.35;}
@@ -233,6 +256,9 @@
     color:var(--text);background:transparent;border:none;outline:none;
     pointer-events:none;box-sizing:border-box;
 }
+/* When Ctrl is held, enable pointer events on overlay so obj links are clickable */
+body.ctrl-held .sql-hl { pointer-events:auto; }
+body.ctrl-held .sql-input { pointer-events:none; }
 .sql-hl::-webkit-scrollbar{display:none;}
 .hl-kw{color:#cf9fff;font-weight:600;}
 .hl-fn{color:#79c0ff;}
@@ -240,8 +266,23 @@
 .hl-num{color:var(--amber);}
 .hl-cmt{color:var(--text-3);font-style:italic;}
 .hl-op{color:#f39c12;}
+
+/*
+ * FIX: Textarea поверх подсветки — цвет transparent нужен чтобы
+ * был виден подсвеченный текст снизу, но каретка должна быть видна.
+ * Важно: color:transparent — это норма для overlay-подсветки.
+ * Проблема "невидимого текста" возникала только когда updateHighlight
+ * не вызывался после applyAC — теперь исправлено.
+ */
 #sqlInput,
-.sql-input{color:transparent;background:transparent;caret-color:var(--amber);position:absolute;inset:0;width:100%;height:100%;flex:unset;}
+.sql-input{
+    color:transparent;
+    background:transparent;
+    caret-color:var(--amber);
+    position:absolute;inset:0;
+    width:100%;height:100%;
+    flex:unset;
+}
 #sqlInput::selection,.sql-input::selection{background:rgba(240,168,67,.3);color:var(--text);}
 
 /* ── CONTEXT MENU ── */
@@ -277,6 +318,49 @@
 .snip-empty{padding:30px;text-align:center;font-size:12px;color:var(--text-3);}
 .ac-it.col .ac-tp{background:rgba(240,168,67,.15);color:var(--amber);}
 .ac-it.sch .ac-tp{background:rgba(30,200,200,.12);color:#1ec8c8;}
+
+/* ── #13 Cheatsheet kbd styles ── */
+.cs-row{display:flex;align-items:center;gap:10px;padding:5px 6px;border-bottom:1px solid var(--line);font-size:12px;color:var(--text-2);}
+.cs-row:last-child{border-bottom:none;}
+.cs-row kbd{display:inline-flex;align-items:center;padding:2px 6px;background:var(--bg-3);border:1px solid var(--line-2);border-radius:3px;font-family:var(--font-mono);font-size:10px;color:var(--text);white-space:nowrap;min-width:120px;flex-shrink:0;}
+.cs-row span{color:var(--text-3);font-family:var(--font-ui);font-size:11px;}
+
+/* ── #5 Find/Replace bar ── */
+#findBar {
+    display:none; position:absolute; top:38px; right:14px; z-index:200;
+    background:var(--bg-2); border:1px solid var(--line-2); border-radius:5px;
+    box-shadow:var(--shadow-md); padding:7px 10px; gap:6px;
+    flex-direction:column; min-width:320px;
+}
+#findBar.show { display:flex; }
+.fb-row { display:flex; align-items:center; gap:5px; }
+.fb-input {
+    flex:1; background:var(--bg-3); border:1px solid var(--line); border-radius:3px;
+    padding:4px 8px; font-family:var(--font-mono); font-size:12px;
+    color:var(--text); outline:none;
+}
+.fb-input:focus { border-color:var(--amber); }
+.fb-input::placeholder { color:var(--text-3); }
+.fb-count { font-size:10px; color:var(--text-3); font-family:var(--font-mono); white-space:nowrap; min-width:55px; }
+.fb-sep { height:1px; background:var(--line); margin:2px 0; }
+#findBar .btn-icon {
+    background:var(--bg-3); border:1px solid var(--line); border-radius:3px;
+    color:var(--text-2); cursor:pointer; padding:3px 7px; font-size:11px;
+    display:flex; align-items:center; gap:4px; transition:all .12s; white-space:nowrap;
+}
+#findBar .btn-icon:hover { background:var(--amber-glow); color:var(--amber); border-color:var(--amber-dim); }
+#findBar .btn-icon.active { background:var(--amber-glow); color:var(--amber); border-color:var(--amber-dim); }
+.fb-close { background:none; border:none; color:var(--text-3); cursor:pointer; font-size:16px; line-height:1; padding:0 2px; margin-left:2px; }
+.fb-close:hover { color:var(--red); }
+
+/* ── #6 WORD MATCH HIGHLIGHT in overlay ── */
+.hl-match { background:rgba(240,168,67,.22); border-radius:2px; outline:1px solid rgba(240,168,67,.4); }
+.hl-match-cur { background:rgba(240,168,67,.55); border-radius:2px; outline:1px solid var(--amber); }
+/* ── CTRL+CLICK object links in editor overlay ── */
+.hl-obj-link{color:inherit;border-bottom:1px dashed rgba(82,183,136,.5);cursor:pointer;transition:border-color .15s,color .15s;}
+body.ctrl-held .hl-obj-link{border-bottom-color:var(--green);color:#52b788;cursor:pointer;}
+/* ── selection word highlight ── */
+.hl-sel-word{background:rgba(91,141,238,.18);border-radius:2px;outline:1px solid rgba(91,141,238,.3);}
 </style>
 {% endblock %}
 
@@ -340,6 +424,9 @@
                     <button class="btn btn-secondary btn-sm" onclick="saveCurrentAsSnippet()" title="Сохранить как сниппет"><i class="bi bi-bookmark-plus"></i></button>
                     <button class="btn btn-secondary btn-sm" onclick="showSnippetsModal()" title="Мои сниппеты"><i class="bi bi-collection"></i></button>
                     <button class="btn btn-secondary btn-sm" onclick="openHistoryTab()" title="История"><i class="bi bi-clock-history"></i></button>
+                    <div class="tb-div"></div>
+                    <button class="btn btn-secondary btn-sm" onclick="showFindBar(false)" title="Найти (Ctrl+F)"><i class="bi bi-search"></i></button>
+                    <button class="btn btn-secondary btn-sm" onclick="showCheatsheet()" title="Горячие клавиши (Ctrl+?)"><i class="bi bi-keyboard"></i></button>
                 </div>
                 <div class="lint-bar" id="lintBar"></div>
 
@@ -348,6 +435,24 @@
                         <div class="pane-hdr">
                             <span><i class="bi bi-code-slash"></i>SQL запрос</span>
                             <span id="cursorPos" style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);">Ln 1, Col 1</span>
+                        </div>
+                        <!-- #5 Find/Replace bar — позиционируется поверх редактора -->
+                        <div id="findBar">
+                            <div class="fb-row">
+                                <input id="fbFindInput" class="fb-input" placeholder="Найти… (Enter — следующее, Shift+Enter — предыдущее)" spellcheck="false">
+                                <span class="fb-count" id="fbCount"></span>
+                                <button class="btn-icon" onclick="fbMove(-1)" title="Предыдущее (Shift+Enter)"><i class="bi bi-chevron-up"></i></button>
+                                <button class="btn-icon" onclick="fbMove(1)" title="Следующее (Enter)"><i class="bi bi-chevron-down"></i></button>
+                                <button class="btn-icon" id="fbCaseBtn" onclick="fbToggleCase()" title="Учитывать регистр (Alt+C)">Aa</button>
+                                <button class="btn-icon" id="fbRegexBtn" onclick="fbToggleRegex()" title="Регулярное выражение (Alt+R)">.*</button>
+                                <button class="fb-close" onclick="hideFindBar()" title="Закрыть (Escape)">×</button>
+                            </div>
+                            <div class="fb-sep"></div>
+                            <div class="fb-row">
+                                <input id="fbReplaceInput" class="fb-input" placeholder="Заменить на…" spellcheck="false">
+                                <button class="btn-icon" onclick="fbReplaceOne()" title="Заменить (Ctrl+H)"><i class="bi bi-arrow-repeat"></i> Заменить</button>
+                                <button class="btn-icon" onclick="fbReplaceAll()" title="Заменить всё"><i class="bi bi-arrow-clockwise"></i> Все</button>
+                            </div>
                         </div>
                         <div class="code-wrap">
                             <div id="lineNums">1</div>
@@ -406,6 +511,38 @@
     </div>
 </div>
 
+<!-- #13 Keyboard Cheatsheet Modal -->
+<div class="modal-overlay" id="cheatsheetModal" onclick="if(event.target===this)hideCheatsheet()">
+    <div class="modal-box" style="width:520px;">
+        <div class="modal-hdr">
+            <span><i class="bi bi-keyboard" style="color:var(--amber);margin-right:8px;"></i>Горячие клавиши</span>
+            <button class="modal-hdr-close" onclick="hideCheatsheet()">×</button>
+        </div>
+        <div class="modal-body" style="padding:6px 10px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
+                <div style="padding:6px 0;border-bottom:1px solid var(--line);grid-column:1/-1;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;padding-left:6px;">Выполнение</div>
+                <div class="cs-row"><kbd>Ctrl+Enter</kbd><span>Выполнить запрос</span></div>
+                <div class="cs-row"><kbd>Ctrl+Shift+Enter</kbd><span>Выполнить statement</span></div>
+                <div style="padding:6px 0;border-bottom:1px solid var(--line);border-top:1px solid var(--line);grid-column:1/-1;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;padding-left:6px;margin-top:4px;">Редактор</div>
+                <div class="cs-row"><kbd>Ctrl+/</kbd><span>Комментировать строки</span></div>
+                <div class="cs-row"><kbd>Ctrl+K</kbd><span>Форматировать SQL</span></div>
+                <div class="cs-row"><kbd>Ctrl+F</kbd><span>Найти</span></div>
+                <div class="cs-row"><kbd>Ctrl+H</kbd><span>Найти и заменить</span></div>
+                <div class="cs-row"><kbd>Ctrl+Space</kbd><span>Автодополнение</span></div>
+                <div class="cs-row"><kbd>Tab</kbd><span>Принять подсказку / отступ</span></div>
+                <div class="cs-row"><kbd>Escape</kbd><span>Закрыть меню / панель</span></div>
+                <div class="cs-row"><kbd>Ctrl+Click</kbd><span>Открыть структуру таблицы</span></div>
+                <div style="padding:6px 0;border-bottom:1px solid var(--line);border-top:1px solid var(--line);grid-column:1/-1;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;padding-left:6px;margin-top:4px;">Поиск и замена</div>
+                <div class="cs-row"><kbd>Enter</kbd><span>Следующее вхождение</span></div>
+                <div class="cs-row"><kbd>Shift+Enter</kbd><span>Предыдущее вхождение</span></div>
+                <div class="cs-row"><kbd>Alt+C</kbd><span>Учитывать регистр</span></div>
+                <div class="cs-row"><kbd>Alt+R</kbd><span>Режим регулярных выражений</span></div>
+            </div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-secondary btn-sm" onclick="hideCheatsheet()">Закрыть</button></div>
+    </div>
+</div>
+
 <script>
 const SQL_KW = 'SELECT FROM WHERE JOIN LEFT RIGHT INNER OUTER FULL CROSS ON AS AND OR NOT IN EXISTS BETWEEN LIKE ILIKE IS NULL TRUE FALSE INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE INDEX VIEW DROP ALTER ADD COLUMN PRIMARY KEY FOREIGN REFERENCES UNIQUE DEFAULT CONSTRAINT CHECK GROUP BY ORDER HAVING LIMIT OFFSET UNION ALL DISTINCT WITH RECURSIVE CASE WHEN THEN ELSE END CAST OVER PARTITION ROW_NUMBER RANK DENSE_RANK TRUNCATE BEGIN COMMIT ROLLBACK TRANSACTION EXPLAIN ANALYZE VACUUM RETURNING COALESCE NULLIF GREATEST LEAST EXTRACT DATE_TRUNC ARRAY JSONB JSON TEXT INTEGER BIGINT BOOLEAN NUMERIC TIMESTAMP DATE TIME INTERVAL SERIAL UUID VARCHAR DO LANGUAGE PLPGSQL FUNCTION PROCEDURE TRIGGER RETURNS DECLARE'.split(' ');
 const SQL_FN = 'COUNT SUM AVG MIN MAX ROUND FLOOR CEIL ABS MOD LENGTH TRIM UPPER LOWER SUBSTR SUBSTRING REPLACE SPLIT_PART CONCAT COALESCE NULLIF NOW CURRENT_DATE CURRENT_TIMESTAMP TO_CHAR TO_DATE AGE EXTRACT DATE_TRUNC DATE_PART ARRAY_AGG STRING_AGG JSON_AGG JSONB_AGG ROW_TO_JSON UNNEST GENERATE_SERIES REGEXP_REPLACE REGEXP_MATCH LEAD LAG FIRST_VALUE LAST_VALUE NTH_VALUE NTILE CUME_DIST PERCENT_RANK'.split(' ');
@@ -431,7 +568,8 @@ const S = {
         'tab-1': { type: 'sql', title: 'SQL Запрос', data: {} }
     },
     colCache: {},
-    connInfo: ''
+    connInfo: '',
+    _acLoading: null  // FIX: guard against concurrent loadTableColumns calls
 };
 
 const MAX_HISTORY_ITEMS = 100;
@@ -444,6 +582,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.addEventListener('click', e => {
         if (!e.target.closest('#acMenu') && !e.target.closest('.sql-input')) hideAC();
     });
+    // FIX: track Ctrl key for visual hint on tree nodes
+    document.addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey) document.body.classList.add('ctrl-held'); });
+    document.addEventListener('keyup', e => { if (!e.ctrlKey && !e.metaKey) document.body.classList.remove('ctrl-held'); });
+    document.addEventListener('blur', () => document.body.classList.remove('ctrl-held'));
+    // #7 #8 wire initial tab-1
+    const tab1El = document.querySelector('.tab[data-tab-id="tab-1"]');
+    if (tab1El) {
+        // Add tab-title class to span for rename support
+        const sp = tab1El.querySelector('span:not(.tab-close)');
+        if (sp) sp.classList.add('tab-title');
+        wireTabRename(tab1El, 'tab-1');
+        tab1El.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); }); // tab-1 не закрываем
+    }
 });
 
 async function checkConn() {
@@ -471,8 +622,39 @@ function getActiveTA() {
     return document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
 }
 
+// ── #2 fetchWithRetry — retry с backoff при сетевых ошибках ──────────
+async function fetchWithRetry(url, opts = {}, retries = 2) {
+    for (let i = 0; i <= retries; i++) {
+        try { return await fetch(url, opts); }
+        catch(e) {
+            if (i === retries) throw e;
+            await new Promise(r => setTimeout(r, 500 * (i + 1)));
+        }
+    }
+}
+
+// ── #1 Сохранение содержимого вкладок между сессиями ─────────────────
+function saveTabContent(tabId, value) {
+    try { localStorage.setItem('sqltab_' + tabId, value); } catch(e) {}
+}
+function loadTabContent(tabId) {
+    try { return localStorage.getItem('sqltab_' + tabId); } catch(e) { return null; }
+}
+function clearTabContent(tabId) {
+    try { localStorage.removeItem('sqltab_' + tabId); } catch(e) {}
+}
+
+// FIX: debounced AC to prevent freeze on every keystroke (especially '.')
 function wireupTA(ta) {
-    ta.addEventListener('input', () => { syncNums(ta); updateHighlight(ta); showAC(false, ta); });
+    let _acTimer = null;
+    ta.addEventListener('input', () => {
+        syncNums(ta);
+        updateHighlight(ta);
+        // #1 сохраняем контент при каждом изменении
+        saveTabContent(ta.dataset.tab, ta.value);
+        clearTimeout(_acTimer);
+        _acTimer = setTimeout(() => showAC(false, ta), 150);
+    });
     ta.addEventListener('keydown', onKD);
     ta.addEventListener('scroll', () => syncScroll(ta));
     ta.addEventListener('click', () => updateCursor(ta));
@@ -483,7 +665,9 @@ function initEditor() {
     const ta = document.getElementById('sqlInput');
     if (!ta) return;
     wireupTA(ta);
-    ta.value = '-- SQL Редактор\n-- Ctrl+Enter — выполнить  |  Ctrl+Space — автодополнение\n\nSELECT version();';
+    // #1 восстанавливаем сохранённое содержимое, иначе дефолтный текст
+    const saved = loadTabContent('tab-1');
+    ta.value = saved !== null ? saved : '-- SQL Редактор\n-- Ctrl+Enter — выполнить  |  Ctrl+Space — автодополнение\n-- Ctrl+Click по таблице в дереве — открыть структуру таблицы\n\nSELECT version();';
     syncNums(ta);
     updateHighlight(ta);
 }
@@ -503,13 +687,11 @@ function syncNums(ta) {
 function syncScroll(ta) {
     if (!ta) ta = document.getElementById('sqlInput');
     if (!ta) return;
-    // Sync line numbers
     const wrap = ta.closest('.code-wrap');
     if (wrap) {
         const ln = wrap.querySelector('#lineNums, .line-nums');
         if (ln) ln.scrollTop = ta.scrollTop;
     }
-    // Sync highlight overlay
     const hl = ta.previousElementSibling;
     if (hl && hl.classList.contains('sql-hl')) {
         hl.scrollTop = ta.scrollTop;
@@ -526,26 +708,72 @@ function updateCursor(ta) {
     if (cp) cp.textContent = `Ln ${lines.length}, Col ${lines[lines.length-1].length+1}`;
 }
 
+// FIX: Tab behaviour — if AC menu is open, Tab completes the word (first or selected item).
+// If AC is closed, Tab inserts 4 spaces as before.
 function onKD(e) {
     const ta = e.target;
     const acVis = document.getElementById('acMenu').style.display === 'block';
     if (acVis) {
         if (e.key==='ArrowDown'){e.preventDefault();acMove(1);return;}
         if (e.key==='ArrowUp'){e.preventDefault();acMove(-1);return;}
-        if ((e.key==='Tab'||e.key==='Enter')&&S.acIdx>=0){e.preventDefault();applyAC(S.acItems[S.acIdx], ta);return;}
+        if (e.key==='Tab') {
+            e.preventDefault();
+            const idx = S.acIdx >= 0 ? S.acIdx : 0;
+            if (S.acItems[idx]) { applyAC(S.acItems[idx], ta); return; }
+        }
+        if (e.key==='Enter'&&S.acIdx>=0){e.preventDefault();applyAC(S.acItems[S.acIdx], ta);return;}
         if (e.key==='Escape'){hideAC();return;}
     }
     if ((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runQuery();return;}
     if ((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key==='Enter'){e.preventDefault();runStatement();return;}
     if ((e.ctrlKey||e.metaKey)&&e.key===' '){e.preventDefault();showAC(true, ta);return;}
     if ((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();formatSQL();return;}
+    // #4 Ctrl+/ — комментирование/раскомментирование строк
+    if ((e.ctrlKey||e.metaKey)&&e.key==='/'){e.preventDefault();toggleLineComments(ta);return;}
     if (e.key==='Tab'){
         e.preventDefault();
         const s=ta.selectionStart;
-        ta.value=ta.value.substring(0,s)+'    '+ta.value.substring(ta.selectionEnd);
+        const end=ta.selectionEnd;
+        ta.value=ta.value.substring(0,s)+'    '+ta.value.substring(end);
         ta.selectionStart=ta.selectionEnd=s+4;
         syncNums(ta);
+        updateHighlight(ta);
     }
+}
+
+// ── #4 Toggle line comments (Ctrl+/) ────────────────────────────────
+function toggleLineComments(ta) {
+    const val = ta.value;
+    const selStart = ta.selectionStart;
+    const selEnd = ta.selectionEnd;
+
+    // Find first and last affected line indices
+    const beforeStart = val.lastIndexOf('\n', selStart - 1);
+    const lineStart = beforeStart + 1;
+    const lineEnd = selEnd > selStart && val[selEnd - 1] === '\n' ? selEnd - 1 : selEnd;
+    const afterEnd = val.indexOf('\n', lineEnd);
+    const lastLineEnd = afterEnd === -1 ? val.length : afterEnd;
+
+    const chunk = val.substring(lineStart, lastLineEnd);
+    const lines = chunk.split('\n');
+
+    // If all lines start with --, remove comments; otherwise add
+    const allCommented = lines.every(l => l.trimStart().startsWith('--'));
+    const newLines = allCommented
+        ? lines.map(l => l.replace(/^(\s*)--\s?/, '$1'))
+        : lines.map(l => '-- ' + l);
+
+    const newChunk = newLines.join('\n');
+    ta.value = val.substring(0, lineStart) + newChunk + val.substring(lastLineEnd);
+
+    // Restore selection approximately
+    const delta = newChunk.length - chunk.length;
+    ta.selectionStart = selStart + (selStart > lineStart ? Math.min(delta, 0) : 0);
+    ta.selectionEnd = selEnd + delta;
+
+    syncNums(ta);
+    updateHighlight(ta);
+    saveTabContent(ta.dataset.tab, ta.value);
 }
 
 function getWord(ta){
@@ -553,22 +781,34 @@ function getWord(ta){
     const m=ta.value.substring(0,ta.selectionStart).match(/[\w.]+$/);
     return m?m[0]:'';
 }
+
+// FIX: showAC — guarded against freeze when typing '.' with empty/invalid table name.
+// Uses mousedown (not click) on items to prevent textarea blur before selection.
+// Guards against concurrent async loadTableColumns with S._acLoading flag.
 function showAC(force=false, ta=null){
     if(!ta) ta=getActiveTA();
-    const w=getWord(ta); if(!force&&w.length<1){hideAC();return;}
+    const w=getWord(ta);
+    if(!force&&w.length<1){hideAC();return;}
     const up=w.toUpperCase(); const items=[];
 
     // Column autocomplete: detect table.col pattern
     const dotIdx = w.lastIndexOf('.');
     if (dotIdx > 0) {
         const tblPart = w.substring(0, dotIdx);
+        // Guard: skip if table name part is empty or has no letters (e.g. "123." or just ".")
+        if (!tblPart || !/[a-zA-Z_]/.test(tblPart)) { hideAC(); return; }
         const colPart = w.substring(dotIdx + 1).toLowerCase();
         const cols = S.colCache[tblPart] || S.colCache[tblPart.toLowerCase()] || [];
         if (cols.length) {
             cols.filter(c => c.toLowerCase().startsWith(colPart)).slice(0,12).forEach(c => items.push({label: tblPart + '.' + c, type:'col'}));
-        } else {
-            // Trigger async load then re-show
-            loadTableColumns(tblPart).then(() => showAC(force, ta));
+        } else if (!S._acLoading) {
+            // Async load columns — guarded by flag to prevent repeated requests
+            S._acLoading = tblPart;
+            loadTableColumns(tblPart).then(() => {
+                S._acLoading = null;
+                showAC(force, ta);
+            }).catch(() => { S._acLoading = null; });
+            return; // Don't show empty menu while loading
         }
     } else {
         SQL_KW.filter(k=>k.startsWith(up)).slice(0,8).forEach(k=>items.push({label:k,type:'kw'}));
@@ -578,7 +818,15 @@ function showAC(force=false, ta=null){
     if(!items.length){hideAC();return;}
     S.acItems=items;S.acIdx=-1;
     const m=document.getElementById('acMenu');
-    m.innerHTML=items.map((it,i)=>`<div class="ac-it ${it.type}" onclick="applyAC(S.acItems[${i}], getActiveTA())"><span class="ac-tp">${it.type.toUpperCase()}</span>${eh(it.label)}</div>`).join('');
+    m.innerHTML=items.map((it,i)=>`<div class="ac-it ${it.type}" data-idx="${i}"><span class="ac-tp">${it.type.toUpperCase()}</span>${eh(it.label)}</div>`).join('');
+    // FIX: use mousedown instead of click to prevent textarea blur before applyAC fires
+    m.querySelectorAll('.ac-it').forEach(el => {
+        el.addEventListener('mousedown', e => {
+            e.preventDefault(); // Critical: prevent textarea losing focus
+            const idx = parseInt(el.dataset.idx);
+            applyAC(S.acItems[idx], ta);
+        });
+    });
     m.style.display='block';
     const r=ta.getBoundingClientRect();
     const lines=ta.value.substring(0,ta.selectionStart).split('\n');
@@ -594,6 +842,8 @@ function acMove(d){
     els[S.acIdx]?.classList.add('sel');
     els[S.acIdx]?.scrollIntoView({block:'nearest'});
 }
+
+// FIX: applyAC — call updateHighlight after inserting text so it's visible
 function applyAC(item, ta=null){
     if(!item)return;
     if(!ta) ta=getActiveTA();
@@ -602,17 +852,21 @@ function applyAC(item, ta=null){
     const wl=m?m[0].length:0;
     ta.value=ta.value.substring(0,pos-wl)+item.label+ta.value.substring(pos);
     ta.selectionStart=ta.selectionEnd=pos-wl+item.label.length;
-    hideAC();syncNums(ta);ta.focus();
+    hideAC();
+    syncNums(ta);
+    updateHighlight(ta); // FIX: without this the overlay stays stale and text appears invisible
+    ta.focus();
 }
 
 async function buildTree() {
     const body=document.getElementById('treeBody');
     body.innerHTML='<div class="tree-loading"><span class="loading"></span> Загрузка...</div>';
     try {
-        const r=await fetch('/api/get-tables');
+        const r=await fetchWithRetry('/api/get-tables');
         const d=await r.json();
         if(!d.success){body.innerHTML='<div class="tree-loading">Ошибка</div>';return;}
         S.tables=d.data.map(t=>t.table_name);
+        _objLinkCache = null; // invalidate cache when tables reload
         body.innerHTML = renderGroup('public', 'bi-layers ico-schema', [
             { label:'Tables', icon:'bi-table ico-group', badge:d.data.length,
               kids: d.data.map(t=>({ label:t.table_name, icon:'bi-table ico-table', type:'table', tableName:t.table_name, comment:t.table_comment }))
@@ -667,6 +921,8 @@ function renderGroup(label, icon, groups, depth) {
 function bindTree() {
     document.querySelectorAll('#treeBody .tn').forEach(node => {
         node.addEventListener('click', function(e) {
+            // Ctrl+click в дереве — ничего не делаем, только снятие ctrl-held стиля
+            if (e.ctrlKey || e.metaKey) return;
             const tc = this.nextElementSibling;
             if (tc && tc.classList.contains('tc')) {
                 const isOpen = tc.classList.contains('open');
@@ -686,6 +942,7 @@ function bindTree() {
             this.classList.add('sel');
         });
         if (node.dataset.type === 'table' && node.dataset.table) {
+            // Только двойной клик открывает структуру таблицы
             node.addEventListener('dblclick', function(e) {
                 e.stopPropagation();
                 openDetail(this.dataset.table);
@@ -695,6 +952,7 @@ function bindTree() {
                 e.stopPropagation();
                 showContextMenu(e.clientX, e.clientY, this.dataset.table);
             });
+            if (!node.title) node.title = 'Двойной клик — открыть структуру';
         }
     });
 }
@@ -718,26 +976,93 @@ async function loadLazy(container, type) {
         const items = d.data || [];
         if (!items.length) {
             container.innerHTML = `<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--text-3);">Нет объектов</div>`;
-            return;
+        } else {
+            const icon = LAZY_ICONS[type] || 'bi-circle';
+            container.innerHTML = items.map(name => `
+                <div class="tn" style="padding-left:42px" data-type="obj">
+                    <span class="arr" style="visibility:hidden">▶</span>
+                    <span class="ico"><i class="bi ${icon}"></i></span>
+                    <span class="lbl">${eh(name)}</span>
+                </div>`).join('');
         }
-        const icon = LAZY_ICONS[type] || 'bi-circle';
-        container.innerHTML = items.map(name => `
-            <div class="tn" style="padding-left:42px" data-type="obj">
-                <span class="arr" style="visibility:hidden">▶</span>
-                <span class="ico"><i class="bi ${icon}"></i></span>
-                <span class="lbl">${eh(name)}</span>
-            </div>`).join('');
+        // FIX 1: обновляем бейдж на родительском узле группы
+        const groupNode = container.previousElementSibling;
+        if (groupNode && groupNode.classList.contains('tn')) {
+            let bdg = groupNode.querySelector('.bdg');
+            if (!bdg) {
+                bdg = document.createElement('span');
+                bdg.className = 'bdg';
+                groupNode.appendChild(bdg);
+            }
+            bdg.textContent = items.length;
+        }
     } catch(e) {
         container.innerHTML = `<div style="padding:6px 10px;font-size:11px;color:var(--red);">Ошибка: ${eh(e.message)}</div>`;
     }
 }
 
+// ── #16 Debounce filterTree ───────────────────────────────────────────
+let _treeFilterTimer = null;
 function filterTree(q) {
-    q=q.toLowerCase();
-    document.querySelectorAll('#treeBody .tn').forEach(n=>{
-        const lbl=n.querySelector('.lbl')?.textContent.toLowerCase()||'';
-        n.style.display=!q||lbl.includes(q)?'':'none';
+    clearTimeout(_treeFilterTimer);
+    _treeFilterTimer = setTimeout(() => {
+        const ql = q.toLowerCase();
+        document.querySelectorAll('#treeBody .tn').forEach(n => {
+            const lbl = n.querySelector('.lbl')?.textContent.toLowerCase() || '';
+            n.style.display = !ql || lbl.includes(ql) ? '' : 'none';
+        });
+    }, 100);
+}
+
+// ── #11 Context menu on results table ────────────────────────────────
+let _resultCtxMenu = null;
+function onResultCtxMenu(e) {
+    const td = e.target.closest('td');
+    const tr = e.target.closest('tr');
+    if (!td || !tr) return;
+    e.preventDefault();
+    const cellVal = td.title || td.textContent;
+    // Collect all cell values for row copy
+    const cells = [...tr.querySelectorAll('td')].slice(1); // skip # column
+    const rowObj = {};
+    S.cols.forEach((col, i) => { rowObj[col] = cells[i]?.title || cells[i]?.textContent || ''; });
+
+    if (!_resultCtxMenu) {
+        _resultCtxMenu = document.createElement('div');
+        _resultCtxMenu.id = 'resultCtxMenu';
+        _resultCtxMenu.style.cssText = 'display:none;position:fixed;z-index:9997;background:var(--bg-2);border:1px solid var(--line-2);border-radius:4px;box-shadow:var(--shadow-md);min-width:200px;padding:4px 0;font-family:var(--font-ui);font-size:12px;';
+        document.body.appendChild(_resultCtxMenu);
+        document.addEventListener('click', () => { if (_resultCtxMenu) _resultCtxMenu.style.display = 'none'; });
+    }
+
+    _resultCtxMenu.innerHTML = `
+        <div class="ctx-item" data-act="cell"><i class="bi bi-clipboard"></i>Копировать ячейку</div>
+        <div class="ctx-item" data-act="row_tsv"><i class="bi bi-layout-three-columns"></i>Копировать строку (TSV)</div>
+        <div class="ctx-item" data-act="row_json"><i class="bi bi-braces"></i>Копировать строку (JSON)</div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item" data-act="col_filter"><i class="bi bi-funnel"></i>Фильтр по этому значению</div>
+    `;
+    _resultCtxMenu.querySelectorAll('.ctx-item[data-act]').forEach(item => {
+        item.addEventListener('click', () => {
+            const act = item.dataset.act;
+            _resultCtxMenu.style.display = 'none';
+            if (act === 'cell') {
+                navigator.clipboard.writeText(cellVal === 'NULL' ? '' : cellVal).then(() => showNotice('Скопировано'));
+            } else if (act === 'row_tsv') {
+                const tsv = S.cols.map(col => rowObj[col]).join('\t');
+                navigator.clipboard.writeText(tsv).then(() => showNotice('Строка скопирована (TSV)'));
+            } else if (act === 'row_json') {
+                navigator.clipboard.writeText(JSON.stringify(rowObj, null, 2)).then(() => showNotice('Строка скопирована (JSON)'));
+            } else if (act === 'col_filter') {
+                const fi = document.getElementById('resultFilter');
+                if (fi) { fi.value = cellVal === 'NULL' ? '' : cellVal; applyFilter(); }
+            }
+        });
     });
+
+    _resultCtxMenu.style.display = 'block';
+    _resultCtxMenu.style.left = Math.min(e.clientX, window.innerWidth - 220) + 'px';
+    _resultCtxMenu.style.top = Math.min(e.clientY, window.innerHeight - 160) + 'px';
 }
 
 // ═══ RENDER FUNCTIONS ═══
@@ -799,13 +1124,49 @@ function addNewSQLTab() {
     tabEl.className = 'tab';
     tabEl.dataset.tabId = tabId;
     tabEl.onclick = () => switchEditorTab(tabId);
-    tabEl.innerHTML = `<i class="bi bi-code-slash"></i><span>${S.tabs[tabId].title}</span><button class="tab-close" onclick="closeTab(event, '${tabId}')">×</button>`;
+    tabEl.innerHTML = `<i class="bi bi-code-slash"></i><span class="tab-title">${S.tabs[tabId].title}</span><button class="tab-close" onclick="closeTab(event, '${tabId}')">×</button>`;
+    // #7 переименование по двойному клику на заголовок
+    wireTabRename(tabEl, tabId);
+    // #8 закрытие средней кнопкой мыши
+    tabEl.addEventListener('mousedown', e => { if (e.button === 1) { e.preventDefault(); closeTab(e, tabId); } });
     document.getElementById('tabsList').appendChild(tabEl);
     const content = createSQLTabContent(tabId);
     document.getElementById('tabsContainer').appendChild(content);
     const ta = content.querySelector('.sql-input');
-    if (ta) { wireupTA(ta); updateHighlight(ta); }
+    if (ta) {
+        wireupTA(ta);
+        const saved = loadTabContent(tabId);
+        if (saved !== null) { ta.value = saved; syncNums(ta); updateHighlight(ta); }
+    }
     switchEditorTab(tabId);
+}
+
+// ── #7 Переименование вкладки двойным кликом ─────────────────────────
+function wireTabRename(tabEl, tabId) {
+    const span = tabEl.querySelector('.tab-title');
+    if (!span) return;
+    span.addEventListener('dblclick', e => {
+        e.stopPropagation();
+        const input = document.createElement('input');
+        input.value = span.textContent;
+        input.style.cssText = 'background:transparent;border:none;border-bottom:1px solid var(--amber);outline:none;font:inherit;color:var(--amber);width:110px;padding:0;';
+        span.replaceWith(input);
+        input.focus(); input.select();
+        const commit = () => {
+            const newTitle = input.value.trim() || span.textContent;
+            const newSpan = document.createElement('span');
+            newSpan.className = 'tab-title';
+            newSpan.textContent = newTitle;
+            input.replaceWith(newSpan);
+            if (S.tabs[tabId]) S.tabs[tabId].title = newTitle;
+            wireTabRename(tabEl, tabId);
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', e2 => {
+            if (e2.key === 'Enter') { e2.preventDefault(); commit(); }
+            if (e2.key === 'Escape') { e2.preventDefault(); input.value = span.textContent; commit(); }
+        });
+    });
 }
 
 function createSQLTabContent(tabId) {
@@ -954,7 +1315,6 @@ async function runStatement() {
 async function executeSQL(sql, tabId) {
     if (!tabId) tabId = S.currentEditorTab;
 
-    // Run linter and show warnings
     const warnings = lintQuery(sql);
     showLintBar(warnings, tabId);
 
@@ -964,6 +1324,9 @@ async function executeSQL(sql, tabId) {
     if (btn) { btn.innerHTML = '<span class="loading"></span> Выполняется...'; btn.disabled = true; }
     if (stmtBtn) stmtBtn.disabled = true;
     setSt('run', '⟳ Выполняется...', '', '');
+    // #12 заголовок вкладки браузера показывает статус
+    const _origTitle = document.title;
+    document.title = '⟳ Выполняется... — SQL Редактор';
 
     const rfbar = document.getElementById('rfbar');
     const exportStrip = document.getElementById('exportStrip');
@@ -976,7 +1339,7 @@ async function executeSQL(sql, tabId) {
     const t0 = performance.now();
 
     try {
-        const resp = await fetch('/api/sql/execute', {
+        const resp = await fetchWithRetry('/api/sql/execute', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({sql, limit})
@@ -1014,6 +1377,9 @@ async function executeSQL(sql, tabId) {
                 if (rfbar) rfbar.style.display = 'flex';
                 if (exportStrip) exportStrip.style.display = 'flex';
                 setSt('ok', '✓ Выполнено', el + 's', S.master.length + ' строк');
+                // #12 title
+                document.title = `✓ ${S.master.length} строк — SQL Редактор`;
+                setTimeout(() => { document.title = _origTitle; }, 4000);
 
                 renderTable();
             } else {
@@ -1022,6 +1388,9 @@ async function executeSQL(sql, tabId) {
                 S.cols = [];
                 const affected = data.rows_affected ?? 0;
                 setSt('ok', '✓ Выполнено', el + 's', 'затронуто: ' + affected);
+                // #12
+                document.title = `✓ OK — SQL Редактор`;
+                setTimeout(() => { document.title = _origTitle; }, 4000);
                 if (resultsEl) resultsEl.innerHTML = `
                     <div class="msg-ok">
                         <div class="mi"><i class="bi bi-check-circle-fill"></i></div>
@@ -1037,6 +1406,9 @@ async function executeSQL(sql, tabId) {
             S.display = [];
             S.cols = [];
             setSt('err', '✗ Ошибка', el + 's', '');
+            // #12
+            document.title = `✗ Ошибка — SQL Редактор`;
+            setTimeout(() => { document.title = _origTitle; }, 4000);
             if (resultsEl) resultsEl.innerHTML = `<pre class="err-blk">${eh(data.error || 'Неизвестная ошибка')}</pre>`;
         }
     } catch (e) {
@@ -1060,6 +1432,44 @@ function setSt(t, text, time, rows) {
     if (stRows) stRows.textContent = rows;
 }
 
+// ── Resizable columns state ──────────────────────────────────────────
+const COL_WIDTHS = {}; // key: tabId+colIdx -> px width
+
+// Measure natural width of a column by its header name and first N data values.
+// Uses 80th-percentile of lengths (not max) so one outlier row doesn't blow up the column.
+function _measureColWidth(colName, colIdx, sampleRows = 50) {
+    const CH = 7.5;    // approx px per char in 12px monospace
+    const HDR_CH = 7;  // header chars (uppercase, letter-spacing ~0.06em ≈ slightly wider)
+    const PAD = 22;    // cell padding left+right
+    const MIN_W = 48;
+    const MAX_W = 280; // hard cap — long text always truncates with ellipsis
+
+    // Header width
+    const hdrW = Math.round(colName.length * HDR_CH + PAD + 20); // +20 for resizer + sort arrow
+
+    // Collect data lengths
+    const lens = [];
+    const sample = S.display.slice(0, sampleRows);
+    for (const row of sample) {
+        const v = row[colName];
+        if (v === null || v === undefined) continue;
+        lens.push(String(v).length);
+    }
+
+    let dataW = 0;
+    if (lens.length > 0) {
+        // Sort and take 80th percentile — resistant to single long outliers
+        lens.sort((a, b) => a - b);
+        const p80idx = Math.floor(lens.length * 0.80);
+        const p80 = lens[Math.min(p80idx, lens.length - 1)];
+        // Cap individual value at 40 chars so UUIDs/long text don't dominate
+        const effective = Math.min(p80, 40);
+        dataW = Math.round(effective * CH + PAD);
+    }
+
+    return Math.min(MAX_W, Math.max(MIN_W, Math.max(hdrW, dataW)));
+}
+
 function renderTable() {
     const c = document.querySelector(`.results-content[data-tab="${S.currentEditorTab}"]`) || document.getElementById('resultsContent');
     if (!c) return;
@@ -1068,24 +1478,123 @@ function renderTable() {
         return;
     }
 
-    const ths = S.cols.map((col, i) => {
-        let cl = S.sortCol === i ? (S.sortDir === 'asc' ? 'sa' : 'sd') : '';
-        return `<th class="${cl}" onclick="sortBy(${i})">${eh(col)}</th>`;
+    // Row-number column fixed width
+    const ROW_NUM_W = 42;
+
+    const getW = (i) => {
+        const key = `${S.currentEditorTab}_${i}`;
+        if (COL_WIDTHS[key]) return COL_WIDTHS[key];
+        if (i === -1) return ROW_NUM_W;
+        return _measureColWidth(S.cols[i], i);
+    };
+
+    // Build <colgroup>
+    const colgroup = `<colgroup>
+        <col style="width:${ROW_NUM_W}px;min-width:36px;">
+        ${S.cols.map((_, i) => `<col style="width:${getW(i)}px;min-width:40px;">`).join('')}
+    </colgroup>`;
+
+    // Sort headers
+    const rowNumTh = `<th style="text-align:right;padding-right:8px;cursor:default;" data-col="-1">
+        <span style="color:var(--text-3)">#</span>
+        <span class="rt-resizer" data-colidx="-1"></span>
+    </th>`;
+    const ths = rowNumTh + S.cols.map((col, i) => {
+        const cl = S.sortCol === i ? (S.sortDir === 'asc' ? 'sa' : 'sd') : '';
+        return `<th class="${cl}" data-col="${i}">
+            <span class="th-label" onclick="sortBy(${i})" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">${eh(col)}</span>
+            <span class="rt-resizer" data-colidx="${i}"></span>
+        </th>`;
     }).join('');
 
-    const trs = S.display.map(row => {
-        const tds = S.cols.map(c => {
-            const v = row[c];
-            if (v === null || v === undefined) return `<td class="vn">NULL</td>`;
-            if (typeof v === 'number') return `<td class="vnum">${v}</td>`;
-            if (typeof v === 'boolean') return `<td class="vbool">${v}</td>`;
-            const s = String(v);
-            return `<td title="${eh(s)}">${eh(s.length > 200 ? s.substring(0, 200) + '…' : s)}</td>`;
-        }).join('');
-        return `<tr>${tds}</tr>`;
-    }).join('');
+    c.innerHTML = `<table class="rt" id="resultTable">${colgroup}<thead><tr>${ths}</tr></thead><tbody id="resultTbody"></tbody></table>`;
 
-    c.innerHTML = `<table class="rt"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+    // Wire column resizers
+    c.querySelectorAll('.rt-resizer').forEach(handle => {
+        handle.addEventListener('mousedown', onColResizerMousedown);
+    });
+
+    // Wire context menu
+    c.addEventListener('contextmenu', onResultCtxMenu, { once: false });
+
+    S._virtRendered = 0;
+    _renderNextChunk();
+
+    c._virtScrollHandler = () => {
+        if (c.scrollTop + c.clientHeight > c.scrollHeight - 300) _renderNextChunk();
+    };
+    c.removeEventListener('scroll', c._virtScrollHandler);
+    c.addEventListener('scroll', c._virtScrollHandler);
+}
+
+// ── Column resize drag ───────────────────────────────────────────────
+let _colResizeDrag = null;
+
+function onColResizerMousedown(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget;
+    const colIdx = parseInt(handle.dataset.colidx);
+    const th = handle.closest('th');
+    const startX = e.clientX;
+    const startW = th.offsetWidth;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev) => {
+        const newW = Math.max(40, startW + ev.clientX - startX);
+        COL_WIDTHS[`${S.currentEditorTab}_${colIdx}`] = newW;
+        // Update colgroup col width live
+        const table = document.getElementById('resultTable');
+        if (table) {
+            const cols = table.querySelectorAll('colgroup col');
+            const colEl = cols[colIdx === -1 ? 0 : colIdx + 1];
+            if (colEl) colEl.style.width = newW + 'px';
+        }
+        th.style.width = newW + 'px';
+    };
+    const onUp = () => {
+        handle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
+const VIRT_CHUNK = 150; // строк за один рендер-цикл
+
+function _buildRow(row, idx) {
+    const rowNum = `<td style="color:var(--text-3);font-size:11px;text-align:right;user-select:none;padding-right:8px;">${idx + 1}</td>`;
+    const tds = S.cols.map(c => {
+        const v = row[c];
+        if (v === null || v === undefined) return `<td class="vn">NULL</td>`;
+        if (typeof v === 'number') return `<td class="vnum">${v}</td>`;
+        if (typeof v === 'boolean') return `<td class="vbool">${v}</td>`;
+        const s = String(v);
+        return `<td title="${eh(s)}">${eh(s.length > 200 ? s.substring(0, 200) + '…' : s)}</td>`;
+    }).join('');
+    return `<tr>${rowNum}${tds}</tr>`;
+}
+
+function _renderNextChunk() {
+    const tbody = document.getElementById('resultTbody');
+    if (!tbody) return;
+    const start = S._virtRendered;
+    const end = Math.min(start + VIRT_CHUNK, S.display.length);
+    if (start >= S.display.length) return;
+    let html = '';
+    for (let i = start; i < end; i++) html += _buildRow(S.display[i], i);
+    tbody.insertAdjacentHTML('beforeend', html);
+    S._virtRendered = end;
+    // Update status with rendered count if partial
+    if (end < S.display.length) {
+        const stRows = document.getElementById('stRows');
+        if (stRows) stRows.textContent = `${S.master.length} строк (показано ${end})`;
+    }
 }
 
 function sortBy(i) {
@@ -1382,15 +1891,136 @@ window.highlightSQL = function(text) {
 };
 })();
 
+// ── #17 rAF-throttled syntax highlighting ────────────────────────────
+let _hlFrame = null;
 function updateHighlight(ta) {
     if (!ta) return;
-    const hl = ta.previousElementSibling;
-    if (!hl || !hl.classList.contains('sql-hl')) return;
-    hl.innerHTML = highlightSQL(ta.value);
-    // Keep scroll in sync
-    hl.scrollTop = ta.scrollTop;
-    hl.scrollLeft = ta.scrollLeft;
+    cancelAnimationFrame(_hlFrame);
+    _hlFrame = requestAnimationFrame(() => {
+        const hl = ta.previousElementSibling;
+        if (!hl || !hl.classList.contains('sql-hl')) return;
+        hl.innerHTML = highlightSQL(ta.value);
+        hl.scrollTop = ta.scrollTop;
+        hl.scrollLeft = ta.scrollLeft;
+    });
 }
+
+// ── Object link + selection highlight wrapper ─────────────────────────
+// Wraps the base highlightSQL to add: object links (ctrl+click),
+// selection word highlight, and find-bar match marks.
+// Must be defined AFTER the base highlightSQL IIFE above.
+let _objLinkCache = null; // pre-sorted table names, invalidated on tree reload
+
+function _wrapHighlightSQL() {
+    const base = window.highlightSQL;
+    window.highlightSQL = function(text) {
+        let html = base(text);
+        const findBarOpen = document.getElementById('findBar')?.classList.contains('show');
+
+        if (!findBarOpen) {
+            // Selection word highlight
+            const ta = getActiveTA();
+            if (ta && ta.selectionStart !== ta.selectionEnd) {
+                const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+                if (sel.length >= 2 && !/\s/.test(sel)) {
+                    try {
+                        const re = new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+                        const ranges = [];
+                        let mm;
+                        while ((mm = re.exec(text)) !== null) {
+                            const isCur = mm.index === ta.selectionStart && mm.index + mm[0].length === ta.selectionEnd;
+                            ranges.push({ start: mm.index, end: mm.index + mm[0].length, isCur });
+                        }
+                        if (ranges.length > 1) {
+                            html = _applySelWordMarks(base, text, ranges);
+                        }
+                    } catch(e) {}
+                }
+            }
+        } else if (typeof FB !== 'undefined' && FB.matches && FB.matches.length > 0) {
+            html = _applyMatchMarksRanges(base, text, FB.matches, FB.cur);
+        }
+
+        // Object links (always applied on top)
+        if (S.tables && S.tables.length) {
+            html = _applyObjectLinks(base, html, text);
+        }
+        return html;
+    };
+}
+
+function _applySelWordMarks(base, text, ranges) {
+    const events = [];
+    let prev = 0;
+    ranges.forEach(r => {
+        if (r.start > prev) events.push({ type: 'text', val: text.slice(prev, r.start) });
+        events.push({ type: 'match', val: text.slice(r.start, r.end), isCur: r.isCur });
+        prev = r.end;
+    });
+    if (prev < text.length) events.push({ type: 'text', val: text.slice(prev) });
+    return events.map(ev => {
+        const inner = base(ev.val).replace(/\n$/, '');
+        if (ev.type === 'match') {
+            return `<mark class="${ev.isCur ? 'hl-match-cur' : 'hl-sel-word'}">${inner}</mark>`;
+        }
+        return inner;
+    }).join('') + '\n';
+}
+
+function _applyObjectLinks(base, existingHtml, text) {
+    if (!S.tables.length) return existingHtml;
+    if (!_objLinkCache || _objLinkCache.length !== S.tables.length) {
+        _objLinkCache = [...S.tables].sort((a, b) => b.length - a.length);
+    }
+    const pattern = _objLinkCache.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    let re;
+    try { re = new RegExp(`\\b(${pattern})\\b`, 'gi'); }
+    catch(e) { return existingHtml; }
+
+    const ranges = [];
+    let m;
+    while ((m = re.exec(text)) !== null) {
+        // Skip if inside a line comment
+        const lineStart = text.lastIndexOf('\n', m.index) + 1;
+        const linePrefix = text.slice(lineStart, m.index);
+        if (linePrefix.includes('--')) continue;
+        ranges.push({ start: m.index, end: m.index + m[0].length, name: m[0] });
+    }
+    if (!ranges.length) return existingHtml;
+
+    const events = [];
+    let prev = 0;
+    ranges.forEach(r => {
+        if (r.start > prev) events.push({ type: 'text', val: text.slice(prev, r.start) });
+        events.push({ type: 'obj', val: text.slice(r.start, r.end), name: r.name });
+        prev = r.end;
+    });
+    if (prev < text.length) events.push({ type: 'text', val: text.slice(prev) });
+
+    return events.map(ev => {
+        const inner = base(ev.val).replace(/\n$/, '');
+        if (ev.type === 'obj') {
+            return `<span class="hl-obj-link" data-obj="${eh(ev.name)}">${inner}</span>`;
+        }
+        return inner;
+    }).join('') + '\n';
+}
+
+function handleEditorObjClick(e) {
+    const name = e.currentTarget?.dataset.obj || e.target?.closest('.hl-obj-link')?.dataset.obj;
+    if (name) openDetail(name);
+}
+
+// Wire obj link clicks via event delegation on the overlay pre element
+// (pointer-events toggled via body.ctrl-held CSS)
+document.addEventListener('click', function(e) {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const link = e.target.closest('.hl-obj-link');
+    if (!link) return;
+    e.preventDefault();
+    const name = link.dataset.obj;
+    if (name) openDetail(name);
+});
 
 // ═══ STATEMENT PARSER ═══
 function splitStatements(sql) {
@@ -1447,7 +2077,6 @@ function getStatementAtCursor(ta) {
     for (const s of stmts) {
         if (pos >= s.start && pos <= s.end + 1) return s.sql;
     }
-    // fallback: entire text
     return sql.trim();
 }
 
@@ -1469,7 +2098,6 @@ function explainQuery(analyze) {
 // ═══ QUERY LINTER ═══
 function lintQuery(sql) {
     const warnings = [];
-    // Strip comments for analysis
     const clean = sql
         .replace(/--[^\n]*/g, '')
         .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -1507,7 +2135,6 @@ function showLintBar(warnings, tabId) {
 function showContextMenu(x, y, tableName) {
     const menu = document.getElementById('ctxMenu');
     if (!menu) return;
-    // Use data-action attributes to avoid XSS through inline event handlers
     menu.innerHTML = `
         <div class="ctx-item" data-action="select100"><i class="bi bi-table"></i>SELECT 100 строк</div>
         <div class="ctx-item" data-action="count"><i class="bi bi-hash"></i>COUNT(*)</div>
@@ -1657,5 +2284,242 @@ function showNotice(msg, type) {
     document.body.appendChild(d);
     setTimeout(() => { d.style.opacity = '0'; setTimeout(() => d.remove(), 300); }, 2200);
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// #5  FIND / REPLACE
+// ═══════════════════════════════════════════════════════════════════
+const FB = {
+    matches: [],   // [{start, end}]
+    cur: -1,
+    caseSensitive: false,
+    useRegex: false,
+};
+
+function showFindBar(withReplace = false) {
+    const bar = document.getElementById('findBar');
+    bar.classList.add('show');
+    // position relative to editorPane
+    const ep = document.getElementById('editorPane');
+    if (ep) ep.style.position = 'relative';
+    const fi = document.getElementById('fbFindInput');
+    if (fi) { fi.focus(); fi.select(); }
+    // pre-fill with selected text
+    const ta = getActiveTA();
+    if (ta) {
+        const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+        if (sel && sel.length < 200 && !sel.includes('\n')) { fi.value = sel; }
+    }
+    fbSearch();
+}
+
+function hideFindBar() {
+    document.getElementById('findBar').classList.remove('show');
+    FB.matches = []; FB.cur = -1;
+    // re-render highlight without match marks
+    const ta = getActiveTA();
+    if (ta) updateHighlight(ta);
+    document.getElementById('fbCount').textContent = '';
+}
+
+function fbToggleCase() {
+    FB.caseSensitive = !FB.caseSensitive;
+    document.getElementById('fbCaseBtn').classList.toggle('active', FB.caseSensitive);
+    fbSearch();
+}
+
+function fbToggleRegex() {
+    FB.useRegex = !FB.useRegex;
+    document.getElementById('fbRegexBtn').classList.toggle('active', FB.useRegex);
+    fbSearch();
+}
+
+function fbSearch() {
+    const ta = getActiveTA();
+    if (!ta) return;
+    const needle = document.getElementById('fbFindInput').value;
+    FB.matches = [];
+    FB.cur = -1;
+
+    if (!needle) {
+        document.getElementById('fbCount').textContent = '';
+        updateHighlight(ta);
+        return;
+    }
+
+    const text = ta.value;
+    try {
+        let re;
+        if (FB.useRegex) {
+            re = new RegExp(needle, FB.caseSensitive ? 'g' : 'gi');
+        } else {
+            re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), FB.caseSensitive ? 'g' : 'gi');
+        }
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            FB.matches.push({ start: m.index, end: m.index + m[0].length });
+            if (FB.matches.length > 5000) break; // safety cap
+        }
+    } catch(e) { /* invalid regex */ }
+
+    if (FB.matches.length > 0) {
+        // find closest match to cursor
+        const pos = ta.selectionStart;
+        FB.cur = FB.matches.findIndex(m => m.start >= pos);
+        if (FB.cur === -1) FB.cur = 0;
+        _fbScrollToCurrent(ta);
+    }
+
+    const cnt = document.getElementById('fbCount');
+    cnt.textContent = FB.matches.length
+        ? `${FB.cur + 1} / ${FB.matches.length}`
+        : 'Не найдено';
+    cnt.style.color = FB.matches.length ? 'var(--text-3)' : 'var(--red)';
+
+    updateHighlight(ta);
+}
+
+function fbMove(dir) {
+    if (!FB.matches.length) return;
+    FB.cur = (FB.cur + dir + FB.matches.length) % FB.matches.length;
+    document.getElementById('fbCount').textContent = `${FB.cur + 1} / ${FB.matches.length}`;
+    const ta = getActiveTA();
+    if (ta) _fbScrollToCurrent(ta);
+    updateHighlight(ta);
+}
+
+function _fbScrollToCurrent(ta) {
+    const m = FB.matches[FB.cur];
+    if (!m) return;
+    ta.selectionStart = m.start;
+    ta.selectionEnd = m.end;
+    // Scroll textarea to show selection
+    const linesBefore = ta.value.substring(0, m.start).split('\n').length;
+    ta.scrollTop = Math.max(0, (linesBefore - 4) * 20);
+}
+
+function fbReplaceOne() {
+    const ta = getActiveTA();
+    if (!ta || !FB.matches.length || FB.cur < 0) return;
+    const m = FB.matches[FB.cur];
+    const rep = document.getElementById('fbReplaceInput').value;
+    ta.value = ta.value.substring(0, m.start) + rep + ta.value.substring(m.end);
+    ta.selectionStart = ta.selectionEnd = m.start + rep.length;
+    syncNums(ta); saveTabContent(ta.dataset.tab, ta.value);
+    fbSearch(); // re-scan
+}
+
+function fbReplaceAll() {
+    const ta = getActiveTA();
+    if (!ta || !FB.matches.length) return;
+    const needle = document.getElementById('fbFindInput').value;
+    const rep = document.getElementById('fbReplaceInput').value;
+    let count = 0;
+    try {
+        let re;
+        if (FB.useRegex) {
+            re = new RegExp(needle, FB.caseSensitive ? 'g' : 'gi');
+        } else {
+            re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), FB.caseSensitive ? 'g' : 'gi');
+        }
+        const orig = ta.value;
+        ta.value = orig.replace(re, () => { count++; return rep; });
+    } catch(e) { showNotice('Некорректное регулярное выражение', 'err'); return; }
+    syncNums(ta); updateHighlight(ta); saveTabContent(ta.dataset.tab, ta.value);
+    showNotice(`Заменено: ${count}`);
+    fbSearch();
+}
+
+// Wire find bar input events
+document.addEventListener('DOMContentLoaded', () => {
+    const fi = document.getElementById('fbFindInput');
+    if (fi) {
+        fi.addEventListener('input', fbSearch);
+        fi.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); fbMove(e.shiftKey ? -1 : 1); }
+            if (e.key === 'Escape') { e.preventDefault(); hideFindBar(); }
+            if (e.altKey && e.key.toLowerCase() === 'c') { e.preventDefault(); fbToggleCase(); }
+            if (e.altKey && e.key.toLowerCase() === 'r') { e.preventDefault(); fbToggleRegex(); }
+        });
+    }
+    const ri = document.getElementById('fbReplaceInput');
+    if (ri) {
+        ri.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { e.preventDefault(); hideFindBar(); }
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); fbReplaceAll(); }
+        });
+    }
+});
+
+// ── Apply highlight marks for find bar (used by _wrapHighlightSQL) ──
+function _applyMatchMarks(base, text, needle, caseSensitive, curIdx) {
+    if (!needle) return base(text);
+    try {
+        const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), caseSensitive ? 'g' : 'gi');
+        const ranges = [];
+        let m;
+        while ((m = re.exec(text)) !== null) ranges.push({ start: m.index, end: m.index + m[0].length });
+        return _applyMatchMarksRanges(base, text, ranges, curIdx);
+    } catch(e) { return base(text); }
+}
+
+function _applyMatchMarksRanges(base, text, ranges, curIdx) {
+    if (!ranges.length) return base(text);
+    const events = [];
+    let prev = 0;
+    ranges.forEach((r, i) => {
+        if (r.start > prev) events.push({ type: 'text', val: text.slice(prev, r.start) });
+        events.push({ type: 'match', val: text.slice(r.start, r.end), idx: i });
+        prev = r.end;
+    });
+    if (prev < text.length) events.push({ type: 'text', val: text.slice(prev) });
+    return events.map(ev => {
+        const inner = base(ev.val).replace(/\n$/, '');
+        if (ev.type === 'match') {
+            const cls = ev.idx === curIdx ? 'hl-match-cur' : 'hl-match';
+            return `<mark class="${cls}">${inner}</mark>`;
+        }
+        return inner;
+    }).join('') + '\n';
+}
+
+// Call wrapper — must be after all helper functions are defined
+_wrapHighlightSQL();
+
+// ═══════════════════════════════════════════════════════════════════
+// #13  KEYBOARD CHEATSHEET
+// ═══════════════════════════════════════════════════════════════════
+function showCheatsheet() {
+    document.getElementById('cheatsheetModal')?.classList.add('show');
+}
+function hideCheatsheet() {
+    document.getElementById('cheatsheetModal')?.classList.remove('show');
+}
+
+// Wire global hotkeys for find bar and cheatsheet
+(function() {
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'f') {
+            const ta = getActiveTA();
+            if (ta === document.activeElement || document.activeElement?.closest('#sqlEditorRoot')) {
+                e.preventDefault(); showFindBar(false); return;
+            }
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+            e.preventDefault(); showFindBar(true);
+            setTimeout(() => document.getElementById('fbReplaceInput')?.focus(), 50); return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === '?') {
+            e.preventDefault(); showCheatsheet(); return;
+        }
+        if (e.key === 'Escape') {
+            if (document.getElementById('findBar')?.classList.contains('show')) {
+                hideFindBar(); getActiveTA()?.focus();
+            }
+            if (document.getElementById('cheatsheetModal')?.classList.contains('show')) {
+                hideCheatsheet();
+            }
+        }
+    });
+})();
 </script>
 {% endblock %}
