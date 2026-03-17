@@ -6,12 +6,6 @@
 <button class="btn btn-secondary btn-sm" onclick="formatSQL()">
     <i class="bi bi-magic"></i> Форматировать
 </button>
-<button class="btn btn-secondary btn-sm" id="runStmtBtn" onclick="runStatement()" title="Выполнить текущий statement (Ctrl+Shift+Enter)">
-    <i class="bi bi-play"></i> Statement
-</button>
-<button class="btn btn-primary btn-sm" id="runBtn" onclick="runQuery()">
-    <i class="bi bi-play-fill"></i> Выполнить <kbd style="font-size:9px;opacity:.7;margin-left:4px;">Ctrl+Enter</kbd>
-</button>
 {% endblock %}
 
 {% block extra_css %}
@@ -402,13 +396,8 @@ body.ctrl-held .hl-obj-link{border-bottom-color:var(--green);color:#52b788;curso
         <div id="tabsContainer">
             <div class="tab-content active" data-tab-id="tab-1">
                 <div class="editor-toolbar">
-                    <span class="tb-lbl">Шаблоны:</span>
-                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('select', 'tab-1')">SELECT</button>
-                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('insert', 'tab-1')">INSERT</button>
-                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('update', 'tab-1')">UPDATE</button>
-                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('delete', 'tab-1')">DELETE</button>
-                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('explain', 'tab-1')">EXPLAIN</button>
-                    <button class="btn btn-secondary btn-sm" onclick="insertSnippet('cte', 'tab-1')">WITH CTE</button>
+                    <button class="btn btn-primary btn-sm run-tab-btn" data-tab="tab-1" onclick="runQuery()" title="Выполнить выделенное или всё (F9)" aria-label="Выполнить выделенное или всё (F9)"><i class="bi bi-play-fill"></i></button>
+                    <button class="btn btn-secondary btn-sm" onclick="runStatement()" title="Выполнить statement под курсором (Ctrl+Shift+Enter)"><i class="bi bi-play"></i> Statement</button>
                     <div class="tb-div"></div>
                     <button class="btn btn-secondary btn-sm" onclick="explainQuery(false)" title="EXPLAIN текущего запроса"><i class="bi bi-search"></i> Explain</button>
                     <button class="btn btn-secondary btn-sm" onclick="explainQuery(true)" title="EXPLAIN ANALYZE текущего запроса"><i class="bi bi-search-heart"></i> Analyze</button>
@@ -459,7 +448,7 @@ body.ctrl-held .hl-obj-link{border-bottom-color:var(--green);color:#52b788;curso
                             <div class="hl-wrap">
                                 <pre class="sql-hl" id="sqlHighlight" aria-hidden="true"></pre>
                                 <textarea id="sqlInput" class="sql-input" data-tab="tab-1" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
-                                    placeholder="-- Введите SQL запрос...&#10;-- Ctrl+Enter — выполнить&#10;-- Ctrl+Space — автодополнение"></textarea>
+                                placeholder="-- Введите SQL запрос...&#10;-- F9 / Ctrl+Enter — выполнить&#10;-- Ctrl+Space — автодополнение"></textarea>
                             </div>
                         </div>
                     </div>
@@ -521,6 +510,7 @@ body.ctrl-held .hl-obj-link{border-bottom-color:var(--green);color:#52b788;curso
         <div class="modal-body" style="padding:6px 10px;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
                 <div style="padding:6px 0;border-bottom:1px solid var(--line);grid-column:1/-1;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;padding-left:6px;">Выполнение</div>
+                <div class="cs-row"><kbd>F9</kbd><span>Выполнить выделенное или всё</span></div>
                 <div class="cs-row"><kbd>Ctrl+Enter</kbd><span>Выполнить запрос</span></div>
                 <div class="cs-row"><kbd>Ctrl+Shift+Enter</kbd><span>Выполнить statement</span></div>
                 <div style="padding:6px 0;border-bottom:1px solid var(--line);border-top:1px solid var(--line);grid-column:1/-1;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;padding-left:6px;margin-top:4px;">Редактор</div>
@@ -569,7 +559,9 @@ const S = {
     },
     colCache: {},
     connInfo: '',
-    _acLoading: null  // FIX: guard against concurrent loadTableColumns calls
+    _acLoading: null,  // FIX: guard against concurrent loadTableColumns calls
+    _fnList: null,     // cached functions list from buildTree
+    _procList: null    // cached procedures list from buildTree
 };
 
 const MAX_HISTORY_ITEMS = 100;
@@ -726,6 +718,7 @@ function onKD(e) {
     }
     if ((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runQuery();return;}
     if ((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key==='Enter'){e.preventDefault();runStatement();return;}
+    if (e.key==='F9'){e.preventDefault();runQuery();return;}
     if ((e.ctrlKey||e.metaKey)&&e.key===' '){e.preventDefault();showAC(true, ta);return;}
     if ((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();formatSQL();return;}
     // #4 Ctrl+/ — комментирование/раскомментирование строк
@@ -862,19 +855,28 @@ async function buildTree() {
     const body=document.getElementById('treeBody');
     body.innerHTML='<div class="tree-loading"><span class="loading"></span> Загрузка...</div>';
     try {
-        const r=await fetchWithRetry('/api/get-tables');
-        const d=await r.json();
+        const [tablesRes, fnRes, procRes] = await Promise.all([
+            fetchWithRetry('/api/get-tables'),
+            fetch('/api/sql/schema-objects?type=functions').catch(()=>null),
+            fetch('/api/sql/schema-objects?type=procedures').catch(()=>null),
+        ]);
+        const d=await tablesRes.json();
         if(!d.success){body.innerHTML='<div class="tree-loading">Ошибка</div>';return;}
         S.tables=d.data.map(t=>t.table_name);
         _objLinkCache = null; // invalidate cache when tables reload
+
+        let fnCount = null, procCount = null;
+        try { const fd = await fnRes?.json(); if (fd?.success) { fnCount = fd.data.length; S._fnList = fd.data; } } catch(e){ console.warn('[buildTree] functions fetch failed', e); }
+        try { const pd = await procRes?.json(); if (pd?.success) { procCount = pd.data.length; S._procList = pd.data; } } catch(e){ console.warn('[buildTree] procedures fetch failed', e); }
+
         body.innerHTML = renderGroup('public', 'bi-layers ico-schema', [
             { label:'Tables', icon:'bi-table ico-group', badge:d.data.length,
               kids: d.data.map(t=>({ label:t.table_name, icon:'bi-table ico-table', type:'table', tableName:t.table_name, comment:t.table_comment }))
             },
             { label:'Views',               icon:'bi-eye ico-group',          lazy:'views'      },
             { label:'Materialized Views',  icon:'bi-layers ico-group',        lazy:'matviews'   },
-            { label:'Functions',           icon:'bi-lightning ico-fn',        lazy:'functions'  },
-            { label:'Procedures',          icon:'bi-gear ico-proc',           lazy:'procedures' },
+            { label:'Functions',           icon:'bi-lightning ico-fn',        lazy:'functions',  badge: fnCount   },
+            { label:'Procedures',          icon:'bi-gear ico-proc',           lazy:'procedures', badge: procCount },
             { label:'Sequences',           icon:'bi-123 ico-seq',             lazy:'sequences'  },
             { label:'Triggers',            icon:'bi-lightning-charge ico-trig',lazy:'triggers'  },
             { label:'Types',               icon:'bi-tag ico-type',            lazy:'types'      },
@@ -965,6 +967,15 @@ const LAZY_ICONS = {
 };
 
 async function loadLazy(container, type) {
+    // Use cached data for functions/procedures if already fetched during buildTree
+    if (type === 'functions' && S._fnList) {
+        _renderLazyItems(container, S._fnList, type);
+        return;
+    }
+    if (type === 'procedures' && S._procList) {
+        _renderLazyItems(container, S._procList, type);
+        return;
+    }
     container.innerHTML='<div class="tree-loading" style="padding-left:42px"><span class="loading"></span></div>';
     try {
         const r = await fetch('/api/sql/schema-objects?type=' + type);
@@ -974,31 +985,51 @@ async function loadLazy(container, type) {
             return;
         }
         const items = d.data || [];
-        if (!items.length) {
-            container.innerHTML = `<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--text-3);">Нет объектов</div>`;
-        } else {
-            const icon = LAZY_ICONS[type] || 'bi-circle';
-            container.innerHTML = items.map(name => `
-                <div class="tn" style="padding-left:42px" data-type="obj">
-                    <span class="arr" style="visibility:hidden">▶</span>
-                    <span class="ico"><i class="bi ${icon}"></i></span>
-                    <span class="lbl">${eh(name)}</span>
-                </div>`).join('');
-        }
-        // FIX 1: обновляем бейдж на родительском узле группы
-        const groupNode = container.previousElementSibling;
-        if (groupNode && groupNode.classList.contains('tn')) {
-            let bdg = groupNode.querySelector('.bdg');
-            if (!bdg) {
-                bdg = document.createElement('span');
-                bdg.className = 'bdg';
-                groupNode.appendChild(bdg);
-            }
-            bdg.textContent = items.length;
-        }
+        _renderLazyItems(container, items, type);
     } catch(e) {
         container.innerHTML = `<div style="padding:6px 10px;font-size:11px;color:var(--red);">Ошибка: ${eh(e.message)}</div>`;
     }
+}
+
+function _renderLazyItems(container, items, type) {
+    if (!items.length) {
+        container.innerHTML = `<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--text-3);">Нет объектов</div>`;
+    } else {
+        const icon = LAZY_ICONS[type] || 'bi-circle';
+        const isRoutine = type === 'functions' || type === 'procedures';
+        const routineType = type === 'functions' ? 'function' : 'procedure';
+        container.innerHTML = items.map(name => `
+            <div class="tn" style="padding-left:42px" data-type="${isRoutine ? routineType : 'obj'}" ${isRoutine ? `data-routine="${eh(name)}" data-routine-type="${routineType}" title="Двойной клик — открыть DDL и параметры"` : ''}>
+                <span class="arr" style="visibility:hidden">▶</span>
+                <span class="ico"><i class="bi ${icon}"></i></span>
+                <span class="lbl">${eh(name)}</span>
+            </div>`).join('');
+    }
+    // Update badge on parent group node
+    const groupNode = container.previousElementSibling;
+    if (groupNode && groupNode.classList.contains('tn')) {
+        let bdg = groupNode.querySelector('.bdg');
+        if (!bdg) {
+            bdg = document.createElement('span');
+            bdg.className = 'bdg';
+            groupNode.appendChild(bdg);
+        }
+        bdg.textContent = items.length;
+    }
+    // Bind dblclick and Enter key for routines
+    container.querySelectorAll('.tn[data-routine]').forEach(node => {
+        node.setAttribute('tabindex', '0');
+        node.addEventListener('dblclick', function(e) {
+            e.stopPropagation();
+            openRoutineDetail(this.dataset.routine, this.dataset.routineType);
+        });
+        node.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.stopPropagation();
+                openRoutineDetail(this.dataset.routine, this.dataset.routineType);
+            }
+        });
+    });
 }
 
 // ── #16 Debounce filterTree ───────────────────────────────────────────
@@ -1175,13 +1206,8 @@ function createSQLTabContent(tabId) {
     div.dataset.tabId = tabId;
     div.innerHTML = `
         <div class="editor-toolbar">
-            <span class="tb-lbl">Шаблоны:</span>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('select', '${tabId}')">SELECT</button>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('insert', '${tabId}')">INSERT</button>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('update', '${tabId}')">UPDATE</button>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('delete', '${tabId}')">DELETE</button>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('explain', '${tabId}')">EXPLAIN</button>
-            <button class="btn btn-secondary btn-sm" onclick="insertSnippet('cte', '${tabId}')">WITH CTE</button>
+            <button class="btn btn-primary btn-sm run-tab-btn" data-tab="${tabId}" onclick="runQuery()" title="Выполнить выделенное или всё (F9)" aria-label="Выполнить выделенное или всё (F9)"><i class="bi bi-play-fill"></i></button>
+            <button class="btn btn-secondary btn-sm" onclick="runStatement()" title="Выполнить statement под курсором (Ctrl+Shift+Enter)"><i class="bi bi-play"></i> Statement</button>
             <div class="tb-div"></div>
             <button class="btn btn-secondary btn-sm" onclick="explainQuery(false)" title="EXPLAIN"><i class="bi bi-search"></i> Explain</button>
             <button class="btn btn-secondary btn-sm" onclick="explainQuery(true)" title="EXPLAIN ANALYZE"><i class="bi bi-search-heart"></i> Analyze</button>
@@ -1196,7 +1222,6 @@ function createSQLTabContent(tabId) {
             <button class="btn btn-secondary btn-sm" onclick="clearEditor('${tabId}')"><i class="bi bi-trash"></i></button>
             <button class="btn btn-secondary btn-sm" onclick="saveCurrentAsSnippet()" title="Сохранить как сниппет"><i class="bi bi-bookmark-plus"></i></button>
             <button class="btn btn-secondary btn-sm" onclick="showSnippetsModal()" title="Мои сниппеты"><i class="bi bi-collection"></i></button>
-            <button class="btn btn-primary btn-sm" onclick="runQuery()"><i class="bi bi-play-fill"></i> Выполнить</button>
         </div>
         <div class="lint-bar" id="lintBar-${tabId}"></div>
         <div style="flex:1;display:flex;flex-direction:column;">
@@ -1245,6 +1270,86 @@ async function openDetail(tableName) {
     document.getElementById('tabsContainer').appendChild(content);
     switchEditorTab(tabId);
     await loadDetailTabData(tabId, 'columns', tableName);
+}
+
+async function openRoutineDetail(name, routineType) {
+    S.tabCounter++;
+    const tabId = 'routine-' + S.tabCounter;
+    const icon = routineType === 'function' ? 'bi-lightning' : 'bi-gear';
+    S.tabs[tabId] = { type: 'routine', title: name, routineName: name, routineType, activeSubTab: 'ddl' };
+    const tabEl = document.createElement('div');
+    tabEl.className = 'tab';
+    tabEl.dataset.tabId = tabId;
+    tabEl.onclick = () => switchEditorTab(tabId);
+    tabEl.innerHTML = `<i class="bi ${icon}"></i><span>${name}</span><button class="tab-close" onclick="closeTab(event, '${tabId}')">×</button>`;
+    document.getElementById('tabsList').appendChild(tabEl);
+    const content = createRoutineDetailTabContent(tabId, name, routineType);
+    document.getElementById('tabsContainer').appendChild(content);
+    switchEditorTab(tabId);
+    await loadRoutineDetailData(tabId, 'ddl', name, routineType);
+}
+
+function createRoutineDetailTabContent(tabId, name, routineType) {
+    const div = document.createElement('div');
+    div.className = 'tab-content';
+    div.dataset.tabId = tabId;
+    div.innerHTML = `
+        <div class="detail-tabs">
+            <button class="detail-tab active" data-subtab="ddl" onclick="switchRoutineSubTab('${tabId}', 'ddl')">DDL</button>
+            <button class="detail-tab" data-subtab="params" onclick="switchRoutineSubTab('${tabId}', 'params')">Параметры</button>
+        </div>
+        <div class="detail-body" data-tab="${tabId}"><div class="tree-loading"><span class="loading"></span> Загрузка...</div></div>
+    `;
+    return div;
+}
+
+async function switchRoutineSubTab(tabId, subtab) {
+    const content = document.querySelector(`.tab-content[data-tab-id="${tabId}"]`);
+    content.querySelectorAll('.detail-tab').forEach(t => t.classList.toggle('active', t.dataset.subtab === subtab));
+    S.tabs[tabId].activeSubTab = subtab;
+    await loadRoutineDetailData(tabId, subtab, S.tabs[tabId].routineName, S.tabs[tabId].routineType);
+}
+
+async function loadRoutineDetailData(tabId, subtab, name, routineType) {
+    const body = document.querySelector(`.detail-body[data-tab="${tabId}"]`);
+    body.innerHTML = '<div class="tree-loading"><span class="loading"></span> Загрузка...</div>';
+    try {
+        const r = await fetch(`/api/sql/routine-detail?name=${encodeURIComponent(name)}&type=${encodeURIComponent(routineType)}&tab=${subtab}`);
+        const d = await r.json();
+        if (!d.success) { body.innerHTML = `<pre class="err-blk">${eh(d.error)}</pre>`; return; }
+        if (subtab === 'ddl') renderDDL(body, d.data);
+        else if (subtab === 'params') renderParams(body, d.data);
+    } catch (e) {
+        body.innerHTML = `<pre class="err-blk">${eh(e.message)}</pre>`;
+    }
+}
+
+function renderParams(body, rows) {
+    if (!rows || !rows.length) {
+        body.innerHTML = '<div style="padding:16px;color:var(--text-3);font-size:13px;">Параметры не найдены</div>';
+        return;
+    }
+    const inParams  = rows.filter(r => r.parameter_mode === 'IN' || r.parameter_mode === 'INOUT' || !r.parameter_mode);
+    const outParams = rows.filter(r => r.parameter_mode === 'OUT' || r.parameter_mode === 'INOUT');
+    let html = '<div style="padding:10px;">';
+    if (inParams.length) {
+        html += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Входные параметры</div>';
+        html += '<table class="dt" style="width:100%;margin-bottom:12px;"><thead><tr><th>Имя</th><th>Тип</th><th>Режим</th><th>По умолчанию</th></tr></thead><tbody>';
+        inParams.forEach(p => {
+            html += `<tr><td><code>${eh(p.parameter_name||'—')}</code></td><td><span style="color:var(--amber);font-family:var(--font-mono);font-size:11px;">${eh(p.data_type||'—')}</span></td><td>${eh(p.parameter_mode||'IN')}</td><td>${p.parameter_default ? eh(p.parameter_default) : '<span style="color:var(--text-3)">—</span>'}</td></tr>`;
+        });
+        html += '</tbody></table>';
+    }
+    if (outParams.length) {
+        html += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Выходные параметры</div>';
+        html += '<table class="dt" style="width:100%;"><thead><tr><th>Имя</th><th>Тип</th><th>Режим</th></tr></thead><tbody>';
+        outParams.forEach(p => {
+            html += `<tr><td><code>${eh(p.parameter_name||'—')}</code></td><td><span style="color:var(--amber);font-family:var(--font-mono);font-size:11px;">${eh(p.data_type||'—')}</span></td><td>${eh(p.parameter_mode)}</td></tr>`;
+        });
+        html += '</tbody></table>';
+    }
+    html += '</div>';
+    body.innerHTML = html;
 }
 
 function createDetailTabContent(tabId, tableName) {
@@ -1319,10 +1424,8 @@ async function executeSQL(sql, tabId) {
     showLintBar(warnings, tabId);
 
     const limit = parseInt(document.querySelector(`.lim-sel[data-tab="${tabId}"]`)?.value || document.getElementById('rowLimit')?.value || 100);
-    const btn = document.getElementById('runBtn');
-    const stmtBtn = document.getElementById('runStmtBtn');
-    if (btn) { btn.innerHTML = '<span class="loading"></span> Выполняется...'; btn.disabled = true; }
-    if (stmtBtn) stmtBtn.disabled = true;
+    const btn = document.querySelector(`.run-tab-btn[data-tab="${tabId}"]`);
+    if (btn) { btn.innerHTML = '<span class="loading"></span>'; btn.disabled = true; }
     setSt('run', '⟳ Выполняется...', '', '');
     // #12 заголовок вкладки браузера показывает статус
     const _origTitle = document.title;
@@ -1416,8 +1519,7 @@ async function executeSQL(sql, tabId) {
         setSt('err', '✗ Сетевая ошибка', '', '');
         if (resultsEl) resultsEl.innerHTML = `<pre class="err-blk">${eh(e.message)}</pre>`;
     } finally {
-        if (btn) { btn.innerHTML = '<i class="bi bi-play-fill"></i> Выполнить <kbd style="font-size:9px;opacity:.7;margin-left:4px;">Ctrl+Enter</kbd>'; btn.disabled = false; }
-        if (stmtBtn) stmtBtn.disabled = false;
+        if (btn) { btn.innerHTML = '<i class="bi bi-play-fill"></i>'; btn.disabled = false; }
     }
 }
 

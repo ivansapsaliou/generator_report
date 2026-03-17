@@ -3284,5 +3284,58 @@ def sql_table_detail():
         return jsonify({'success': False, 'error': str(e)}), 200
 
 
+@app.route('/api/sql/routine-detail', methods=['GET'])
+@login_required
+def sql_routine_detail():
+    name      = request.args.get('name', '').strip()
+    obj_type  = request.args.get('type', 'function')  # 'function' or 'procedure'
+    tab       = request.args.get('tab', 'ddl')         # 'ddl', 'params'
+
+    if not name:
+        return jsonify({'success': False, 'error': 'name parameter required'}), 400
+
+    try:
+        conn = get_db_connection()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+        if tab == 'ddl':
+            prokind_filter = "p.prokind IN ('f', 'w', 'a')" if obj_type == 'function' else "p.prokind = 'p'"
+            cur.execute(
+                "SELECT pg_get_functiondef(p.oid) AS ddl"
+                " FROM pg_proc p"
+                " JOIN pg_namespace n ON n.oid = p.pronamespace"
+                " WHERE n.nspname = 'public' AND p.proname = %s AND " + prokind_filter +
+                " LIMIT 1",
+                (name,)
+            )
+            row = cur.fetchone()
+            ddl = row['ddl'] if row else '-- DDL недоступен'
+            cur.close(); conn.close()
+            return jsonify({'success': True, 'data': {'ddl': ddl}})
+
+        elif tab == 'params':
+            cur.execute('''
+                SELECT
+                    p.parameter_name,
+                    p.parameter_mode,
+                    p.data_type,
+                    p.parameter_default
+                FROM information_schema.parameters p
+                WHERE p.specific_schema = 'public'
+                  AND p.specific_name LIKE %s || '%%'
+                ORDER BY p.ordinal_position
+            ''', (name,))
+            rows = [dict(r) for r in cur.fetchall()]
+            cur.close(); conn.close()
+            return jsonify({'success': True, 'data': rows})
+
+        cur.close(); conn.close()
+        return jsonify({'success': False, 'error': 'Unknown tab'}), 400
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 200
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
