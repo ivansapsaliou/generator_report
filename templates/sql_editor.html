@@ -364,6 +364,10 @@ body.ctrl-held .hl-proc-link{border-bottom-color:#f39c12;color:#f39c12;}
 .hl-sel-word{background:rgba(91,141,238,.18);border-radius:2px;outline:1px solid rgba(91,141,238,.3);}
 /* ── Syntax-highlighted DDL block ── */
 .ddl-hl{line-height:1.7;}
+
+/* ── MONACO EDITOR CONTAINERS ── */
+.monaco-editor-container{flex:1;overflow:hidden;min-height:0;}
+.ddl-monaco-container{height:380px;max-height:calc(100vh - 220px);border:1px solid var(--line);border-radius:3px;overflow:hidden;}
 </style>
 {% endblock %}
 
@@ -452,14 +456,7 @@ body.ctrl-held .hl-proc-link{border-bottom-color:#f39c12;color:#f39c12;}
                                 <button class="btn-icon" onclick="fbReplaceAll()" title="Заменить всё"><i class="bi bi-arrow-clockwise"></i> Все</button>
                             </div>
                         </div>
-                        <div class="code-wrap">
-                            <div id="lineNums">1</div>
-                            <div class="hl-wrap">
-                                <pre class="sql-hl" id="sqlHighlight" aria-hidden="true"></pre>
-                                <textarea id="sqlInput" class="sql-input" data-tab="tab-1" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
-                                placeholder="-- Введите SQL запрос...&#10;-- F9 / Ctrl+Enter — выполнить&#10;-- Ctrl+Space — автодополнение"></textarea>
-                            </div>
-                        </div>
+                        <div class="monaco-editor-container" id="monaco-tab-1" data-tab="tab-1"></div>
                     </div>
                     <div id="hResizer"></div>
                     <div id="resultsPane">
@@ -542,6 +539,7 @@ body.ctrl-held .hl-proc-link{border-bottom-color:#f39c12;color:#f39c12;}
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
 <script>
 const SQL_KW = 'SELECT FROM WHERE JOIN LEFT RIGHT INNER OUTER FULL CROSS ON AS AND OR NOT IN EXISTS BETWEEN LIKE ILIKE IS NULL TRUE FALSE INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE INDEX VIEW DROP ALTER ADD COLUMN PRIMARY KEY FOREIGN REFERENCES UNIQUE DEFAULT CONSTRAINT CHECK GROUP BY ORDER HAVING LIMIT OFFSET UNION ALL DISTINCT WITH RECURSIVE CASE WHEN THEN ELSE END CAST OVER PARTITION ROW_NUMBER RANK DENSE_RANK TRUNCATE BEGIN COMMIT ROLLBACK TRANSACTION EXPLAIN ANALYZE VACUUM RETURNING COALESCE NULLIF GREATEST LEAST EXTRACT DATE_TRUNC ARRAY JSONB JSON TEXT INTEGER BIGINT BOOLEAN NUMERIC TIMESTAMP DATE TIME INTERVAL SERIAL UUID VARCHAR DO LANGUAGE PLPGSQL FUNCTION PROCEDURE TRIGGER RETURNS DECLARE'.split(' ');
 const SQL_FN = 'COUNT SUM AVG MIN MAX ROUND FLOOR CEIL ABS MOD LENGTH TRIM UPPER LOWER SUBSTR SUBSTRING REPLACE SPLIT_PART CONCAT COALESCE NULLIF NOW CURRENT_DATE CURRENT_TIMESTAMP TO_CHAR TO_DATE AGE EXTRACT DATE_TRUNC DATE_PART ARRAY_AGG STRING_AGG JSON_AGG JSONB_AGG ROW_TO_JSON UNNEST GENERATE_SERIES REGEXP_REPLACE REGEXP_MATCH LEAD LAG FIRST_VALUE LAST_VALUE NTH_VALUE NTILE CUME_DIST PERCENT_RANK'.split(' ');
@@ -575,9 +573,192 @@ const S = {
 
 const MAX_HISTORY_ITEMS = 100;
 
-document.addEventListener('DOMContentLoaded', async () => {
-    await checkConn();
+// ═══ MONACO EDITOR ═══
+const monacoEditors = {};   // tabId → monaco editor instance
+let _monacoApiReady = false;
+let _domContentLoaded = false;
+
+function _tryAfterBothReady() {
+    if (!_monacoApiReady || !_domContentLoaded) return;
     initEditor();
+}
+
+require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs' } });
+require(['vs/editor/editor.main'], function() {
+    _monacoApiReady = true;
+    _setupMonacoTheme();
+    _registerMonacoCompletion();
+    _tryAfterBothReady();
+});
+
+function _setupMonacoTheme() {
+    monaco.editor.defineTheme('sql-dark', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+            { token: 'keyword',    foreground: 'cf9fff', fontStyle: 'bold' },
+            { token: 'predefined', foreground: '79c0ff' },
+            { token: 'string',     foreground: 'a8d9a4' },
+            { token: 'number',     foreground: 'f0a843' },
+            { token: 'comment',    foreground: '6a737d', fontStyle: 'italic' },
+            { token: 'operator',   foreground: 'f39c12' },
+        ],
+        colors: {
+            'editor.background':                 '#141414',
+            'editor.foreground':                 '#cdd9e5',
+            'editor.lineHighlightBackground':    '#1a1e27',
+            'editor.selectionBackground':        '#3d3114',
+            'editorLineNumber.foreground':       '#4d5566',
+            'editorLineNumber.activeForeground': '#9e9e9e',
+            'editorCursor.foreground':           '#f0a843',
+            'editor.inactiveSelectionBackground':'#2d2d2d',
+            'editorIndentGuide.background':      '#2a2d36',
+            'editorBracketMatch.background':     '#2d4b2d',
+            'editorBracketMatch.border':         '#52b788',
+            'scrollbarSlider.background':        '#3d3d3d80',
+            'scrollbarSlider.hoverBackground':   '#5d5d5d90',
+        }
+    });
+}
+
+function _registerMonacoCompletion() {
+    monaco.languages.registerCompletionItemProvider('sql', {
+        provideCompletionItems: function(model, position) {
+            const word = model.getWordUntilPosition(position);
+            const range = {
+                startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
+                startColumn: word.startColumn, endColumn: word.endColumn
+            };
+            const up = (word.word || '').toUpperCase();
+            const suggestions = [];
+            SQL_KW.filter(k => k.startsWith(up)).forEach(k => suggestions.push({
+                label: k, kind: monaco.languages.CompletionItemKind.Keyword,
+                insertText: k, range
+            }));
+            SQL_FN.filter(f => f.startsWith(up)).forEach(f => suggestions.push({
+                label: f, kind: monaco.languages.CompletionItemKind.Function,
+                insertText: f + '(', range
+            }));
+            (S.tables || []).filter(t => t.toLowerCase().startsWith(word.word.toLowerCase())).forEach(t => suggestions.push({
+                label: t, kind: monaco.languages.CompletionItemKind.Class,
+                insertText: t, range
+            }));
+            return { suggestions };
+        }
+    });
+}
+
+function initMonacoEditor(tabId, containerEl) {
+    if (!_monacoApiReady) return null;
+    if (!containerEl) {
+        containerEl = document.getElementById('monaco-' + tabId) ||
+                      document.querySelector(`.monaco-editor-container[data-tab="${tabId}"]`);
+    }
+    if (!containerEl) return null;
+    if (monacoEditors[tabId]) return monacoEditors[tabId]; // already created
+    // Ensure container is in the DOM and visible before creating editor
+    if (!containerEl.offsetParent && !document.body.contains(containerEl)) return null;
+
+    const saved = loadTabContent(tabId);
+    const defaultSql = tabId === 'tab-1'
+        ? '-- SQL Редактор\n-- F9 / Ctrl+Enter — выполнить  |  Ctrl+Space — автодополнение\n-- Ctrl+Click по таблице в дереве — открыть структуру таблицы\n\nSELECT version();'
+        : '';
+    const initialValue = saved !== null ? saved : defaultSql;
+
+    const editor = monaco.editor.create(containerEl, {
+        value: initialValue,
+        language: 'sql',
+        theme: 'sql-dark',
+        fontSize: 14,
+        lineHeight: 22,
+        tabSize: 4,
+        minimap: { enabled: false },
+        automaticLayout: true,
+        scrollBeyondLastLine: false,
+        renderWhitespace: 'none',
+        fontFamily: "'Geist Mono', 'Consolas', 'Courier New', monospace",
+        cursorStyle: 'line',
+        wordWrap: 'off',
+        scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
+        padding: { top: 8, bottom: 8 },
+        quickSuggestions: { other: true, comments: false, strings: false },
+    });
+
+    monacoEditors[tabId] = editor;
+
+    // Keyboard shortcuts
+    editor.addCommand(monaco.KeyCode.F9,
+        () => runQuery());
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+        () => runQuery());
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter,
+        () => runStatement());
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK,
+        () => formatSQL());
+
+    // Save content on change
+    editor.onDidChangeModelContent(() => {
+        saveTabContent(tabId, editor.getValue());
+    });
+
+    // Cursor position display
+    editor.onDidChangeCursorPosition(e => {
+        if (S.currentEditorTab === tabId) {
+            const cp = document.getElementById('cursorPos');
+            if (cp) cp.textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+        }
+    });
+
+    return editor;
+}
+
+// Monaco adapter: gives Monaco editors a textarea-like interface
+function _monacoAdapter(editor, tabId) {
+    const adapter = {
+        _isMonaco: true,
+        _editor: editor,
+        dataset: { tab: tabId },
+        _pendingSelEnd: null,
+        get value() { return editor.getValue(); },
+        set value(v) { editor.setValue(typeof v === 'string' ? v : ''); },
+        get selectionStart() {
+            const model = editor.getModel(), sel = editor.getSelection();
+            return (model && sel) ? model.getOffsetAt({ lineNumber: sel.startLineNumber, column: sel.startColumn }) : 0;
+        },
+        get selectionEnd() {
+            const model = editor.getModel(), sel = editor.getSelection();
+            return (model && sel) ? model.getOffsetAt({ lineNumber: sel.endLineNumber, column: sel.endColumn }) : 0;
+        },
+        // setters used in chained assignment (selectionEnd set first, then selectionStart)
+        set selectionEnd(offset) {
+            this._pendingSelEnd = offset;
+        },
+        set selectionStart(offset) {
+            const model = editor.getModel();
+            if (!model) return;
+            const endOff = (this._pendingSelEnd !== null && this._pendingSelEnd !== undefined)
+                ? this._pendingSelEnd : offset;
+            const sp = model.getPositionAt(offset);
+            const ep = model.getPositionAt(endOff);
+            editor.setSelection({ startLineNumber: sp.lineNumber, startColumn: sp.column,
+                                   endLineNumber: ep.lineNumber,   endColumn: ep.column });
+            this._pendingSelEnd = null;
+        },
+        focus() { editor.focus(); },
+        closest() { return null; },
+        getBoundingClientRect() {
+            const d = editor.getContainerDomNode();
+            return d ? d.getBoundingClientRect() : { top: 0, left: 0, right: 0, bottom: 0 };
+        },
+        get scrollTop() { return 0; },
+        set scrollTop(v) { },
+    };
+    return adapter;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    _domContentLoaded = true;
+    checkConn();
     initSplitters();
     buildTree();
     document.addEventListener('click', e => {
@@ -596,6 +777,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         wireTabRename(tab1El, 'tab-1');
         tab1El.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); }); // tab-1 не закрываем
     }
+    _tryAfterBothReady();
 });
 
 async function checkConn() {
@@ -620,6 +802,8 @@ async function checkConn() {
 // ═══ HELPERS ═══
 function getActiveTA() {
     const tabId = S.currentEditorTab;
+    const editor = monacoEditors[tabId];
+    if (editor) return _monacoAdapter(editor, tabId);
     return document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
 }
 
@@ -663,18 +847,13 @@ function wireupTA(ta) {
 }
 
 function initEditor() {
-    const ta = document.getElementById('sqlInput');
-    if (!ta) return;
-    wireupTA(ta);
-    // #1 восстанавливаем сохранённое содержимое, иначе дефолтный текст
-    const saved = loadTabContent('tab-1');
-    ta.value = saved !== null ? saved : '-- SQL Редактор\n-- Ctrl+Enter — выполнить  |  Ctrl+Space — автодополнение\n-- Ctrl+Click по таблице в дереве — открыть структуру таблицы\n\nSELECT version();';
-    syncNums(ta);
-    updateHighlight(ta);
+    // Initialize Monaco editor for tab-1
+    initMonacoEditor('tab-1');
 }
 
 function syncNums(ta) {
-    if (!ta) ta = document.getElementById('sqlInput');
+    if (!ta || ta._isMonaco) return; // Monaco handles its own line numbers
+    if (!ta.tagName) ta = document.getElementById('sqlInput');
     if (!ta) return;
     const wrap = ta.closest('.code-wrap');
     const ln = wrap ? wrap.querySelector('#lineNums, .line-nums') : document.getElementById('lineNums');
@@ -686,7 +865,8 @@ function syncNums(ta) {
 }
 
 function syncScroll(ta) {
-    if (!ta) ta = document.getElementById('sqlInput');
+    if (!ta || ta._isMonaco) return; // Monaco handles its own scroll
+    if (!ta.tagName) ta = document.getElementById('sqlInput');
     if (!ta) return;
     const wrap = ta.closest('.code-wrap');
     if (wrap) {
@@ -701,7 +881,8 @@ function syncScroll(ta) {
 }
 
 function updateCursor(ta) {
-    if (!ta) ta = document.getElementById('sqlInput');
+    if (!ta || ta._isMonaco) return; // Monaco updates cursor position via event
+    if (!ta.tagName) ta = document.getElementById('sqlInput');
     if (!ta) return;
     const before = ta.value.substring(0, ta.selectionStart);
     const lines = before.split('\n');
@@ -789,6 +970,7 @@ function getWord(ta){
 // Guards against concurrent async loadTableColumns with S._acLoading flag.
 function showAC(force=false, ta=null){
     if(!ta) ta=getActiveTA();
+    if(ta && ta._isMonaco) return; // Monaco uses its own completion provider
     const w=getWord(ta);
     if(!force&&w.length<1){hideAC();return;}
     const up=w.toUpperCase(); const items=[];
@@ -1155,12 +1337,40 @@ function renderCons(body, data) {
 
 function renderDDL(body, data) {
     const ddl = data.ddl || '-- DDL недоступен';
-    const hlHtml = (typeof highlightSQL === 'function') ? highlightSQL(ddl) : eh(ddl);
+    const containerId = 'ddl-ed-' + Date.now();
     body.innerHTML = `<div class="ddl-wrap">
-        <button class="btn btn-secondary btn-sm" style="margin-bottom:8px;" onclick="navigator.clipboard.writeText(this.closest('.ddl-wrap').querySelector('.ddl-code').textContent)">
+        <button class="btn btn-secondary btn-sm" style="margin-bottom:8px;"
+            onclick="navigator.clipboard.writeText(document.getElementById('${containerId}')?.__ddlText||'')">
             <i class="bi bi-clipboard"></i> Копировать
         </button>
-        <pre class="ddl-code ddl-hl">${hlHtml}</pre></div>`;
+        <div id="${containerId}" class="ddl-monaco-container"></div>
+    </div>`;
+    const containerEl = document.getElementById(containerId);
+    if (containerEl) {
+        containerEl.__ddlText = ddl;
+        if (_monacoApiReady) {
+            monaco.editor.create(containerEl, {
+                value: ddl,
+                language: 'sql',
+                theme: 'sql-dark',
+                readOnly: true,
+                fontSize: 13,
+                lineHeight: 20,
+                minimap: { enabled: false },
+                automaticLayout: true,
+                scrollBeyondLastLine: false,
+                renderWhitespace: 'none',
+                fontFamily: "'Geist Mono', 'Consolas', 'Courier New', monospace",
+                scrollbar: { verticalScrollbarSize: 5, horizontalScrollbarSize: 5 },
+                padding: { top: 8, bottom: 8 },
+                domReadOnly: true,
+            });
+        } else {
+            // Fallback: plain pre block until Monaco loads
+            const hlHtml = (typeof highlightSQL === 'function') ? highlightSQL(ddl) : eh(ddl);
+            containerEl.outerHTML = `<pre class="ddl-code ddl-hl" id="${containerId}">${hlHtml}</pre>`;
+        }
+    }
 }
 
 // ═══ TABS MANAGEMENT ═══
@@ -1180,13 +1390,11 @@ function addNewSQLTab() {
     document.getElementById('tabsList').appendChild(tabEl);
     const content = createSQLTabContent(tabId);
     document.getElementById('tabsContainer').appendChild(content);
-    const ta = content.querySelector('.sql-input');
-    if (ta) {
-        wireupTA(ta);
-        const saved = loadTabContent(tabId);
-        if (saved !== null) { ta.value = saved; syncNums(ta); updateHighlight(ta); }
-    }
     switchEditorTab(tabId);
+    // Initialize Monaco editor after the container is in the DOM
+    if (_monacoApiReady) {
+        requestAnimationFrame(() => initMonacoEditor(tabId));
+    }
 }
 
 // ── #7 Переименование вкладки двойным кликом ─────────────────────────
@@ -1241,18 +1449,12 @@ function createSQLTabContent(tabId) {
             <button class="btn btn-secondary btn-sm" onclick="showSnippetsModal()" title="Мои сниппеты"><i class="bi bi-collection"></i></button>
         </div>
         <div class="lint-bar" id="lintBar-${tabId}"></div>
-        <div style="flex:1;display:flex;flex-direction:column;">
-            <div style="flex:1;display:flex;flex-direction:column;">
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+            <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
                 <div class="pane-hdr"><span><i class="bi bi-code-slash"></i>SQL запрос</span></div>
-                <div class="code-wrap">
-                    <div class="line-nums">1</div>
-                    <div class="hl-wrap">
-                        <pre class="sql-hl" aria-hidden="true"></pre>
-                        <textarea class="sql-input" data-tab="${tabId}" spellcheck="false" placeholder="-- SQL запрос..."></textarea>
-                    </div>
-                </div>
+                <div class="monaco-editor-container" data-tab="${tabId}"></div>
             </div>
-            <div class="results-content" data-tab="${tabId}" style="border-top:1px solid var(--line);padding:20px;"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос</span></div></div>
+            <div class="results-content" data-tab="${tabId}" style="border-top:1px solid var(--line);padding:20px;flex:1;overflow:auto;"><div class="empty-hint"><i class="bi bi-terminal"></i><span>Выполните запрос</span></div></div>
         </div>
     `;
     return div;
@@ -1262,11 +1464,19 @@ function switchEditorTab(tabId) {
     S.currentEditorTab = tabId;
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tabId === tabId));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.dataset.tabId === tabId));
+    // Trigger Monaco layout when switching to a Monaco tab
+    const editor = monacoEditors[tabId];
+    if (editor) requestAnimationFrame(() => editor.layout());
 }
 
 function closeTab(event, tabId) {
     event.stopPropagation();
     if (tabId === 'tab-1') return;
+    // Dispose Monaco editor if it exists
+    if (monacoEditors[tabId]) {
+        monacoEditors[tabId].dispose();
+        delete monacoEditors[tabId];
+    }
     delete S.tabs[tabId];
     document.querySelector(`.tab[data-tab-id="${tabId}"]`)?.remove();
     document.querySelector(`.tab-content[data-tab-id="${tabId}"]`)?.remove();
@@ -1411,27 +1621,48 @@ async function loadDetailTabData(tabId, subtab, tableName) {
 // ═══ RUN QUERY ═══
 async function runQuery() {
     const tabId = S.currentEditorTab;
-    const ta = document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
-    if (!ta) return;
-
-    let sql = ta.value.trim();
-    const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
-    if (sel) sql = sel;
+    const editor = monacoEditors[tabId];
+    let sql;
+    if (editor) {
+        const sel = editor.getModel().getValueInRange(editor.getSelection());
+        sql = (sel && sel.trim()) ? sel.trim() : editor.getValue().trim();
+    } else {
+        const ta = document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
+        if (!ta) return;
+        const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+        sql = sel || ta.value.trim();
+    }
     if (!sql) return;
-
     await executeSQL(sql, tabId);
 }
 
 async function runStatement() {
     const tabId = S.currentEditorTab;
-    const ta = document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
-    if (!ta) return;
-
-    const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
-    const sql = sel || getStatementAtCursor(ta);
+    const editor = monacoEditors[tabId];
+    let sql;
+    if (editor) {
+        const sel = editor.getModel().getValueInRange(editor.getSelection());
+        sql = (sel && sel.trim()) ? sel.trim() : getStatementAtCursorMonaco(editor);
+    } else {
+        const ta = document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
+        if (!ta) return;
+        const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+        sql = sel || getStatementAtCursor(ta);
+    }
     if (!sql) return;
-
     await executeSQL(sql, tabId);
+}
+
+function getStatementAtCursorMonaco(editor) {
+    const model = editor.getModel();
+    const pos = editor.getPosition();
+    const offset = model.getOffsetAt(pos);
+    const sql = model.getValue();
+    const stmts = splitStatements(sql);
+    for (const s of stmts) {
+        if (offset >= s.start && offset <= s.end + 1) return s.sql;
+    }
+    return sql.trim();
 }
 
 async function executeSQL(sql, tabId) {
@@ -1776,16 +2007,26 @@ function renderHist() {
 function loadHist(i) {
     const h = S.history[i];
     if (!h) return;
-    const ta = getActiveTA();
-    if (ta) {
-        ta.value = h.sql || h.sqlPreview || '';
-        syncNums(ta);
-        updateHighlight(ta);
+    const sql = h.sql || h.sqlPreview || '';
+    const editor = monacoEditors[S.currentEditorTab];
+    if (editor) {
+        editor.setValue(sql);
+        editor.focus();
+    } else {
+        const ta = getActiveTA();
+        if (ta) { ta.value = sql; syncNums(ta); updateHighlight(ta); }
     }
     switchTab('data');
 }
 
 function insertSnippet(key, tabId) {
+    const editor = monacoEditors[tabId];
+    if (editor) {
+        const snip = SNIPS[key] || '';
+        editor.executeEdits('insertSnippet', [{ range: editor.getSelection(), text: snip, forceMoveMarkers: true }]);
+        editor.focus();
+        return;
+    }
     const ta = document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
     if (!ta) return;
     const s = ta.selectionStart;
@@ -1797,6 +2038,8 @@ function insertSnippet(key, tabId) {
 }
 
 function clearEditor(tabId) {
+    const editor = monacoEditors[tabId];
+    if (editor) { editor.setValue(''); editor.focus(); return; }
     const ta = document.querySelector(`.sql-input[data-tab="${tabId}"]`) || document.getElementById('sqlInput');
     if (!ta) return;
     ta.value = '';
@@ -1805,6 +2048,13 @@ function clearEditor(tabId) {
 }
 
 function insertText(name) {
+    const tabId = S.currentEditorTab;
+    const editor = monacoEditors[tabId];
+    if (editor) {
+        editor.executeEdits('insertText', [{ range: editor.getSelection(), text: name, forceMoveMarkers: true }]);
+        editor.focus();
+        return;
+    }
     const ta = getActiveTA();
     if (!ta) return;
     const p = ta.selectionStart;
@@ -1816,13 +2066,22 @@ function insertText(name) {
 }
 
 function formatSQL() {
+    const tabId = S.currentEditorTab;
+    const editor = monacoEditors[tabId];
+    const _fmt = sql => {
+        ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'UNION ALL', 'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'RETURNING'].forEach(kw => {
+            sql = sql.replace(new RegExp(`\\b${kw}\\b`, 'gi'), '\n' + kw.toUpperCase());
+        });
+        return sql.replace(/\n{3,}/g, '\n\n').trim();
+    };
+    if (editor) {
+        editor.setValue(_fmt(editor.getValue()));
+        editor.focus();
+        return;
+    }
     const ta = getActiveTA();
     if (!ta) return;
-    let sql = ta.value;
-    ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'UNION ALL', 'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'RETURNING'].forEach(kw => {
-        sql = sql.replace(new RegExp(`\\b${kw}\\b`, 'gi'), '\n' + kw.toUpperCase());
-    });
-    ta.value = sql.replace(/\n{3,}/g, '\n\n').trim();
+    ta.value = _fmt(ta.value);
     syncNums(ta);
     updateHighlight(ta);
 }
@@ -1882,6 +2141,9 @@ function initSplitters() {
         if (!dH) return;
         ep.style.height = Math.max(60, Math.min(sHH + e.clientY - sY, vs.offsetHeight - 80)) + 'px';
         syncScroll();
+        // Trigger Monaco layout on resize
+        const editor = monacoEditors[S.currentEditorTab];
+        if (editor) editor.layout();
     });
 
     document.addEventListener('mouseup', () => {
@@ -2013,7 +2275,7 @@ window.highlightSQL = function(text) {
 // ── #17 rAF-throttled syntax highlighting ────────────────────────────
 let _hlFrame = null;
 function updateHighlight(ta) {
-    if (!ta) return;
+    if (!ta || ta._isMonaco) return; // Monaco handles its own highlighting
     cancelAnimationFrame(_hlFrame);
     _hlFrame = requestAnimationFrame(() => {
         const hl = ta.previousElementSibling;
@@ -2230,17 +2492,22 @@ function getStatementAtCursor(ta) {
 
 // ═══ EXPLAIN / EXPLAIN ANALYZE ═══
 function explainQuery(analyze) {
-    const ta = getActiveTA();
-    if (!ta) return;
-    let sql = ta.value.trim();
-    const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
-    if (sel) sql = sel;
+    const tabId = S.currentEditorTab;
+    const editor = monacoEditors[tabId];
+    let sql;
+    if (editor) {
+        const sel = editor.getModel().getValueInRange(editor.getSelection());
+        sql = (sel && sel.trim()) ? sel.trim() : editor.getValue().trim();
+    } else {
+        const ta = getActiveTA();
+        if (!ta) return;
+        const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+        sql = sel || ta.value.trim();
+    }
     if (!sql) return;
     sql = sql.replace(/;\s*$/, '');
-    const prefix = analyze
-        ? 'EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)'
-        : 'EXPLAIN';
-    executeSQL(prefix + '\n' + sql, S.currentEditorTab);
+    const prefix = analyze ? 'EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)' : 'EXPLAIN';
+    executeSQL(prefix + '\n' + sql, tabId);
 }
 
 // ═══ QUERY LINTER ═══
@@ -2316,20 +2583,18 @@ document.addEventListener('click', function(e) {
 
 function execCtxAction(action, tableName) {
     hideContextMenu();
-    const ta = getActiveTA();
-    if (!ta) return;
+    const tabId = S.currentEditorTab;
+    const editor = monacoEditors[tabId];
     if (action === 'select100') {
-        ta.value = `SELECT *\nFROM ${tableName}\nLIMIT 100;`;
-        syncNums(ta);
-        updateHighlight(ta);
-        ta.focus();
-        executeSQL(ta.value, S.currentEditorTab);
+        const sql = `SELECT *\nFROM ${tableName}\nLIMIT 100;`;
+        if (editor) { editor.setValue(sql); editor.focus(); }
+        else { const ta = getActiveTA(); if (ta) { ta.value = sql; syncNums(ta); updateHighlight(ta); ta.focus(); } }
+        executeSQL(sql, tabId);
     } else if (action === 'count') {
-        ta.value = `SELECT COUNT(*) AS cnt\nFROM ${tableName};`;
-        syncNums(ta);
-        updateHighlight(ta);
-        ta.focus();
-        executeSQL(ta.value, S.currentEditorTab);
+        const sql = `SELECT COUNT(*) AS cnt\nFROM ${tableName};`;
+        if (editor) { editor.setValue(sql); editor.focus(); }
+        else { const ta = getActiveTA(); if (ta) { ta.value = sql; syncNums(ta); updateHighlight(ta); ta.focus(); } }
+        executeSQL(sql, tabId);
     } else if (action === 'insert_name') {
         insertText(tableName);
     }
@@ -2360,13 +2625,15 @@ function saveUserSnippetsList(snips) {
 }
 
 function saveCurrentAsSnippet() {
-    const ta = getActiveTA();
-    if (!ta || !ta.value.trim()) { showNotice('Редактор пуст', 'err'); return; }
+    const tabId = S.currentEditorTab;
+    const editor = monacoEditors[tabId];
+    const val = editor ? editor.getValue() : (getActiveTA()?.value || '');
+    if (!val.trim()) { showNotice('Редактор пуст', 'err'); return; }
     const name = prompt('Название сниппета:', '');
     if (name == null) return;
     const trimName = name.trim() || ('Сниппет ' + new Date().toLocaleTimeString('ru-RU'));
     const snips = getUserSnippets();
-    snips.unshift({ id: Date.now(), name: trimName, sql: ta.value.trim(), ts: new Date().toLocaleDateString('ru-RU') });
+    snips.unshift({ id: Date.now(), name: trimName, sql: val.trim(), ts: new Date().toLocaleDateString('ru-RU') });
     saveUserSnippetsList(snips);
     showNotice('Сниппет «' + trimName + '» сохранён');
 }
@@ -2406,12 +2673,19 @@ function loadSnippet(i) {
     const snips = getUserSnippets();
     const s = snips[i];
     if (!s) return;
-    const ta = getActiveTA();
-    if (!ta) return;
-    ta.value = s.sql;
-    syncNums(ta);
-    updateHighlight(ta);
-    ta.focus();
+    const tabId = S.currentEditorTab;
+    const editor = monacoEditors[tabId];
+    if (editor) {
+        editor.setValue(s.sql);
+        editor.focus();
+    } else {
+        const ta = getActiveTA();
+        if (!ta) return;
+        ta.value = s.sql;
+        syncNums(ta);
+        updateHighlight(ta);
+        ta.focus();
+    }
     hideSnippetsModal();
 }
 
@@ -2444,6 +2718,13 @@ const FB = {
 };
 
 function showFindBar(withReplace = false) {
+    // For Monaco editors use the built-in find widget
+    const editor = monacoEditors[S.currentEditorTab];
+    if (editor) {
+        const action = withReplace ? 'editor.action.startFindReplaceAction' : 'actions.find';
+        editor.getAction(action)?.run();
+        return;
+    }
     const bar = document.getElementById('findBar');
     bar.classList.add('show');
     // position relative to editorPane
@@ -2461,11 +2742,13 @@ function showFindBar(withReplace = false) {
 }
 
 function hideFindBar() {
+    // Monaco handles closing its own find widget
+    if (monacoEditors[S.currentEditorTab]) return;
     document.getElementById('findBar').classList.remove('show');
     FB.matches = []; FB.cur = -1;
     // re-render highlight without match marks
     const ta = getActiveTA();
-    if (ta) updateHighlight(ta);
+    if (ta && !ta._isMonaco) updateHighlight(ta);
     document.getElementById('fbCount').textContent = '';
 }
 
@@ -2483,7 +2766,7 @@ function fbToggleRegex() {
 
 function fbSearch() {
     const ta = getActiveTA();
-    if (!ta) return;
+    if (!ta || ta._isMonaco) return; // Monaco uses its own find widget
     const needle = document.getElementById('fbFindInput').value;
     FB.matches = [];
     FB.cur = -1;
@@ -2646,15 +2929,18 @@ function hideCheatsheet() {
 // Wire global hotkeys for find bar and cheatsheet
 (function() {
     document.addEventListener('keydown', e => {
+        // For Monaco editors, Ctrl+F / Ctrl+H are handled by Monaco natively
+        const isMonaco = !!monacoEditors[S.currentEditorTab];
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'f') {
-            const ta = getActiveTA();
-            if (ta === document.activeElement || document.activeElement?.closest('#sqlEditorRoot')) {
+            if (!isMonaco && (document.activeElement?.closest('#sqlEditorRoot'))) {
                 e.preventDefault(); showFindBar(false); return;
             }
         }
         if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
-            e.preventDefault(); showFindBar(true);
-            setTimeout(() => document.getElementById('fbReplaceInput')?.focus(), 50); return;
+            if (!isMonaco) {
+                e.preventDefault(); showFindBar(true);
+                setTimeout(() => document.getElementById('fbReplaceInput')?.focus(), 50); return;
+            }
         }
         if ((e.ctrlKey || e.metaKey) && e.key === '?') {
             e.preventDefault(); showCheatsheet(); return;
