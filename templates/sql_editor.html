@@ -163,7 +163,7 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 #hResizer::before{content:'⋯';font-size:9px;color:var(--text-3);letter-spacing:3px;}
 
 /* ── RESULTS ── */
-#resultsPane{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+#resultsPane{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;}
 .res-hdr{display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:var(--bg-2);border-bottom:1px solid var(--line);font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;flex-shrink:0;gap:6px;}
 .res-hdr i{color:var(--green);margin-right:4px;}
 .res-tabs{display:flex;gap:2px;}
@@ -177,7 +177,7 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 .rfbar input:focus{border-color:var(--amber);}
 .rfbar input::placeholder{color:var(--text-3);}
 
-#resultsContent, .results-content{flex:1;overflow:auto;background:var(--bg-1);min-height:0;min-width:0;max-width:100%;}
+#resultsContent, .results-content{flex:1;overflow:auto;background:var(--bg-1);min-height:0;min-width:0;max-width:100%;width:100%;}
 #resultsContent::-webkit-scrollbar, .results-content::-webkit-scrollbar{width:6px;height:6px;}
 #resultsContent::-webkit-scrollbar-track, .results-content::-webkit-scrollbar-track{background:var(--bg-2);}
 #resultsContent::-webkit-scrollbar-thumb, .results-content::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:3px;}
@@ -1725,8 +1725,8 @@ function createSQLTabContent(tabId) {
             <button class="btn btn-secondary btn-sm" onclick="showSnippetsModal()" title="Мои сниппеты"><i class="bi bi-collection"></i></button>
         </div>
         <div class="lint-bar" id="lintBar-${tabId}"></div>
-        <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
-            <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;">
+            <div style="flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;">
                 <div class="pane-hdr"><span><i class="bi bi-code-slash"></i>SQL запрос</span></div>
                 <div class="monaco-editor-container" data-tab="${tabId}"></div>
             </div>
