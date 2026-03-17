@@ -3,7 +3,6 @@ __pycache__/
 *.py[cod]
 *.pyc
 flask_session/
-*.db
 *.sqlite
 *.sqlite3
 .env
