@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}500 — Внутренняя ошибка сервера{% endblock %}
+
+{% block topbar_title %}Внутренняя ошибка сервера{% endblock %}
+
+{% block content %}
+<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;">
+    <i class="bi bi-bug" style="font-size:64px;color:var(--red);margin-bottom:24px;"></i>
+    <h2 style="font-size:24px;margin-bottom:8px;color:var(--text);">500 — Внутренняя ошибка сервера</h2>
+    <p style="color:var(--text-3);margin-bottom:24px;">Произошла ошибка на сервере. Попробуйте повторить запрос позже.</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-house"></i> На главную
+    </a>
+</div>
+{% endblock %}
