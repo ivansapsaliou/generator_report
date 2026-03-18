@@ -1666,7 +1666,6 @@ function bindTree() {
                 e.stopPropagation();
                 showContextMenu(e.clientX, e.clientY, this.dataset.table);
             });
-            if (!node.title) node.title = 'Двойной клик — открыть структуру';
         }
     });
 }
@@ -1712,7 +1711,7 @@ function _renderLazyItems(container, items, type) {
         const isRoutine = type === 'functions' || type === 'procedures';
         const routineType = type === 'functions' ? 'function' : 'procedure';
         container.innerHTML = items.map(name => `
-            <div class="tn" style="padding-left:42px" data-type="${isRoutine ? routineType : 'obj'}" ${isRoutine ? `data-routine="${eh(name)}" data-routine-type="${routineType}" title="Двойной клик — открыть DDL и параметры"` : ''}>
+            <div class="tn" style="padding-left:42px" data-type="${isRoutine ? routineType : 'obj'}" ${isRoutine ? `data-routine="${eh(name)}" data-routine-type="${routineType}"` : ''}>
                 <span class="arr" style="visibility:hidden">▶</span>
                 <span class="ico"><i class="bi ${icon}"></i></span>
                 <span class="lbl">${eh(name)}</span>

@@ -137,13 +137,12 @@ function _showTreeTooltip(tableName, schema, anchorEl) {
         }
         if (columns && columns.length) {
             html += `<div class="ttt-cols">`;
-            columns.slice(0, 15).forEach(c => {
+            columns.forEach(c => {
                 const badges = (c.is_pk ? '<span class="ttt-pk">PK</span>' : '') +
                                (c.is_fk ? '<span class="ttt-fk">FK</span>' : '') +
                                (!c.is_nullable ? '<span class="ttt-nn">NN</span>' : '');
                 html += `<div class="ttt-col">${badges}<span class="ttt-cn">${eh(c.column_name)}</span><span class="ttt-ct">${eh(c.data_type)}</span></div>`;
             });
-            if (columns.length > 15) html += `<div class="ttt-more">+${columns.length - 15} колонок</div>`;
             html += `</div>`;
         } else if (!stats) {
             html += `<div class="ttt-loading" style="font-size:10px;color:var(--text-3)">Нет данных</div>`;
@@ -309,7 +308,6 @@ function bindTree() {
             node.addEventListener('mouseleave', function(e) {
                 if (!e.relatedTarget || !e.relatedTarget.closest('#treeTooltip')) _scheduleHideTooltip();
             });
-            if (!node.title) node.title = 'Двойной клик — открыть структуру';
         }
     });
     // Delegate star button clicks (uses capture to intercept before node click)
@@ -358,7 +356,7 @@ function _renderLazyItems(container, items, type) {
         const isRoutine = type === 'functions' || type === 'procedures';
         const routineType = type === 'functions' ? 'function' : 'procedure';
         container.innerHTML = items.map(name => `
-            <div class="tn" style="padding-left:42px" data-type="${isRoutine ? routineType : 'obj'}" ${isRoutine ? `data-routine="${eh(name)}" data-routine-type="${routineType}" title="Двойной клик — открыть DDL и параметры"` : ''}>
+            <div class="tn" style="padding-left:42px" data-type="${isRoutine ? routineType : 'obj'}" ${isRoutine ? `data-routine="${eh(name)}" data-routine-type="${routineType}"` : ''}>
                 <span class="arr" style="visibility:hidden">▶</span>
                 <span class="ico"><i class="bi ${icon}"></i></span>
                 <span class="lbl">${eh(name)}</span>
