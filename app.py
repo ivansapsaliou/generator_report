@@ -3394,5 +3394,50 @@ def sql_routine_detail():
         return jsonify({'success': False, 'error': str(e)}), 200
 
 
+@app.route('/api/sql/table-stats', methods=['GET'])
+@login_required
+def sql_table_stats():
+    table_name = request.args.get('table', '').strip()
+    schema     = request.args.get('schema', 'public').strip()
+
+    if not table_name:
+        return jsonify({'success': False, 'error': 'table parameter required'}), 400
+
+    try:
+        conn = get_db_connection()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute('''
+            SELECT
+                COALESCE(s.n_live_tup, 0)                               AS row_count,
+                pg_size_pretty(pg_total_relation_size(c.oid))           AS total_size,
+                pg_size_pretty(pg_relation_size(c.oid))                 AS table_size,
+                (SELECT COUNT(*)
+                   FROM pg_index i
+                  WHERE i.indrelid = c.oid)                             AS index_count
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_stat_user_tables s
+                   ON s.relname = c.relname AND s.schemaname = n.nspname
+            WHERE c.relname = %s AND n.nspname = %s AND c.relkind = 'r'
+        ''', (table_name, schema))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return jsonify({'success': False, 'error': 'Table not found'}), 404
+        return jsonify({
+            'success': True,
+            'data': {
+                'row_count':   int(row['row_count']  or 0),
+                'total_size':  row['total_size']  or '0 bytes',
+                'table_size':  row['table_size']  or '0 bytes',
+                'index_count': int(row['index_count'] or 0),
+            }
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 200
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
