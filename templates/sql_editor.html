@@ -814,11 +814,15 @@ function _updateMonacoObjectDecorations(editor, tabId) {
         return;
     }
 
-    // Build sorted list longest-first to prevent partial matches
+    // Build sorted list longest-first to prevent partial matches.
+    // Use unqualified table names (part after the dot) so that both
+    // schema-qualified references (public.users) and unqualified (users)
+    // get decorated — Monaco's getWordAtPosition returns single word tokens.
+    const tableNames = [...new Set(tables.map(n => (n.includes('.') ? n.split('.').pop() : n)))];
     const allObjs = [
-        ...tables.map(n => ({ name: n, cls: 'monaco-obj-table' })),
-        ...fns   .map(n => ({ name: n, cls: 'monaco-obj-fn'    })),
-        ...procs .map(n => ({ name: n, cls: 'monaco-obj-proc'  })),
+        ...tableNames.map(n => ({ name: n, cls: 'monaco-obj-table' })),
+        ...fns       .map(n => ({ name: n, cls: 'monaco-obj-fn'    })),
+        ...procs     .map(n => ({ name: n, cls: 'monaco-obj-proc'  })),
     ].sort((a, b) => b.name.length - a.name.length);
 
     const text = model.getValue();
@@ -1023,7 +1027,10 @@ function initMonacoEditor(tabId, containerEl) {
         if (!wordInfo) return;
         const name    = wordInfo.word;
         const nameLc  = name.toLowerCase();
-        if ((S.tables   || []).some(t => t.toLowerCase() === nameLc)) {
+        // S.tables stores schema-qualified names (e.g. 'public.users');
+        // getWordAtPosition returns only the bare word ('users'), so also
+        // check against the unqualified part (after the dot).
+        if ((S.tables || []).some(t => { const tl = t.toLowerCase(); return tl === nameLc || tl.split('.').pop() === nameLc; })) {
             e.event.preventDefault();
             openDetail(name);
             return;
@@ -2838,9 +2845,12 @@ function _applySelWordMarks(base, text, ranges) {
 }
 
 function _applyObjectLinks(base, existingHtml, text) {
-    // Rebuild caches when underlying lists change
+    // Rebuild caches when underlying lists change.
+    // S.tables stores schema-qualified names (e.g. 'public.users'); use the
+    // unqualified part so plain references in SQL are matched and clickable.
     if (!_objLinkCache || _objLinkCache.length !== S.tables.length) {
-        _objLinkCache = [...S.tables].sort((a, b) => b.length - a.length);
+        const unqualified = [...new Set(S.tables.map(t => (t.includes('.') ? t.split('.').pop() : t)))];
+        _objLinkCache = unqualified.sort((a, b) => b.length - a.length);
     }
     const fnList   = S._fnList   || [];
     const procList = S._procList || [];
