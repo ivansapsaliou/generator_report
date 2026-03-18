@@ -141,8 +141,7 @@ function _showTreeTooltip(tableName, schema, anchorEl) {
                 const badges = (c.is_pk ? '<span class="ttt-pk">PK</span>' : '') +
                                (c.is_fk ? '<span class="ttt-fk">FK</span>' : '') +
                                (!c.is_nullable ? '<span class="ttt-nn">NN</span>' : '');
-                const comment = c.column_comment ? `<span class="ttt-cc" title="${eh(c.column_comment)}">${eh(c.column_comment)}</span>` : '';
-                html += `<div class="ttt-col">${badges}<span class="ttt-cn">${eh(c.column_name)}</span><span class="ttt-ct">${eh(c.data_type)}</span>${comment}</div>`;
+                html += `<div class="ttt-col">${badges}<span class="ttt-cn">${eh(c.column_name)}</span><span class="ttt-ct">${eh(c.data_type)}</span></div>`;
             });
             html += `</div>`;
         } else if (!stats) {

@@ -283,7 +283,7 @@ function loadHist(i) {
 // ═══ RENDER DETAIL VIEWS ═══
 function renderCols(body, data) {
     if (!data.length) { body.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--text-3);">Нет колонок</div>'; return; }
-    body.innerHTML = `<table class="dt"><thead><tr><th>#</th><th>Имя колонки</th><th>Тип данных</th><th>Nullable</th><th>По умолчанию</th><th>Ключи</th></tr></thead><tbody>` +
+    body.innerHTML = `<table class="dt"><thead><tr><th>#</th><th>Имя колонки</th><th>Тип данных</th><th>Nullable</th><th>По умолчанию</th><th>Ключи</th><th>Описание</th></tr></thead><tbody>` +
     data.map((c, i) => {
         const keys = [];
         if (c.is_pk) keys.push('<span class="tag tpk">PK</span>');
@@ -295,7 +295,8 @@ function renderCols(body, data) {
             <td style="color:var(--amber);font-size:11px;">${eh(c.data_type)}</td>
             <td>${c.is_nullable ? '<span class="tag tnull">NULL</span>' : '<span class="tag tnn">NOT NULL</span>'}</td>
             <td style="color:var(--text-3);font-size:11px;">${eh(c.column_default || '—')}</td>
-            <td>${keys.join(' ')}</td></tr>`;
+            <td>${keys.join(' ')}</td>
+            <td style="color:var(--text-2);font-size:11px;">${eh(c.column_comment || '—')}</td></tr>`;
     }).join('') + `</tbody></table>`;
 }
 
