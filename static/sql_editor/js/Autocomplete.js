@@ -548,6 +548,14 @@ function hideCheatsheet() {
 (function() {
     document.addEventListener('keydown', e => {
         const isMonaco = !!monacoEditors[S.currentEditorTab];
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 's') {
+            if (!isMonaco) {
+                e.preventDefault();
+                if (typeof formatSQL === 'function') formatSQL();
+                if (typeof showNotice === 'function') showNotice('✓ Отформатировано и сохранено', 'ok');
+            }
+            return;
+        }
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'f') {
             if (!isMonaco && (document.activeElement?.closest('#sqlEditorRoot'))) {
                 e.preventDefault(); showFindBar(false); return;

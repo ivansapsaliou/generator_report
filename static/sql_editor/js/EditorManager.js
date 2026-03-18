@@ -445,10 +445,15 @@ function initMonacoEditor(tabId, containerEl) {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runQuery());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => runStatement());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => formatSQL());
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        formatSQL();
+        showNotice('✓ Отформатировано и сохранено', 'ok');
+    });
 
     editor.onDidChangeModelContent(() => {
         saveTabContent(tabId, editor.getValue());
         _scheduleMonacoDecorationUpdate();
+        _scheduleLintMarkersUpdate(editor, tabId);
     });
 
     editor.onDidChangeCursorPosition(e => {
@@ -489,7 +494,59 @@ function initMonacoEditor(tabId, containerEl) {
     return editor;
 }
 
-// Monaco adapter: gives Monaco editors a textarea-like interface
+// ═══ MONACO LINT MARKERS ═══
+let _lintMarkersTimer = null;
+function _scheduleLintMarkersUpdate(editor, tabId) {
+    clearTimeout(_lintMarkersTimer);
+    _lintMarkersTimer = setTimeout(() => _updateMonacoLintMarkers(editor, tabId), 600);
+}
+
+function _updateMonacoLintMarkers(editor, tabId) {
+    if (!editor || typeof monaco === 'undefined') return;
+    const model = editor.getModel();
+    if (!model) return;
+    const sql = model.getValue();
+    const warnings = (typeof lintQuery === 'function') ? lintQuery(sql) : [];
+    const markers = [];
+
+    if (warnings.length > 0) {
+        const lines = sql.split('\n');
+        const kwPatterns = {
+            'UPDATE':   /\bUPDATE\b/i,
+            'DELETE':   /\bDELETE\b/i,
+            'TRUNCATE': /\bTRUNCATE\b/i,
+            'DROP':     /\bDROP\b/i,
+        };
+        warnings.forEach(w => {
+            let lineNum = 1;
+            for (const [kw, re] of Object.entries(kwPatterns)) {
+                if (w.msg.toUpperCase().includes(kw)) {
+                    for (let i = 0; i < lines.length; i++) {
+                        const stripped = lines[i].replace(/--[^\n]*/g, '');
+                        if (re.test(stripped)) { lineNum = i + 1; break; }
+                    }
+                    break;
+                }
+            }
+            const lineText = lines[lineNum - 1] || '';
+            markers.push({
+                severity: monaco.MarkerSeverity.Warning,
+                message:  w.msg,
+                startLineNumber: lineNum,
+                startColumn: 1,
+                endLineNumber: lineNum,
+                endColumn: lineText.length + 1,
+            });
+        });
+    }
+
+    monaco.editor.setModelMarkers(model, 'sql-linter', markers);
+    if (typeof showLintBar === 'function') {
+        showLintBar(warnings, tabId);
+    }
+}
+
+
 function _monacoAdapter(editor, tabId) {
     const adapter = {
         _isMonaco: true,
