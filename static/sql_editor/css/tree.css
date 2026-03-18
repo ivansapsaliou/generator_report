@@ -67,6 +67,7 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 .ttt-col:last-child{border-bottom:none;}.ttt-col:hover{background:var(--bg-3);}
 .ttt-cn{flex:1;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ttt-ct{font-size:9px;color:var(--text-3);white-space:nowrap;margin-left:4px;}
+.ttt-cc{font-size:9px;color:var(--text-3);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;margin-left:4px;}
 .ttt-pk{background:rgba(240,168,67,.15);color:var(--amber);border:1px solid rgba(240,168,67,.3);padding:0 3px;border-radius:2px;font-size:8px;font-weight:700;flex-shrink:0;}
 .ttt-fk{background:rgba(224,82,82,.12);color:var(--red);border:1px solid rgba(224,82,82,.25);padding:0 3px;border-radius:2px;font-size:8px;font-weight:700;flex-shrink:0;}
 .ttt-nn{background:rgba(82,183,136,.1);color:var(--green);border:1px solid rgba(82,183,136,.2);padding:0 3px;border-radius:2px;font-size:8px;font-weight:700;flex-shrink:0;}

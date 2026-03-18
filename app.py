@@ -3198,32 +3198,39 @@ def sql_table_detail():
                     c.is_nullable = 'YES'                   AS is_nullable,
                     c.column_default,
                     EXISTS (
-                        SELECT 1 FROM information_schema.table_constraints tc
-                        JOIN information_schema.key_column_usage kcu
-                            ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-                        WHERE tc.table_schema = 'public'
-                          AND tc.table_name   = c.table_name
-                          AND tc.constraint_type = 'PRIMARY KEY'
-                          AND kcu.column_name = c.column_name
+                        SELECT 1 FROM pg_constraint pc
+                        JOIN pg_class t  ON t.oid = pc.conrelid
+                        JOIN pg_namespace n ON n.oid = t.relnamespace
+                        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(pc.conkey)
+                        WHERE n.nspname = 'public'
+                          AND t.relname = c.table_name
+                          AND pc.contype = 'p'
+                          AND a.attname = c.column_name
                     )                                       AS is_pk,
                     EXISTS (
-                        SELECT 1 FROM information_schema.table_constraints tc
-                        JOIN information_schema.key_column_usage kcu
-                            ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-                        WHERE tc.table_schema = 'public'
-                          AND tc.table_name   = c.table_name
-                          AND tc.constraint_type = 'FOREIGN KEY'
-                          AND kcu.column_name = c.column_name
+                        SELECT 1 FROM pg_constraint pc
+                        JOIN pg_class t  ON t.oid = pc.conrelid
+                        JOIN pg_namespace n ON n.oid = t.relnamespace
+                        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(pc.conkey)
+                        WHERE n.nspname = 'public'
+                          AND t.relname = c.table_name
+                          AND pc.contype = 'f'
+                          AND a.attname = c.column_name
                     )                                       AS is_fk,
                     EXISTS (
-                        SELECT 1 FROM information_schema.table_constraints tc
-                        JOIN information_schema.key_column_usage kcu
-                            ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-                        WHERE tc.table_schema = 'public'
-                          AND tc.table_name   = c.table_name
-                          AND tc.constraint_type = 'UNIQUE'
-                          AND kcu.column_name = c.column_name
-                    )                                       AS is_unique
+                        SELECT 1 FROM pg_constraint pc
+                        JOIN pg_class t  ON t.oid = pc.conrelid
+                        JOIN pg_namespace n ON n.oid = t.relnamespace
+                        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(pc.conkey)
+                        WHERE n.nspname = 'public'
+                          AND t.relname = c.table_name
+                          AND pc.contype = 'u'
+                          AND a.attname = c.column_name
+                    )                                       AS is_unique,
+                    col_description(
+                        format('%I.%I', 'public', c.table_name)::regclass::oid,
+                        c.ordinal_position
+                    )                                       AS column_comment
                 FROM information_schema.columns c
                 WHERE c.table_schema = 'public'
                   AND c.table_name   = %s
@@ -3289,28 +3296,38 @@ def sql_table_detail():
                     c.numeric_scale,
                     c.is_nullable,
                     c.column_default,
-                    c.ordinal_position
+                    c.ordinal_position,
+                    col_description(
+                        format('%I.%I', 'public', c.table_name)::regclass::oid,
+                        c.ordinal_position
+                    ) AS column_comment
                 FROM information_schema.columns c
                 WHERE c.table_schema = 'public' AND c.table_name = %s
                 ORDER BY c.ordinal_position
             ''', (table_name,))
             cols = cur.fetchall()
- 
-            # Get constraints
+
+            # Get constraints using pg_constraint for correctness (handles multi-column keys)
             cur.execute('''
-                SELECT tc.constraint_type, tc.constraint_name, kcu.column_name,
-                       ccu.table_name AS f_table, ccu.column_name AS f_col
-                FROM information_schema.table_constraints tc
-                LEFT JOIN information_schema.key_column_usage kcu
-                    ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema
-                LEFT JOIN information_schema.constraint_column_usage ccu
-                    ON ccu.constraint_name=tc.constraint_name AND ccu.table_schema=tc.table_schema
-                WHERE tc.table_schema='public' AND tc.table_name=%s
-                ORDER BY tc.constraint_type
+                SELECT
+                    pc.conname AS constraint_name,
+                    CASE pc.contype
+                        WHEN 'p' THEN 'PRIMARY KEY'
+                        WHEN 'f' THEN 'FOREIGN KEY'
+                        WHEN 'u' THEN 'UNIQUE'
+                        WHEN 'c' THEN 'CHECK'
+                    END AS constraint_type,
+                    pg_get_constraintdef(pc.oid) AS constraint_def
+                FROM pg_constraint pc
+                JOIN pg_class t ON t.oid = pc.conrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                WHERE n.nspname = 'public' AND t.relname = %s
+                  AND pc.contype IN ('p', 'f', 'u', 'c')
+                ORDER BY pc.contype, pc.conname
             ''', (table_name,))
             constraints = cur.fetchall()
             cur.close(); conn.close()
- 
+
             # Build DDL string
             lines = []
             for col in cols:
@@ -3322,16 +3339,25 @@ def sql_table_detail():
                 nn = ' NOT NULL' if col['is_nullable'] == 'NO' else ''
                 df = f" DEFAULT {col['column_default']}" if col['column_default'] else ''
                 lines.append(f"    {col['column_name']} {dt}{nn}{df}")
- 
+
             for c in constraints:
-                if c['constraint_type'] == 'PRIMARY KEY':
-                    lines.append(f"    CONSTRAINT {c['constraint_name']} PRIMARY KEY ({c['column_name']})")
-                elif c['constraint_type'] == 'FOREIGN KEY':
-                    lines.append(f"    CONSTRAINT {c['constraint_name']} FOREIGN KEY ({c['column_name']}) REFERENCES {c['f_table']}({c['f_col']})")
-                elif c['constraint_type'] == 'UNIQUE':
-                    lines.append(f"    CONSTRAINT {c['constraint_name']} UNIQUE ({c['column_name']})")
- 
+                lines.append(f"    CONSTRAINT {c['constraint_name']} {c['constraint_def']}")
+
             ddl = f"CREATE TABLE public.{table_name} (\n" + ',\n'.join(lines) + "\n);"
+
+            # Append COMMENT ON COLUMN statements for columns that have comments
+            comment_lines = []
+            for col in cols:
+                if col['column_comment']:
+                    safe_comment = col['column_comment'].replace("'", "''")
+                    tbl_ident = '"' + table_name.replace('"', '""') + '"'
+                    col_ident = '"' + col['column_name'].replace('"', '""') + '"'
+                    comment_lines.append(
+                        f"COMMENT ON COLUMN public.{tbl_ident}.{col_ident} IS '{safe_comment}';"
+                    )
+            if comment_lines:
+                ddl += '\n\n' + '\n'.join(comment_lines)
+
             return jsonify({'success': True, 'data': {'ddl': ddl}})
  
         return jsonify({'success': False, 'error': 'Unknown tab'}), 400

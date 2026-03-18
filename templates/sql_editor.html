@@ -1811,7 +1811,7 @@ function onResultCtxMenu(e) {
 // ═══ RENDER FUNCTIONS ═══
 function renderCols(body, data) {
     if (!data.length) { body.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--text-3);">Нет колонок</div>'; return; }
-    body.innerHTML = `<table class="dt"><thead><tr><th>#</th><th>Имя колонки</th><th>Тип данных</th><th>Nullable</th><th>По умолчанию</th><th>Ключи</th></tr></thead><tbody>` +
+    body.innerHTML = `<table class="dt"><thead><tr><th>#</th><th>Имя колонки</th><th>Тип данных</th><th>Nullable</th><th>По умолчанию</th><th>Ключи</th><th>Комментарий</th></tr></thead><tbody>` +
     data.map((c, i) => {
         const keys = [];
         if (c.is_pk) keys.push('<span class="tag tpk">PK</span>');
@@ -1823,7 +1823,8 @@ function renderCols(body, data) {
             <td style="color:var(--amber);font-size:11px;">${eh(c.data_type)}</td>
             <td>${c.is_nullable ? '<span class="tag tnull">NULL</span>' : '<span class="tag tnn">NOT NULL</span>'}</td>
             <td style="color:var(--text-3);font-size:11px;">${eh(c.column_default || '—')}</td>
-            <td>${keys.join(' ')}</td></tr>`;
+            <td>${keys.join(' ')}</td>
+            <td style="color:var(--text-3);font-size:11px;">${eh(c.column_comment || '')}</td></tr>`;
     }).join('') + `</tbody></table>`;
 }
 
@@ -1839,7 +1840,7 @@ function renderIdxs(body, data) {
 
 function renderCons(body, data) {
     if (!data.length) { body.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--text-3);">Нет ограничений</div>'; return; }
-    const tm = { p: 'PK', f: 'FK', u: 'UNIQUE', c: 'CHECK', x: 'EXCLUDE' };
+    const tm = { 'PRIMARY KEY': 'PK', 'FOREIGN KEY': 'FK', 'UNIQUE': 'UNIQUE', 'CHECK': 'CHECK', 'EXCLUDE': 'EXCLUDE' };
     const tg = { 'PK': 'tpk', 'FK': 'tfk', 'UNIQUE': 'tuq', 'CHECK': 'tnn' };
     body.innerHTML = `<table class="dt"><thead><tr><th>Имя</th><th>Тип</th><th>Колонки</th><th>Ссылается на</th></tr></thead><tbody>` +
     data.map(c => { const tp = tm[c.constraint_type] || c.constraint_type || '?'; const g = tg[tp] || 'tnull'; return `<tr>
