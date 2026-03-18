@@ -1,0 +1,11 @@
+{# Left tree panel — object browser #}
+<div id="objectTree">
+    <div class="tree-header">
+        <span><i class="bi bi-diagram-2"></i>Объекты</span>
+        <button class="btn btn-secondary btn-sm" style="padding:1px 5px;" onclick="buildTree()" title="Обновить"><i class="bi bi-arrow-clockwise" style="font-size:11px;"></i></button>
+    </div>
+    <div class="tree-search"><input id="treeSearch" type="text" placeholder="Поиск..." oninput="filterTree(this.value)"></div>
+    <div class="tree-body" id="treeBody"><div class="tree-loading"><span class="loading"></span> Загрузка...</div></div>
+</div>
+
+<div id="treeSplitter"></div>

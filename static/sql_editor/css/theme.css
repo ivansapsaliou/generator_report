@@ -1,0 +1,48 @@
+/* ── SYNTAX HIGHLIGHT COLORS ── */
+.hl-kw{color:#cf9fff;font-weight:600;}
+.hl-fn{color:#79c0ff;}
+.hl-str{color:#a8d9a4;}
+.hl-num{color:var(--amber);}
+.hl-cmt{color:var(--text-3);font-style:italic;}
+.hl-op{color:#f39c12;}
+
+/* Light theme syntax overrides */
+body.light-theme .hl-kw{color:#7c3aed;}
+body.light-theme .hl-fn{color:#1d4ed8;}
+body.light-theme .hl-str{color:#16a34a;}
+body.light-theme .hl-num{color:var(--amber);}
+body.light-theme .hl-cmt{color:var(--text-3);}
+body.light-theme .hl-op{color:#b8680a;}
+
+/* ── #6 WORD MATCH HIGHLIGHT in overlay ── */
+.hl-match { background:rgba(240,168,67,.22); border-radius:2px; outline:1px solid rgba(240,168,67,.4); }
+.hl-match-cur { background:rgba(240,168,67,.55); border-radius:2px; outline:1px solid var(--amber); }
+
+/* ── CTRL+CLICK object links in editor overlay ── */
+/* Tables – solid green underline */
+.hl-obj-link{color:#3d8f65;border-bottom:1px solid rgba(82,183,136,.6);cursor:pointer;transition:border-color .15s,color .15s;}
+body.ctrl-held .hl-obj-link{border-bottom-color:#52b788;color:#52b788;}
+/* Functions – solid blue underline */
+.hl-fn-link{color:#4a7fa8;border-bottom:1px solid rgba(121,192,255,.55);cursor:pointer;transition:border-color .15s,color .15s;}
+body.ctrl-held .hl-fn-link{border-bottom-color:#79c0ff;color:#79c0ff;}
+/* Procedures – solid orange underline */
+.hl-proc-link{color:#9b6b20;border-bottom:1px solid rgba(243,156,18,.55);cursor:pointer;transition:border-color .15s,color .15s;}
+body.ctrl-held .hl-proc-link{border-bottom-color:#f39c12;color:#f39c12;}
+/* ── selection word highlight ── */
+.hl-sel-word{background:rgba(91,141,238,.18);border-radius:2px;outline:1px solid rgba(91,141,238,.3);}
+/* ── Syntax-highlighted DDL block ── */
+.ddl-hl{line-height:1.7;}
+
+/* ── MONACO object decorations (table / function / procedure links) ── */
+.monaco-obj-table{color:#3d8f65;border-bottom:1px solid rgba(82,183,136,.5);transition:color .15s,border-color .15s;}
+.monaco-obj-fn   {color:#4a7fa8;border-bottom:1px solid rgba(121,192,255,.5);transition:color .15s,border-color .15s;}
+.monaco-obj-proc {color:#9b6b20;border-bottom:1px solid rgba(243,156,18,.5);transition:color .15s,border-color .15s;}
+body.ctrl-held .monaco-obj-table{color:#52b788 !important;border-bottom-color:#52b788;cursor:pointer !important;}
+body.ctrl-held .monaco-obj-fn   {color:#79c0ff !important;border-bottom-color:#79c0ff;cursor:pointer !important;}
+body.ctrl-held .monaco-obj-proc {color:#f39c12 !important;border-bottom-color:#f39c12;cursor:pointer !important;}
+body.light-theme .monaco-obj-table{color:#166534;border-bottom-color:rgba(22,101,52,.5);}
+body.light-theme .monaco-obj-fn   {color:#1e40af;border-bottom-color:rgba(30,64,175,.5);}
+body.light-theme .monaco-obj-proc {color:#92400e;border-bottom-color:rgba(146,64,14,.5);}
+body.light-theme.ctrl-held .monaco-obj-table{color:#166534 !important;border-bottom-color:#166534;cursor:pointer !important;}
+body.light-theme.ctrl-held .monaco-obj-fn   {color:#1e40af !important;border-bottom-color:#1e40af;cursor:pointer !important;}
+body.light-theme.ctrl-held .monaco-obj-proc {color:#92400e !important;border-bottom-color:#92400e;cursor:pointer !important;}
