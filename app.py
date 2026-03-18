@@ -698,16 +698,68 @@ def select_db_profile():
 @app.route('/api/tables')
 def get_tables():
     try:
+        schema = request.args.get('schema')
+        all_schemas = request.args.get('all') in ('1', 'true', 'yes')
+
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT * FROM report_get_tables('public') ORDER BY table_name")
+
+        # Не завязываемся на кастомную функцию report_get_tables(),
+        # чтобы дерево объектов работало и на новых БД/через SSH-профили.
+        base_sql = """
+            SELECT
+                n.nspname AS table_schema,
+                c.relname AS table_name,
+                COALESCE(obj_description(c.oid, 'pg_class'), '') AS table_comment
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind IN ('r','p')  -- table, partitioned table
+              AND n.nspname NOT IN ('pg_catalog','information_schema')
+              AND n.nspname NOT LIKE 'pg_toast%%'
+              AND n.nspname NOT LIKE 'pg_temp%%'
+        """
+        params = []
+        if not all_schemas:
+            schema = schema or 'public'
+            base_sql += " AND n.nspname = %s"
+            params.append(schema)
+        base_sql += " ORDER BY n.nspname, c.relname"
+
+        cur.execute(base_sql, params)
         tables = cur.fetchall()
-        result = [{'table_name': row['table_name'], 'table_comment': row['table_comment']} for row in tables]
+        result = [{
+            'schema': row['table_schema'],
+            'table_name': row['table_name'],
+            'table_comment': row['table_comment']
+        } for row in tables]
+
         cur.close()
         conn.close()
         return jsonify({'success': True, 'data': result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/sql/schemas', methods=['GET'])
+@login_required
+def sql_schemas():
+    """Список пользовательских схем для дерева объектов."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT nspname
+            FROM pg_namespace
+            WHERE nspname NOT IN ('pg_catalog','information_schema')
+              AND nspname NOT LIKE 'pg_toast%%'
+              AND nspname NOT LIKE 'pg_temp%%'
+            ORDER BY nspname
+        """)
+        items = [r[0] for r in cur.fetchall()]
+        cur.close(); conn.close()
+        return jsonify({'success': True, 'data': items})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 200
 
 
 @app.route('/api/table/<table_name>/columns')
@@ -3089,25 +3141,29 @@ def sql_execute():
 @login_required
 def sql_schema_objects():
     obj_type = request.args.get('type', 'views')
+    schema = request.args.get('schema', 'public')
     try:
         conn = get_db_connection()
         cur  = conn.cursor()
  
         queries = {
-            'views':      "SELECT table_name FROM information_schema.views WHERE table_schema='public' ORDER BY table_name",
-            'matviews':   "SELECT matviewname AS table_name FROM pg_matviews WHERE schemaname='public' ORDER BY matviewname",
-            'functions':  "SELECT routine_name AS table_name FROM information_schema.routines WHERE routine_schema='public' AND routine_type='FUNCTION' ORDER BY routine_name",
-            'procedures': "SELECT routine_name AS table_name FROM information_schema.routines WHERE routine_schema='public' AND routine_type='PROCEDURE' ORDER BY routine_name",
-            'sequences':  "SELECT sequence_name AS table_name FROM information_schema.sequences WHERE sequence_schema='public' ORDER BY sequence_name",
-            'triggers':   "SELECT trigger_name AS table_name FROM information_schema.triggers WHERE trigger_schema='public' ORDER BY trigger_name",
-            'types':      "SELECT typname AS table_name FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname='public' AND t.typtype='c' ORDER BY typname",
+            'views':      "SELECT table_name FROM information_schema.views WHERE table_schema=%s ORDER BY table_name",
+            'matviews':   "SELECT matviewname AS table_name FROM pg_matviews WHERE schemaname=%s ORDER BY matviewname",
+            'functions':  "SELECT routine_name AS table_name FROM information_schema.routines WHERE routine_schema=%s AND routine_type='FUNCTION' ORDER BY routine_name",
+            'procedures': "SELECT routine_name AS table_name FROM information_schema.routines WHERE routine_schema=%s AND routine_type='PROCEDURE' ORDER BY routine_name",
+            'sequences':  "SELECT sequence_name AS table_name FROM information_schema.sequences WHERE sequence_schema=%s ORDER BY sequence_name",
+            'triggers':   "SELECT trigger_name AS table_name FROM information_schema.triggers WHERE trigger_schema=%s ORDER BY trigger_name",
+            'types':      "SELECT typname AS table_name FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname=%s AND t.typtype='c' ORDER BY typname",
             'extensions': "SELECT extname AS table_name FROM pg_extension ORDER BY extname",
         }
         q = queries.get(obj_type)
         if not q:
             return jsonify({'success': False, 'error': 'Unknown type'}), 400
  
-        cur.execute(q)
+        if obj_type == 'extensions':
+            cur.execute(q)
+        else:
+            cur.execute(q, (schema,))
         items = [row[0] for row in cur.fetchall()]
         cur.close(); conn.close()
         return jsonify({'success': True, 'data': items})

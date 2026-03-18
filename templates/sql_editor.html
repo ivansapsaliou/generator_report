@@ -149,10 +149,10 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 .tb-lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;}
 .lim-sel{appearance:none;background:var(--bg-3);border:1px solid var(--line);border-radius:3px;color:var(--text-2);font-family:var(--font-mono);font-size:11px;padding:2px 6px;cursor:pointer;}
 
-#vSplit{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;max-width:100%;overflow:hidden;}
+#vSplit, .vSplit{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;max-width:100%;overflow:hidden;}
 
 /* ── CODE EDITOR ── */
-#editorPane{display:flex;flex-direction:column;height:40%;min-height:80px;flex-shrink:0;border-bottom:1px solid var(--line);}
+#editorPane, .editorPane{display:flex;flex-direction:column;height:40%;min-height:80px;flex-shrink:0;border-bottom:1px solid var(--line);}
 .pane-hdr{display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:var(--bg-2);border-bottom:1px solid var(--line);font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;flex-shrink:0;}
 .pane-hdr i{color:var(--amber);margin-right:4px;}
 
@@ -184,12 +184,12 @@ body.ctrl-held .tn[data-type="table"]:hover .lbl::after { content: ' ↗'; font-
 #sqlInput::-webkit-scrollbar-track, .sql-input::-webkit-scrollbar-track{background:var(--bg);}
 #sqlInput::-webkit-scrollbar-thumb, .sql-input::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:3px;}
 
-#hResizer{height:5px;background:var(--bg-3);cursor:ns-resize;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .15s;}
-#hResizer:hover{background:var(--amber-dim);}
-#hResizer::before{content:'⋯';font-size:9px;color:var(--text-3);letter-spacing:3px;}
+#hResizer, .hResizer{height:5px;background:var(--bg-3);cursor:ns-resize;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .15s;}
+#hResizer:hover, .hResizer:hover{background:var(--amber-dim);}
+#hResizer::before, .hResizer::before{content:'⋯';font-size:9px;color:var(--text-3);letter-spacing:3px;}
 
 /* ── RESULTS ── */
-#resultsPane{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;max-width:100%;overflow:hidden;}
+#resultsPane, .resultsPane{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;max-width:100%;overflow:hidden;}
 .res-hdr{display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:var(--bg-2);border-bottom:1px solid var(--line);font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;flex-shrink:0;gap:6px;}
 .res-hdr i{color:var(--green);margin-right:4px;}
 .res-tabs{display:flex;gap:2px;}
@@ -503,28 +503,7 @@ body.light-theme.ctrl-held .monaco-obj-proc {color:#92400e !important;border-bot
 
         <div id="tabsContainer">
             <div class="tab-content active" data-tab-id="tab-1">
-                <div class="editor-toolbar">
-                    <button class="btn btn-primary btn-sm run-tab-btn" data-tab="tab-1" onclick="runQuery()" title="Выполнить выделенное или всё (F9)" aria-label="Выполнить выделенное или всё (F9)"><i class="bi bi-play-fill"></i></button>
-                    <button class="btn btn-secondary btn-sm" onclick="runStatement()" title="Выполнить statement под курсором (Ctrl+Shift+Enter)"><i class="bi bi-play"></i> Statement</button>
-                    <div class="tb-div"></div>
-                    <button class="btn btn-secondary btn-sm" onclick="explainQuery(false)" title="EXPLAIN текущего запроса"><i class="bi bi-search"></i> Explain</button>
-                    <button class="btn btn-secondary btn-sm" onclick="explainQuery(true)" title="EXPLAIN ANALYZE текущего запроса"><i class="bi bi-search-heart"></i> Analyze</button>
-                    <div class="tb-div"></div>
-                    <span class="tb-lbl">Лимит:</span>
-                    <select class="lim-sel" id="rowLimit" data-tab="tab-1">
-                        <option value="50">50</option><option value="100" selected>100</option>
-                        <option value="500">500</option><option value="1000">1 000</option>
-                        <option value="5000">5 000</option><option value="0">Всё</option>
-                    </select>
-                    <div class="tb-div"></div>
-                    <button class="btn btn-secondary btn-sm" onclick="clearEditor('tab-1')"><i class="bi bi-trash"></i></button>
-                    <button class="btn btn-secondary btn-sm" onclick="saveCurrentAsSnippet()" title="Сохранить как сниппет"><i class="bi bi-bookmark-plus"></i></button>
-                    <button class="btn btn-secondary btn-sm" onclick="showSnippetsModal()" title="Мои сниппеты"><i class="bi bi-collection"></i></button>
-                    <button class="btn btn-secondary btn-sm" onclick="openHistoryTab()" title="История"><i class="bi bi-clock-history"></i></button>
-                    <div class="tb-div"></div>
-                    <button class="btn btn-secondary btn-sm" onclick="showFindBar(false)" title="Найти (Ctrl+F)"><i class="bi bi-search"></i></button>
-                    <button class="btn btn-secondary btn-sm" onclick="showCheatsheet()" title="Горячие клавиши (Ctrl+?)"><i class="bi bi-keyboard"></i></button>
-                </div>
+                <div class="editor-toolbar" style="display:none;"></div>
                 <div class="lint-bar" id="lintBar"></div>
 
                 <div id="vSplit">
@@ -556,7 +535,22 @@ body.light-theme.ctrl-held .monaco-obj-proc {color:#92400e !important;border-bot
                     <div id="hResizer"></div>
                     <div id="resultsPane">
                         <div class="res-hdr">
-                            <div><i class="bi bi-table"></i>Результаты</div>
+                            <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+                                <button class="btn btn-primary btn-sm run-tab-btn" data-tab="tab-1" onclick="runQuery()" title="Выполнить выделенное или всё (F9)" aria-label="Выполнить выделенное или всё (F9)"><i class="bi bi-play-fill"></i></button>
+                                <div class="tb-div"></div>
+                                <button class="btn btn-secondary btn-sm" onclick="showFindBar(false)" title="Найти (Ctrl+F)"><i class="bi bi-search"></i></button>
+                                <button class="btn btn-secondary btn-sm" onclick="showCheatsheet()" title="Горячие клавиши (Ctrl+?)"><i class="bi bi-keyboard"></i></button>
+                                <div class="tb-div"></div>
+                                <button class="btn btn-secondary btn-sm" onclick="explainQuery(false)" title="EXPLAIN текущего запроса" aria-label="EXPLAIN текущего запроса"><i class="bi bi-search"></i></button>
+                                <button class="btn btn-secondary btn-sm" onclick="explainQuery(true)" title="EXPLAIN ANALYZE текущего запроса" aria-label="EXPLAIN ANALYZE текущего запроса"><i class="bi bi-search-heart"></i></button>
+                                <div class="tb-div"></div>
+                                <span class="tb-lbl">Лимит:</span>
+                                <select class="lim-sel" data-tab="tab-1">
+                                    <option value="50">50</option><option value="100" selected>100</option>
+                                    <option value="500">500</option><option value="1000">1 000</option>
+                                    <option value="5000">5 000</option><option value="0">Всё</option>
+                                </select>
+                            </div>
                             <div style="display:flex;align-items:center;gap:8px;">
                                 <div class="res-tabs">
                                     <button class="rtab active" id="tab-data" onclick="switchTab('data')">Данные</button>
@@ -1399,38 +1393,49 @@ async function buildTree() {
     const body=document.getElementById('treeBody');
     body.innerHTML='<div class="tree-loading"><span class="loading"></span> Загрузка...</div>';
     try {
-        const [tablesRes, fnRes, procRes] = await Promise.all([
-            fetchWithRetry('/api/get-tables'),
-            fetch('/api/sql/schema-objects?type=functions').catch(()=>null),
-            fetch('/api/sql/schema-objects?type=procedures').catch(()=>null),
+        const [schemasRes, tablesRes] = await Promise.all([
+            fetchWithRetry('/api/sql/schemas'),
+            fetchWithRetry('/api/get-tables?all=1'),
         ]);
-        const d=await tablesRes.json();
-        if(!d.success){body.innerHTML='<div class="tree-loading">Ошибка</div>';return;}
-        S.tables=d.data.map(t=>t.table_name);
+        const sd = await schemasRes.json();
+        const td = await tablesRes.json();
+        if (!sd.success || !td.success) {
+            body.innerHTML = `<div class="tree-loading">Ошибка</div>`;
+            return;
+        }
+        const schemas = sd.data || ['public'];
+        const tablesAll = td.data || [];
+        // for autocomplete: keep both plain and schema-qualified names
+        S.tables = tablesAll.map(t => `${t.schema}.${t.table_name}`);
         _objLinkCache = null; // invalidate cache when tables reload
         _fnLinkCache  = null;
         _procLinkCache= null;
 
-        let fnCount = null, procCount = null;
-        try { const fd = await fnRes?.json(); if (fd?.success) { fnCount = fd.data.length; S._fnList = fd.data; } } catch(e){ console.warn('[buildTree] functions fetch failed', e); }
-        try { const pd = await procRes?.json(); if (pd?.success) { procCount = pd.data.length; S._procList = pd.data; } } catch(e){ console.warn('[buildTree] procedures fetch failed', e); }
-
         // Refresh Monaco decorations now that DB object lists are known
         _scheduleMonacoDecorationUpdate();
 
-        body.innerHTML = renderGroup('public', 'bi-layers ico-schema', [
-            { label:'Tables', icon:'bi-table ico-group', badge:d.data.length,
-              kids: d.data.map(t=>({ label:t.table_name, icon:'bi-table ico-table', type:'table', tableName:t.table_name, comment:t.table_comment }))
-            },
-            { label:'Views',               icon:'bi-eye ico-group',          lazy:'views'      },
-            { label:'Materialized Views',  icon:'bi-layers ico-group',        lazy:'matviews'   },
-            { label:'Functions',           icon:'bi-lightning ico-fn',        lazy:'functions',  badge: fnCount   },
-            { label:'Procedures',          icon:'bi-gear ico-proc',           lazy:'procedures', badge: procCount },
-            { label:'Sequences',           icon:'bi-123 ico-seq',             lazy:'sequences'  },
-            { label:'Triggers',            icon:'bi-lightning-charge ico-trig',lazy:'triggers'  },
-            { label:'Types',               icon:'bi-tag ico-type',            lazy:'types'      },
-            { label:'Extensions',          icon:'bi-plug ico-ext',            lazy:'extensions' },
-        ], 0);
+        const bySchema = new Map();
+        for (const s of schemas) bySchema.set(s, []);
+        for (const t of tablesAll) {
+            if (!bySchema.has(t.schema)) bySchema.set(t.schema, []);
+            bySchema.get(t.schema).push(t);
+        }
+
+        body.innerHTML = Array.from(bySchema.entries()).map(([schema, tables]) => {
+            return renderGroup(schema, 'bi-layers ico-schema', [
+                { label:'Tables', icon:'bi-table ico-group', badge: tables.length,
+                  kids: tables.map(t=>({ label:t.table_name, icon:'bi-table ico-table', type:'table', tableName:t.table_name, schema: t.schema, comment:t.table_comment }))
+                },
+                { label:'Views',               icon:'bi-eye ico-group',          lazy:'views',      schema },
+                { label:'Materialized Views',  icon:'bi-layers ico-group',       lazy:'matviews',   schema },
+                { label:'Functions',           icon:'bi-lightning ico-fn',       lazy:'functions',  schema },
+                { label:'Procedures',          icon:'bi-gear ico-proc',          lazy:'procedures', schema },
+                { label:'Sequences',           icon:'bi-123 ico-seq',            lazy:'sequences',  schema },
+                { label:'Triggers',            icon:'bi-lightning-charge ico-trig',lazy:'triggers', schema },
+                { label:'Types',               icon:'bi-tag ico-type',           lazy:'types',      schema },
+                { label:'Extensions',          icon:'bi-plug ico-ext',           lazy:'extensions', schema },
+            ], 0);
+        }).join('');
         bindTree();
     } catch(e){
         console.error('[buildTree]', e);
@@ -1440,22 +1445,22 @@ async function buildTree() {
 
 function renderGroup(label, icon, groups, depth) {
     const pad = depth*14;
-    let html = `<div class="tn" style="padding-left:${pad}px" data-type="schema">
+    let html = `<div class="tn" style="padding-left:${pad}px" data-type="schema" data-schema="${eh(label)}">
         <span class="arr">▶</span><span class="ico"><i class="bi ${icon}"></i></span>
         <span class="lbl">${eh(label)}</span></div>
-    <div class="tc">`;
+    <div class="tc" data-schema="${eh(label)}">`;
     groups.forEach(g => {
         const bdg = g.badge!=null ? `<span class="bdg">${g.badge}</span>` : '';
         const dp2 = (depth+1)*14;
-        html += `<div class="tn" style="padding-left:${dp2}px" data-type="group" data-lazy="${g.lazy||''}">
+        html += `<div class="tn" style="padding-left:${dp2}px" data-type="group" data-lazy="${g.lazy||''}" data-schema="${eh(g.schema || label)}">
             <span class="arr">${(g.kids?.length||g.lazy)?'▶':'<span style="visibility:hidden">▶</span>'}</span>
             <span class="ico"><i class="bi ${g.icon}"></i></span>
             <span class="lbl">${eh(g.label)}</span>${bdg}</div>
-        <div class="tc" data-lazy="${g.lazy||''}">`;
+        <div class="tc" data-lazy="${g.lazy||''}" data-schema="${eh(g.schema || label)}">`;
         if (g.kids) {
             g.kids.forEach(k => {
                 const dp3 = (depth+2)*14;
-                const ta = k.tableName ? `data-table="${eh(k.tableName)}"` : '';
+                const ta = k.tableName ? `data-table="${eh(k.tableName)}" data-schema="${eh(k.schema || label)}"` : '';
                 const tt = k.comment ? ` title="${eh(k.comment)}"` : '';
                 html += `<div class="tn" style="padding-left:${dp3}px" data-type="${k.type||'obj'}" ${ta}${tt}>
                     <span class="arr" style="visibility:hidden">▶</span>
@@ -1527,7 +1532,8 @@ async function loadLazy(container, type) {
     }
     container.innerHTML='<div class="tree-loading" style="padding-left:42px"><span class="loading"></span></div>';
     try {
-        const r = await fetch('/api/sql/schema-objects?type=' + type);
+        const schema = container.dataset.schema || container.previousElementSibling?.dataset.schema || 'public';
+        const r = await fetch('/api/sql/schema-objects?type=' + encodeURIComponent(type) + '&schema=' + encodeURIComponent(schema));
         const d = await r.json();
         if (!d.success) {
             container.innerHTML = `<div style="padding:4px 0 4px 42px;font-size:11px;color:var(--red);">Ошибка: ${eh(d.error)}</div>`;
@@ -1781,39 +1787,42 @@ function createSQLTabContent(tabId) {
     div.className = 'tab-content';
     div.dataset.tabId = tabId;
     div.innerHTML = `
-        <div class="editor-toolbar">
-            <button class="btn btn-primary btn-sm run-tab-btn" data-tab="${tabId}" onclick="runQuery()" title="Выполнить выделенное или всё (F9)" aria-label="Выполнить выделенное или всё (F9)"><i class="bi bi-play-fill"></i></button>
-            <button class="btn btn-secondary btn-sm" onclick="runStatement()" title="Выполнить statement под курсором (Ctrl+Shift+Enter)"><i class="bi bi-play"></i> Statement</button>
-            <div class="tb-div"></div>
-            <button class="btn btn-secondary btn-sm" onclick="explainQuery(false)" title="EXPLAIN"><i class="bi bi-search"></i> Explain</button>
-            <button class="btn btn-secondary btn-sm" onclick="explainQuery(true)" title="EXPLAIN ANALYZE"><i class="bi bi-search-heart"></i> Analyze</button>
-            <div class="tb-div"></div>
-            <span class="tb-lbl">Лимит:</span>
-            <select class="lim-sel" data-tab="${tabId}">
-                <option value="50">50</option><option value="100" selected>100</option>
-                <option value="500">500</option><option value="1000">1 000</option>
-                <option value="5000">5 000</option><option value="0">Всё</option>
-            </select>
-            <div class="tb-div"></div>
-            <button class="btn btn-secondary btn-sm" onclick="clearEditor('${tabId}')"><i class="bi bi-trash"></i></button>
-            <button class="btn btn-secondary btn-sm" onclick="saveCurrentAsSnippet()" title="Сохранить как сниппет"><i class="bi bi-bookmark-plus"></i></button>
-            <button class="btn btn-secondary btn-sm" onclick="showSnippetsModal()" title="Мои сниппеты"><i class="bi bi-collection"></i></button>
-        </div>
+        <div class="editor-toolbar" style="display:none;"></div>
         <div class="lint-bar" id="lintBar-${tabId}"></div>
-        <div style="flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;">
-            <div style="flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;">
+        <div class="vSplit" style="flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;max-width:100%;overflow:hidden;">
+            <div class="editorPane" style="display:flex;flex-direction:column;height:40%;min-height:80px;flex-shrink:0;border-bottom:1px solid var(--line);">
                 <div class="pane-hdr"><span><i class="bi bi-code-slash"></i>SQL запрос</span></div>
                 <div class="monaco-editor-container" data-tab="${tabId}"></div>
             </div>
-            <div class="results-pane" style="border-top:1px solid var(--line);display:flex;flex-direction:column;min-height:0;">
+            <div class="hResizer"></div>
+            <div class="resultsPane">
                 <div class="res-hdr">
-                    <div><i class="bi bi-table"></i>Результаты</div>
+                    <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+                        <button class="btn btn-primary btn-sm run-tab-btn" data-tab="${tabId}" onclick="runQuery()" title="Выполнить выделенное или всё (F9)" aria-label="Выполнить выделенное или всё (F9)"><i class="bi bi-play-fill"></i></button>
+                        <div class="tb-div"></div>
+                        <button class="btn btn-secondary btn-sm" onclick="showFindBar(false)" title="Найти (Ctrl+F)"><i class="bi bi-search"></i></button>
+                        <button class="btn btn-secondary btn-sm" onclick="showCheatsheet()" title="Горячие клавиши (Ctrl+?)"><i class="bi bi-keyboard"></i></button>
+                        <div class="tb-div"></div>
+                        <button class="btn btn-secondary btn-sm" onclick="explainQuery(false)" title="EXPLAIN текущего запроса" aria-label="EXPLAIN текущего запроса"><i class="bi bi-search"></i></button>
+                        <button class="btn btn-secondary btn-sm" onclick="explainQuery(true)" title="EXPLAIN ANALYZE текущего запроса" aria-label="EXPLAIN ANALYZE текущего запроса"><i class="bi bi-search-heart"></i></button>
+                        <div class="tb-div"></div>
+                        <span class="tb-lbl">Лимит:</span>
+                        <select class="lim-sel" data-tab="${tabId}">
+                            <option value="50">50</option><option value="100" selected>100</option>
+                            <option value="500">500</option><option value="1000">1 000</option>
+                            <option value="5000">5 000</option><option value="0">Всё</option>
+                        </select>
+                    </div>
                     <div style="display:flex;align-items:center;gap:8px;">
                         <div class="res-tabs">
                             <button class="rtab active" onclick="switchTab('data')">Данные</button>
                             <button class="rtab" onclick="switchTab('history')">История</button>
                         </div>
-                        <div class="exp-strip" style="display:none;"></div>
+                        <div class="exp-strip export-strip" style="display:none;">
+                            <button class="btn btn-secondary btn-sm" onclick="exportResult('csv')" title="CSV"><i class="bi bi-filetype-csv"></i></button>
+                            <button class="btn btn-secondary btn-sm" onclick="exportResult('json')" title="JSON"><i class="bi bi-filetype-json"></i></button>
+                            <button class="btn btn-secondary btn-sm" onclick="exportResult('xlsx')" title="Excel"><i class="bi bi-file-earmark-excel"></i></button>
+                        </div>
                     </div>
                 </div>
                 <div class="rfbar" style="display:none;"></div>
@@ -1832,6 +1841,8 @@ function switchEditorTab(tabId) {
     // Trigger Monaco layout when switching to a Monaco tab
     const editor = monacoEditors[tabId];
     if (editor) requestAnimationFrame(() => editor.layout());
+    // Ensure splitters are wired for newly created tabs
+    initSplitters();
 }
 
 function closeTab(event, tabId) {
@@ -2048,8 +2059,9 @@ async function executeSQL(sql, tabId) {
     const _origTitle = document.title;
     document.title = '⟳ Выполняется... — SQL Редактор';
 
-    const rfbar = document.getElementById('rfbar');
-    const exportStrip = document.getElementById('exportStrip');
+    const scope = document.querySelector(`.tab-content[data-tab-id="${tabId}"]`) || document;
+    const rfbar = scope.querySelector('.rfbar') || document.getElementById('rfbar');
+    const exportStrip = scope.querySelector('.export-strip') || document.getElementById('exportStrip');
     if (rfbar) rfbar.style.display = 'none';
     if (exportStrip) exportStrip.style.display = 'none';
 
@@ -2089,15 +2101,9 @@ async function executeSQL(sql, tabId) {
                 S.sortDir = 'asc';
                 S.colFilters = {};
 
-                const rowCnt = document.getElementById('rowCnt');
-                const filtCnt = document.getElementById('filtCnt');
-                const resultFilter = document.getElementById('resultFilter');
-                if (rowCnt) rowCnt.textContent = `${S.master.length} строк`;
-                if (filtCnt) filtCnt.textContent = '';
-                if (resultFilter) resultFilter.value = '';
-                if (rfbar) rfbar.style.display = 'flex';
+                if (rfbar) rfbar.style.display = 'none';
                 if (exportStrip) exportStrip.style.display = 'flex';
-                setSt('ok', '✓ Выполнено', el + 's', S.master.length + ' строк');
+                setSt('ok', '✓ Выполнено', el + 's', S.master.length + ' строк', tabId);
                 // #12 title
                 document.title = `✓ ${S.master.length} строк — SQL Редактор`;
                 setTimeout(() => { document.title = _origTitle; }, 4000);
@@ -2108,7 +2114,7 @@ async function executeSQL(sql, tabId) {
                 S.display = [];
                 S.cols = [];
                 const affected = data.rows_affected ?? 0;
-                setSt('ok', '✓ Выполнено', el + 's', 'затронуто: ' + affected);
+                setSt('ok', '✓ Выполнено', el + 's', 'затронуто: ' + affected, tabId);
                 // #12
                 document.title = `✓ OK — SQL Редактор`;
                 setTimeout(() => { document.title = _origTitle; }, 4000);
@@ -2126,7 +2132,7 @@ async function executeSQL(sql, tabId) {
             S.master = [];
             S.display = [];
             S.cols = [];
-            setSt('err', '✗ Ошибка', el + 's', '');
+            setSt('err', '✗ Ошибка', el + 's', '', tabId);
             // #12
             document.title = `✗ Ошибка — SQL Редактор`;
             setTimeout(() => { document.title = _origTitle; }, 4000);
@@ -2134,7 +2140,7 @@ async function executeSQL(sql, tabId) {
         }
     } catch (e) {
         console.error('[runQuery]', e);
-        setSt('err', '✗ Сетевая ошибка', '', '');
+        setSt('err', '✗ Сетевая ошибка', '', '', tabId);
         if (resultsEl) resultsEl.innerHTML = `<pre class="err-blk">${eh(e.message)}</pre>`;
     } finally {
         if (btn) { btn.innerHTML = '<i class="bi bi-play-fill"></i>'; btn.disabled = false; }
@@ -2587,35 +2593,51 @@ function dl(blob, name) {
 }
 
 function initSplitters() {
-    const hr = document.getElementById('hResizer'),
-          ep = document.getElementById('editorPane'),
-          vs = document.getElementById('vSplit');
-    if (!hr || !ep || !vs) return;
+    // One global drag state that can work for any tab's splitter
+    if (!window.__sqlSplitDrag) window.__sqlSplitDrag = { active: false };
 
-    let dH = false, sY = 0, sHH = 0;
+    const wireV = (scope) => {
+        const hr = scope.querySelector('#hResizer, .hResizer');
+        const ep = scope.querySelector('#editorPane, .editorPane');
+        const vs = scope.querySelector('#vSplit, .vSplit');
+        if (!hr || !ep || !vs) return;
+        if (hr._wired) return;
+        hr._wired = true;
 
-    hr.addEventListener('mousedown', e => {
-        dH = true;
-        sY = e.clientY;
-        sHH = ep.offsetHeight;
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
+        hr.addEventListener('mousedown', e => {
+            window.__sqlSplitDrag = {
+                active: true,
+                startY: e.clientY,
+                startH: ep.offsetHeight,
+                ep,
+                vs
+            };
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+    };
 
-    document.addEventListener('mousemove', e => {
-        if (!dH) return;
-        ep.style.height = Math.max(60, Math.min(sHH + e.clientY - sY, vs.offsetHeight - 80)) + 'px';
-        syncScroll();
-        // Trigger Monaco layout on resize
-        const editor = monacoEditors[S.currentEditorTab];
-        if (editor) editor.layout();
-    });
+    document.querySelectorAll('.tab-content').forEach(wireV);
 
-    document.addEventListener('mouseup', () => {
-        dH = false;
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-    });
+    if (!window.__sqlSplitDragListenersWired) {
+        window.__sqlSplitDragListenersWired = true;
+        document.addEventListener('mousemove', e => {
+            const d = window.__sqlSplitDrag;
+            if (!d || !d.active) return;
+            const newH = Math.max(60, Math.min(d.startH + e.clientY - d.startY, d.vs.offsetHeight - 80));
+            d.ep.style.height = newH + 'px';
+            syncScroll();
+            const editor = monacoEditors[S.currentEditorTab];
+            if (editor) editor.layout();
+        });
+        document.addEventListener('mouseup', () => {
+            const d = window.__sqlSplitDrag;
+            if (d) d.active = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        });
+    }
 
     const ts = document.getElementById('treeSplitter'),
           tree = document.getElementById('objectTree');
@@ -2995,9 +3017,7 @@ function lintQuery(sql) {
     if (/\bDROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW)\b/.test(clean)) {
         warnings.push({ level: 'danger', msg: 'DROP: необратимая операция!' });
     }
-    if (/\bSELECT\s+\*/.test(clean)) {
-        warnings.push({ level: 'info', msg: 'SELECT *: рекомендуется явно перечислить нужные колонки' });
-    }
+    // Убираем "мягкую" подсказку про SELECT * (мешает в интерфейсе)
     return warnings;
 }
 
