@@ -3228,7 +3228,7 @@ def sql_table_detail():
                           AND a.attname = c.column_name
                     )                                       AS is_unique,
                     col_description(
-                        format('%I.%I', 'public', c.table_name)::regclass::oid,
+                        format('%%I.%%I', 'public', c.table_name)::regclass::oid,
                         c.ordinal_position
                     )                                       AS column_comment
                 FROM information_schema.columns c
@@ -3298,7 +3298,7 @@ def sql_table_detail():
                     c.column_default,
                     c.ordinal_position,
                     col_description(
-                        format('%I.%I', 'public', c.table_name)::regclass::oid,
+                        format('%%I.%%I', 'public', c.table_name)::regclass::oid,
                         c.ordinal_position
                     ) AS column_comment
                 FROM information_schema.columns c
