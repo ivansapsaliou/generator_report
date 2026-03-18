@@ -655,6 +655,8 @@ const S = {
         'tab-1': { type: 'sql', title: 'SQL Запрос', data: {} }
     },
     colCache: {},
+    typeCache: {},     // tableName → {column_name: data_type}
+    joinCache: {},    // tableName → possible-joins API response
     connInfo: '',
     _acLoading: null,  // FIX: guard against concurrent loadTableColumns calls
     _fnList: null,     // cached functions list from buildTree
@@ -892,9 +894,38 @@ function _buildAliasMap(sql) {
     return map;
 }
 
+// Extract table names referenced in FROM/JOIN clauses (unqualified)
+function _extractTablesFromSql(sql) {
+    const tables = [];
+    const re = /(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_.]*)/gi;
+    let m;
+    while ((m = re.exec(sql)) !== null) {
+        const name = m[1];
+        if (!_ALIAS_SKIP.has(name.toUpperCase())) {
+            // Strip schema prefix if present
+            tables.push(name.includes('.') ? name.split('.').pop() : name);
+        }
+    }
+    return [...new Set(tables)];
+}
+
+// Load FK-based join suggestions for a table — cached in S.joinCache
+async function _loadPossibleJoins(tableName) {
+    if (S.joinCache[tableName] !== undefined) return;
+    S.joinCache[tableName] = []; // prevent duplicate requests
+    try {
+        const r = await fetch(`/api/table/${encodeURIComponent(tableName)}/possible-joins`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.success && Array.isArray(d.data)) {
+            S.joinCache[tableName] = d.data;
+        }
+    } catch(e) { /* ignore */ }
+}
+
 function _registerMonacoCompletion() {
     monaco.languages.registerCompletionItemProvider('sql', {
-        triggerCharacters: ['.'],
+        triggerCharacters: ['.', ' '],
         provideCompletionItems: async function(model, position) {
             const word = model.getWordUntilPosition(position);
             const range = {
@@ -902,7 +933,9 @@ function _registerMonacoCompletion() {
                 startColumn: word.startColumn, endColumn: word.endColumn
             };
 
-            // Check for dot-triggered column completion: detect "prefix." before the current word
+            const fullSql = model.getValue();
+
+            // ── Dot-triggered column completion: "alias." or "table." ──
             const lineText = model.getLineContent(position.lineNumber);
             const textBeforeWord = lineText.substring(0, word.startColumn - 1);
             const dotPrefixMatch = textBeforeWord.match(/(\w+)\.$/);
@@ -912,14 +945,16 @@ function _registerMonacoCompletion() {
                 const colPrefix = word.word.toLowerCase();
 
                 // Resolve alias → real table name using the full SQL
-                const aliasMap = _buildAliasMap(model.getValue());
-                const tableName = aliasMap[prefix.toLowerCase()] || prefix;
+                const aliasMap = _buildAliasMap(fullSql);
+                const rawName = aliasMap[prefix.toLowerCase()] || prefix;
+                const tableName = rawName.includes('.') ? rawName.split('.').pop() : rawName;
 
                 // Async load if not cached
                 if (!S.colCache[tableName] && !S.colCache[tableName.toLowerCase()]) {
                     await loadTableColumns(tableName);
                 }
                 const cols = S.colCache[tableName] || S.colCache[tableName.toLowerCase()] || [];
+                const types = S.typeCache[tableName] || S.typeCache[tableName.toLowerCase()] || {};
 
                 return {
                     suggestions: cols
@@ -929,11 +964,72 @@ function _registerMonacoCompletion() {
                             kind: monaco.languages.CompletionItemKind.Field,
                             insertText: c,
                             range,
-                            detail: tableName,
+                            detail: types[c] ? `${tableName} · ${types[c]}` : tableName,
                         }))
                 };
             }
 
+            // Text before cursor (original case) for context analysis
+            const textBeforeCursor = model.getValueInRange({
+                startLineNumber: 1, startColumn: 1,
+                endLineNumber: position.lineNumber, endColumn: position.column
+            });
+
+            // ── Context-aware: WHERE/AND/OR/HAVING/SET → suggest columns from query tables ──
+            const contextMatch = textBeforeCursor.match(/\b(WHERE|AND|OR|HAVING|SET)\s+\w*$/i);
+            if (contextMatch) {
+                const aliasMap = _buildAliasMap(fullSql);
+                const tablesInQuery = _extractTablesFromSql(fullSql);
+                const allTables = [...new Set([
+                    ...tablesInQuery,
+                    ...Object.values(aliasMap).map(t => t.includes('.') ? t.split('.').pop() : t)
+                ])];
+
+                const suggestions = [];
+                for (const tbl of allTables) {
+                    if (!S.colCache[tbl]) await loadTableColumns(tbl);
+                    const cols = S.colCache[tbl] || [];
+                    const types = S.typeCache[tbl] || {};
+                    cols.filter(c => !word.word || c.toLowerCase().startsWith(word.word.toLowerCase()))
+                        .forEach(c => suggestions.push({
+                            label: c,
+                            kind: monaco.languages.CompletionItemKind.Field,
+                            insertText: c,
+                            range,
+                            detail: types[c] ? `${tbl} · ${types[c]}` : tbl,
+                        }));
+                }
+                if (suggestions.length) return { suggestions };
+            }
+
+            // ── Context-aware: JOIN table [AS alias] ON → suggest FK-based join conditions ──
+            const joinOnMatch = textBeforeCursor.match(/\bJOIN\s+((?:\w+\.)?\w+)(?:\s+(?:AS\s+)?\w+)?\s+ON\s+[\w.]*$/i);
+            if (joinOnMatch) {
+                const rawJoinTable = joinOnMatch[1];
+                const joinTableLc = (rawJoinTable.includes('.') ? rawJoinTable.split('.').pop() : rawJoinTable).toLowerCase();
+                if (S.joinCache[joinTableLc] === undefined) {
+                    await _loadPossibleJoins(joinTableLc);
+                }
+                const joinData = S.joinCache[joinTableLc] || [];
+                const suggestions = [];
+                for (const targetInfo of joinData) {
+                    for (const pj of (targetInfo.possible_joins || [])) {
+                        if (pj.join_suggestion) {
+                            suggestions.push({
+                                label: pj.join_suggestion,
+                                kind: monaco.languages.CompletionItemKind.Snippet,
+                                insertText: pj.join_suggestion,
+                                range,
+                                detail: `${pj.join_type || 'JOIN'} · ${targetInfo.table_name}`,
+                                documentation: { value: `Confidence: ${pj.match_confidence}` },
+                            });
+                        }
+                    }
+                }
+                if (suggestions.length) return { suggestions };
+            }
+
+            // ── Default: keywords, functions, table names ──
             const up = (word.word || '').toUpperCase();
             const suggestions = [];
             SQL_KW.filter(k => k.startsWith(up)).forEach(k => suggestions.push({
@@ -1027,9 +1123,8 @@ function initMonacoEditor(tabId, containerEl) {
         if (!wordInfo) return;
         const name    = wordInfo.word;
         const nameLc  = name.toLowerCase();
-        // S.tables stores schema-qualified names (e.g. 'public.users');
-        // getWordAtPosition returns only the bare word ('users'), so also
-        // check against the unqualified part (after the dot).
+        // S.tables stores unqualified table names; split('.').pop() is kept
+        // for safety in case any entry still contains a schema prefix.
         if ((S.tables || []).some(t => { const tl = t.toLowerCase(); return tl === nameLc || tl.split('.').pop() === nameLc; })) {
             e.event.preventDefault();
             openDetail(name);
@@ -1412,8 +1507,8 @@ async function buildTree() {
         }
         const schemas = sd.data || ['public'];
         const tablesAll = td.data || [];
-        // for autocomplete: keep both plain and schema-qualified names
-        S.tables = tablesAll.map(t => `${t.schema}.${t.table_name}`);
+        // Store unqualified table names for autocomplete (no schema prefix)
+        S.tables = [...new Set(tablesAll.map(t => t.table_name))];
         _objLinkCache = null; // invalidate cache when tables reload
         _fnLinkCache  = null;
         _procLinkCache= null;
@@ -2846,8 +2941,8 @@ function _applySelWordMarks(base, text, ranges) {
 
 function _applyObjectLinks(base, existingHtml, text) {
     // Rebuild caches when underlying lists change.
-    // S.tables stores schema-qualified names (e.g. 'public.users'); use the
-    // unqualified part so plain references in SQL are matched and clickable.
+    // S.tables stores unqualified table names; the map call is kept for safety
+    // in case any entry still contains a dot (e.g. from older cached state).
     if (!_objLinkCache || _objLinkCache.length !== S.tables.length) {
         const unqualified = [...new Set(S.tables.map(t => (t.includes('.') ? t.split('.').pop() : t)))];
         _objLinkCache = unqualified.sort((a, b) => b.length - a.length);
@@ -3104,8 +3199,12 @@ async function loadTableColumns(tableName) {
         if (!r.ok) return;
         const d = await r.json();
         if (d.success || Array.isArray(d.data)) {
-            const cols = (d.data || []).map(c => c.column_name || c).filter(Boolean);
-            S.colCache[tableName] = cols;
+            const rows = d.data || [];
+            S.colCache[tableName] = rows.map(c => c.column_name || c).filter(Boolean);
+            // Cache column type info for type hints in autocomplete
+            const typeMap = {};
+            rows.forEach(c => { if (c.column_name && c.data_type) typeMap[c.column_name] = c.data_type; });
+            if (Object.keys(typeMap).length) S.typeCache[tableName] = typeMap;
         }
     } catch(e) { /* ignore */ }
 }
