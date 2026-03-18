@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}SQL Редактор{% endblock %}
+
+{% block topbar_actions %}
+{% include 'sql_editor/partials/toolbar.html' %}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='sql_editor/css/layout.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='sql_editor/css/tree.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='sql_editor/css/editor.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='sql_editor/css/results.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='sql_editor/css/theme.css') }}">
+{% endblock %}
+
+{% block content %}
+<div id="sqlEditorRoot">
+    <div id="notSupportedOverlay">
+        <div class="ns-icon">🔴</div>
+        <div class="ns-title">Oracle не поддерживается</div>
+        <div class="ns-badge"><i class="bi bi-exclamation-triangle"></i> SQL Редактор · PostgreSQL only</div>
+        <div class="ns-sub">В данной версии продукта SQL-редактор поддерживает только подключения <strong>PostgreSQL</strong>.<br>Переключите активное подключение.</div>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm" style="margin-top:8px;"><i class="bi bi-database"></i> Выбрать подключение</a>
+    </div>
+
+    {% include 'sql_editor/partials/tree-panel.html' %}
+    {% include 'sql_editor/partials/editor-tabs.html' %}
+</div>
+
+<div id="acMenu"></div>
+<div id="ctxMenu"></div>
+
+{# Snippets Modal #}
+<div class="modal-overlay" id="snippetsModal" onclick="if(event.target===this)hideSnippetsModal()">
+    <div class="modal-box">
+        <div class="modal-hdr">
+            <span><i class="bi bi-collection" style="color:var(--amber);margin-right:8px;"></i>Мои сниппеты</span>
+            <button class="modal-hdr-close" onclick="hideSnippetsModal()">×</button>
+        </div>
+        <div class="modal-body" id="snippetsBody"></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary btn-sm" onclick="hideSnippetsModal()">Закрыть</button>
+            <button class="btn btn-primary btn-sm" onclick="saveCurrentAsSnippet()"><i class="bi bi-bookmark-plus"></i> Сохранить текущий</button>
+        </div>
+    </div>
+</div>
+
+{# Keyboard Cheatsheet Modal #}
+<div class="modal-overlay" id="cheatsheetModal" onclick="if(event.target===this)hideCheatsheet()">
+    <div class="modal-box" style="width:520px;">
+        <div class="modal-hdr">
+            <span><i class="bi bi-keyboard" style="color:var(--amber);margin-right:8px;"></i>Горячие клавиши</span>
+            <button class="modal-hdr-close" onclick="hideCheatsheet()">×</button>
+        </div>
+        <div class="modal-body" style="padding:6px 10px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
+                <div style="padding:6px 0;border-bottom:1px solid var(--line);grid-column:1/-1;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;padding-left:6px;">Выполнение</div>
+                <div class="cs-row"><kbd>F9</kbd><span>Выполнить выделенное или всё</span></div>
+                <div class="cs-row"><kbd>Ctrl+Enter</kbd><span>Выполнить запрос</span></div>
+                <div class="cs-row"><kbd>Ctrl+Shift+Enter</kbd><span>Выполнить statement</span></div>
+                <div style="padding:6px 0;border-bottom:1px solid var(--line);border-top:1px solid var(--line);grid-column:1/-1;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;padding-left:6px;margin-top:4px;">Редактор</div>
+                <div class="cs-row"><kbd>Ctrl+/</kbd><span>Комментировать строки</span></div>
+                <div class="cs-row"><kbd>Ctrl+K</kbd><span>Форматировать SQL</span></div>
+                <div class="cs-row"><kbd>Ctrl+F</kbd><span>Найти</span></div>
+                <div class="cs-row"><kbd>Ctrl+H</kbd><span>Найти и заменить</span></div>
+                <div class="cs-row"><kbd>Ctrl+Space</kbd><span>Автодополнение</span></div>
+                <div class="cs-row"><kbd>Tab</kbd><span>Принять подсказку / отступ</span></div>
+                <div class="cs-row"><kbd>Escape</kbd><span>Закрыть меню / панель</span></div>
+                <div class="cs-row"><kbd>Ctrl+Click</kbd><span>Открыть структуру таблицы</span></div>
+                <div style="padding:6px 0;border-bottom:1px solid var(--line);border-top:1px solid var(--line);grid-column:1/-1;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;padding-left:6px;margin-top:4px;">Поиск и замена</div>
+                <div class="cs-row"><kbd>Enter</kbd><span>Следующее вхождение</span></div>
+                <div class="cs-row"><kbd>Shift+Enter</kbd><span>Предыдущее вхождение</span></div>
+                <div class="cs-row"><kbd>Alt+C</kbd><span>Учитывать регистр</span></div>
+                <div class="cs-row"><kbd>Alt+R</kbd><span>Режим регулярных выражений</span></div>
+            </div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-secondary btn-sm" onclick="hideCheatsheet()">Закрыть</button></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
+<script src="{{ url_for('static', filename='sql_editor/js/sql-editor.js') }}"></script>
+<script src="{{ url_for('static', filename='sql_editor/js/EditorManager.js') }}"></script>
+<script src="{{ url_for('static', filename='sql_editor/js/DatabaseTree.js') }}"></script>
+<script src="{{ url_for('static', filename='sql_editor/js/Autocomplete.js') }}"></script>
+<script src="{{ url_for('static', filename='sql_editor/js/ResultsRenderer.js') }}"></script>
+<script src="{{ url_for('static', filename='sql_editor/js/QueryExecutor.js') }}"></script>
+{% endblock %}

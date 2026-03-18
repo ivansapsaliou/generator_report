@@ -3015,7 +3015,7 @@ def get_chart_data():
 @app.route('/sql-editor')
 @login_required
 def sql_editor():
-    return render_template('sql_editor.html', user=request.user)
+    return render_template('sql_editor/__init__.html', user=request.user)
 
 @app.route('/api/sql/execute', methods=['POST'])
 @login_required

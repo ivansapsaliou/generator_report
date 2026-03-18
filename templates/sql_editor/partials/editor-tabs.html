@@ -1,0 +1,52 @@
+{# Editor tabs area — tabs bar + tab containers #}
+<div id="mainArea">
+    <div class="tabs-bar">
+        <div class="tabs-list" id="tabsList">
+            <div class="tab active" data-tab-id="tab-1" onclick="switchEditorTab('tab-1')">
+                <i class="bi bi-code-slash"></i>
+                <span>SQL Запрос</span>
+                <button class="tab-close" onclick="closeTab(event, 'tab-1')" style="display:none">×</button>
+            </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="addNewSQLTab()" title="Новая вкладка SQL">
+            <i class="bi bi-plus-lg"></i>
+        </button>
+    </div>
+
+    <div id="tabsContainer">
+        <div class="tab-content active" data-tab-id="tab-1">
+            <div class="editor-toolbar" style="display:none;"></div>
+            <div class="lint-bar" id="lintBar"></div>
+
+            <div id="vSplit">
+                <div id="editorPane">
+                    <div class="pane-hdr">
+                        <span><i class="bi bi-code-slash"></i>SQL запрос</span>
+                        <span id="cursorPos" style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);">Ln 1, Col 1</span>
+                    </div>
+                    {# Find/Replace bar — positioned over the editor #}
+                    <div id="findBar">
+                        <div class="fb-row">
+                            <input id="fbFindInput" class="fb-input" placeholder="Найти… (Enter — следующее, Shift+Enter — предыдущее)" spellcheck="false">
+                            <span class="fb-count" id="fbCount"></span>
+                            <button class="btn-icon" onclick="fbMove(-1)" title="Предыдущее (Shift+Enter)"><i class="bi bi-chevron-up"></i></button>
+                            <button class="btn-icon" onclick="fbMove(1)" title="Следующее (Enter)"><i class="bi bi-chevron-down"></i></button>
+                            <button class="btn-icon" id="fbCaseBtn" onclick="fbToggleCase()" title="Учитывать регистр (Alt+C)">Aa</button>
+                            <button class="btn-icon" id="fbRegexBtn" onclick="fbToggleRegex()" title="Регулярное выражение (Alt+R)">.*</button>
+                            <button class="fb-close" onclick="hideFindBar()" title="Закрыть (Escape)">×</button>
+                        </div>
+                        <div class="fb-sep"></div>
+                        <div class="fb-row">
+                            <input id="fbReplaceInput" class="fb-input" placeholder="Заменить на…" spellcheck="false">
+                            <button class="btn-icon" onclick="fbReplaceOne()" title="Заменить (Ctrl+H)"><i class="bi bi-arrow-repeat"></i> Заменить</button>
+                            <button class="btn-icon" onclick="fbReplaceAll()" title="Заменить всё"><i class="bi bi-arrow-clockwise"></i> Все</button>
+                        </div>
+                    </div>
+                    <div class="monaco-editor-container" id="monaco-tab-1" data-tab="tab-1"></div>
+                </div>
+                <div id="hResizer"></div>
+                {% include 'sql_editor/partials/results-panel.html' %}
+            </div>
+        </div>
+    </div>
+</div>
