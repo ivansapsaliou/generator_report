@@ -909,6 +909,50 @@ function _extractTablesFromSql(sql) {
     return [...new Set(tables)];
 }
 
+// Build reverse alias map: lowercase table name → alias
+function _buildTableToAlias(aliasMap) {
+    const rev = {};
+    for (const [alias, tbl] of Object.entries(aliasMap)) {
+        const tblName = (tbl.includes('.') ? tbl.split('.').pop() : tbl).toLowerCase();
+        rev[tblName] = alias;
+    }
+    return rev;
+}
+
+// Replace table names with their aliases inside a join suggestion string like
+// "orders"."col" = "customers"."col"  →  o.col = c.col
+function _applyAliasesToJoinSuggestion(suggestion, tableToAlias) {
+    let result = suggestion;
+    for (const [tblName, alias] of Object.entries(tableToAlias)) {
+        const safe = tblName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Handle quoted identifiers: "tablename".
+        result = result.replace(new RegExp('"' + safe + '"\\.', 'gi'), alias + '.');
+        // Handle unquoted: tablename.
+        result = result.replace(new RegExp('(?<![\\w."])' + safe + '\\.', 'gi'), alias + '.');
+    }
+    return result;
+}
+
+// Build alias.* completion items for all aliases in the map, filtered by current word prefix
+function _getAliasDotStarSuggestions(aliasMap, wordPrefix, range) {
+    const filterLower = (wordPrefix || '').toLowerCase();
+    const suggestions = [];
+    for (const [alias, tbl] of Object.entries(aliasMap)) {
+        const item = alias + '.*';
+        if (!filterLower || item.startsWith(filterLower)) {
+            suggestions.push({
+                label: item,
+                kind: monaco.languages.CompletionItemKind.Snippet,
+                insertText: item,
+                range,
+                detail: tbl.includes('.') ? tbl.split('.').pop() : tbl,
+                sortText: '0' + item, // sort before columns
+            });
+        }
+    }
+    return suggestions;
+}
+
 // Load FK-based join suggestions for a table — cached in S.joinCache
 async function _loadPossibleJoins(tableName) {
     if (S.joinCache[tableName] !== undefined) return;
@@ -975,7 +1019,7 @@ function _registerMonacoCompletion() {
                 endLineNumber: position.lineNumber, endColumn: position.column
             });
 
-            // ── Context-aware: WHERE/AND/OR/HAVING/SET → suggest columns from query tables ──
+            // ── Context-aware: WHERE/AND/OR/HAVING/SET → suggest alias.* + columns from query tables ──
             const contextMatch = textBeforeCursor.match(/\b(WHERE|AND|OR|HAVING|SET)\s+\w*$/i);
             if (contextMatch) {
                 const aliasMap = _buildAliasMap(fullSql);
@@ -985,7 +1029,9 @@ function _registerMonacoCompletion() {
                     ...Object.values(aliasMap).map(t => t.includes('.') ? t.split('.').pop() : t)
                 ])];
 
-                const suggestions = [];
+                const suggestions = [
+                    ..._getAliasDotStarSuggestions(aliasMap, word.word, range),
+                ];
                 for (const tbl of allTables) {
                     if (!S.colCache[tbl]) await loadTableColumns(tbl);
                     const cols = S.colCache[tbl] || [];
@@ -1011,14 +1057,22 @@ function _registerMonacoCompletion() {
                     await _loadPossibleJoins(joinTableLc);
                 }
                 const joinData = S.joinCache[joinTableLc] || [];
+                const aliasMap = _buildAliasMap(fullSql);
+                const tableToAlias = _buildTableToAlias(aliasMap);
+                const tablesInQuery = _extractTablesFromSql(fullSql).map(t => t.toLowerCase());
                 const suggestions = [];
                 for (const targetInfo of joinData) {
+                    // Only suggest joins to tables already present in the query
+                    if (!tablesInQuery.includes(targetInfo.table_name.toLowerCase())) continue;
                     for (const pj of (targetInfo.possible_joins || [])) {
                         if (pj.join_suggestion) {
+                            const suggestion = Object.keys(tableToAlias).length
+                                ? _applyAliasesToJoinSuggestion(pj.join_suggestion, tableToAlias)
+                                : pj.join_suggestion;
                             suggestions.push({
-                                label: pj.join_suggestion,
+                                label: suggestion,
                                 kind: monaco.languages.CompletionItemKind.Snippet,
-                                insertText: pj.join_suggestion,
+                                insertText: suggestion,
                                 range,
                                 detail: `${pj.join_type || 'JOIN'} · ${targetInfo.table_name}`,
                                 documentation: { value: `Confidence: ${pj.match_confidence}` },
@@ -1029,7 +1083,7 @@ function _registerMonacoCompletion() {
                 if (suggestions.length) return { suggestions };
             }
 
-            // ── Default: keywords, functions, table names ──
+            // ── Default: keywords, functions, table names, alias.* ──
             const up = (word.word || '').toUpperCase();
             const suggestions = [];
             SQL_KW.filter(k => k.startsWith(up)).forEach(k => suggestions.push({
@@ -1044,6 +1098,8 @@ function _registerMonacoCompletion() {
                 label: t, kind: monaco.languages.CompletionItemKind.Class,
                 insertText: t, range
             }));
+            const defaultAliasMap = _buildAliasMap(fullSql);
+            suggestions.push(..._getAliasDotStarSuggestions(defaultAliasMap, word.word, range));
             return { suggestions };
         }
     });
