@@ -696,6 +696,7 @@ def select_db_profile():
 
 @app.route('/api/get-tables', methods=['GET'])
 @app.route('/api/tables')
+@login_required
 def get_tables():
     try:
         schema = request.args.get('schema')
@@ -1933,6 +1934,441 @@ def test_mail_settings():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ═════════════════════════════════════════════════════════════════════════════
+# ER DIAGRAM ROUTE - Добавить в app.py после существующих маршрутов
+# ═════════════════════════════════════════════════════════════════════════════
+
+@app.route('/erd')
+@login_required
+def erd_diagram():
+    """
+    Страница Entity Relationship Diagram
+    Интерактивная диаграмма связей таблиц
+    """
+    return render_template('erd_diagram.html', user=request.user)
+
+
+@app.route('/api/erd/schema-objects', methods=['GET'])
+@login_required
+def get_erd_schema_objects():
+    """
+    Получить список всех объектов схемы (таблицы, представления и т.д.)
+    для загрузки в диаграмму
+    
+    Query параметры:
+        schema: имя схемы (по умолчанию 'public')
+        object_types: типы объектов для фильтрации ('TABLE,VIEW,MATERIALIZED VIEW')
+    
+    Returns:
+        JSON со списком объектов, сгруппированных по типам
+    """
+    try:
+        schema = request.args.get('schema', 'public')
+        object_types = request.args.get('object_types', 'TABLE').split(',')
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Список таблиц
+        if 'TABLE' in object_types:
+            cur.execute("""
+                SELECT 
+                    c.relname AS name,
+                    'TABLE' AS type,
+                    pg_size_pretty(pg_total_relation_size(c.oid)) AS size,
+                    (SELECT count(*) FROM pg_attribute WHERE attrelid = c.oid) AS columns
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = %s AND c.relkind IN ('r', 'p')
+                ORDER BY c.relname
+            """, (schema,))
+            tables = cur.fetchall()
+        else:
+            tables = []
+        
+        # Список представлений
+        if 'VIEW' in object_types:
+            cur.execute("""
+                SELECT 
+                    table_name AS name,
+                    'VIEW' AS type,
+                    'N/A' AS size,
+                    (SELECT count(*) FROM information_schema.columns 
+                     WHERE table_name = v.table_name AND table_schema = v.table_schema) AS columns
+                FROM information_schema.views v
+                WHERE table_schema = %s
+                ORDER BY table_name
+            """, (schema,))
+            views = cur.fetchall()
+        else:
+            views = []
+        
+        # Группируем результаты
+        result = {
+            'objects': {
+                'tables': [dict(row) for row in tables],
+                'views': [dict(row) for row in views],
+            },
+            'schema': schema,
+            'total': len(tables) + len(views),
+        }
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'data': result})
+        
+    except Exception as e:
+        print(f"[ERD] Error loading schema objects: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/erd/table-info', methods=['GET'])
+@login_required
+def get_erd_table_info():
+    """
+    Получить детальную информацию о таблице для диаграммы
+    
+    Query параметры:
+        table: имя таблицы (обязательный)
+        schema: имя схемы (по умолчанию 'public')
+    
+    Returns:
+        JSON с информацией о таблице, колонках и связях
+    """
+    try:
+        table_name = request.args.get('table', '').strip()
+        schema = request.args.get('schema', 'public')
+        
+        if not table_name:
+            return jsonify({'success': False, 'error': 'table parameter required'}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Получаем информацию о таблице
+        cur.execute("""
+            SELECT 
+                c.relname AS table_name,
+                n.nspname AS schema,
+                pg_size_pretty(pg_total_relation_size(c.oid)) AS size,
+                (SELECT count(*) FROM pg_stat_user_tables WHERE relname = %s) AS row_count
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = %s AND c.relname = %s
+        """, (table_name, schema, table_name))
+        
+        table_info = cur.fetchone()
+        
+        if not table_info:
+            return jsonify({'success': False, 'error': 'Table not found'}), 404
+        
+        # Получаем информацию о колонках
+        cur.execute("""
+            SELECT
+                a.attname AS name,
+                pg_catalog.format_type(a.atttypid, a.atttypmod) AS type,
+                a.attnotnull AS not_null,
+                obj_description(a.attrelid, 'pg_class') AS comment
+            FROM pg_attribute a
+            JOIN pg_class c ON a.attrelid = c.oid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = %s AND c.relname = %s AND a.attnum > 0
+            ORDER BY a.attnum
+        """, (schema, table_name))
+        
+        columns = [dict(row) for row in cur.fetchall()]
+        
+        # Primary Keys
+        cur.execute("""
+            SELECT DISTINCT kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu 
+                ON tc.constraint_name = kcu.constraint_name
+            WHERE tc.table_schema = %s 
+              AND tc.table_name = %s 
+              AND tc.constraint_type = 'PRIMARY KEY'
+        """, (schema, table_name))
+        
+        pk_columns = {row[0] for row in cur.fetchall()}
+        
+        # Foreign Keys
+        cur.execute("""
+            SELECT 
+                kcu.column_name,
+                ccu.table_name AS referenced_table,
+                ccu.column_name AS referenced_column,
+                tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu 
+                ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage ccu 
+                ON ccu.constraint_name = tc.constraint_name
+            WHERE tc.table_schema = %s 
+              AND tc.table_name = %s 
+              AND tc.constraint_type = 'FOREIGN KEY'
+        """, (schema, table_name))
+        
+        fk_columns = {}
+        for row in cur.fetchall():
+            fk_columns[row[0]] = {
+                'referenced_table': row[1],
+                'referenced_column': row[2],
+                'constraint_name': row[3],
+            }
+        
+        # Enriching columns with PK/FK info
+        for col in columns:
+            col['is_pk'] = col['name'] in pk_columns
+            col['is_fk'] = col['name'] in fk_columns
+            if col['is_fk']:
+                col['fk_info'] = fk_columns[col['name']]
+        
+        cur.close()
+        conn.close()
+        
+        result = dict(table_info)
+        result['columns'] = columns
+        
+        return jsonify({'success': True, 'data': result})
+        
+    except Exception as e:
+        print(f"[ERD] Error getting table info: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/erd/related-tables', methods=['GET'])
+@login_required
+def get_erd_related_tables():
+    """
+    Получить список связанных таблиц (Foreign Keys в обе стороны)
+    
+    Query параметры:
+        table: имя таблицы (обязательный)
+        schema: имя схемы (по умолчанию 'public')
+        depth: глубина поиска (по умолчанию 1)
+    
+    Returns:
+        JSON со списком связанных таблиц
+    """
+    try:
+        table_name = request.args.get('table', '').strip()
+        schema = request.args.get('schema', 'public')
+        depth = int(request.args.get('depth', 1))
+        
+        if not table_name:
+            return jsonify({'success': False, 'error': 'table parameter required'}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        related_tables = set()
+        relationships = []
+        
+        # Рекурсивный поиск связанных таблиц
+        def find_related(tbl_name, current_depth=1):
+            if current_depth > depth:
+                return
+            
+            # Исходящие связи (Foreign Keys)
+            cur.execute("""
+                SELECT 
+                    tc.table_name,
+                    kcu.column_name,
+                    ccu.table_name AS referenced_table,
+                    ccu.column_name AS referenced_column,
+                    tc.constraint_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu 
+                    ON tc.constraint_name = kcu.constraint_name
+                JOIN information_schema.constraint_column_usage ccu 
+                    ON ccu.constraint_name = tc.constraint_name
+                WHERE tc.table_schema = %s 
+                  AND tc.table_name = %s 
+                  AND tc.constraint_type = 'FOREIGN KEY'
+            """, (schema, tbl_name))
+            
+            for row in cur.fetchall():
+                ref_table = row['referenced_table']
+                if ref_table not in related_tables:
+                    related_tables.add(ref_table)
+                    relationships.append({
+                        'from': tbl_name,
+                        'to': ref_table,
+                        'from_col': row['column_name'],
+                        'to_col': row['referenced_column'],
+                        'type': 'many-to-one',
+                        'constraint': row['constraint_name'],
+                    })
+                    if current_depth < depth:
+                        find_related(ref_table, current_depth + 1)
+            
+            # Входящие связи (обратные Foreign Keys)
+            cur.execute("""
+                SELECT 
+                    tc.table_name,
+                    kcu.column_name,
+                    ccu.table_name AS referenced_table,
+                    ccu.column_name AS referenced_column,
+                    tc.constraint_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu 
+                    ON tc.constraint_name = kcu.constraint_name
+                JOIN information_schema.constraint_column_usage ccu 
+                    ON ccu.constraint_name = tc.constraint_name
+                WHERE tc.table_schema = %s 
+                  AND ccu.table_name = %s 
+                  AND tc.constraint_type = 'FOREIGN KEY'
+            """, (schema, tbl_name))
+            
+            for row in cur.fetchall():
+                child_table = row['table_name']
+                if child_table not in related_tables:
+                    related_tables.add(child_table)
+                    relationships.append({
+                        'from': ref_table,
+                        'to': child_table,
+                        'from_col': row['referenced_column'],
+                        'to_col': row['column_name'],
+                        'type': 'one-to-many',
+                        'constraint': row['constraint_name'],
+                    })
+                    if current_depth < depth:
+                        find_related(child_table, current_depth + 1)
+        
+        find_related(table_name)
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'root_table': table_name,
+                'related_tables': list(related_tables),
+                'relationships': relationships,
+            }
+        })
+        
+    except Exception as e:
+        print(f"[ERD] Error getting related tables: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/erd/export', methods=['POST'])
+@login_required
+def export_erd():
+    """
+    Экспортировать диаграмму в различные форматы
+    
+    POST данные:
+        format: 'png' | 'svg' | 'json'
+        data: JSON данные диаграммы
+        filename: имя файла для сохранения
+    
+    Returns:
+        Файл в указанном формате или JSON ошибка
+    """
+    try:
+        data = request.json or {}
+        export_format = data.get('format', 'png')
+        diagram_data = data.get('data', {})
+        filename = data.get('filename', 'erd-diagram')
+        
+        if export_format == 'json':
+            # Просто возвращаем JSON
+            return jsonify({
+                'success': True,
+                'data': diagram_data,
+            })
+        
+        elif export_format == 'svg':
+            # Генерируем SVG из данных диаграммы
+            svg = generate_svg_from_erd(diagram_data)
+            return Response(
+                svg,
+                mimetype='image/svg+xml',
+                headers={'Content-Disposition': f'attachment; filename={filename}.svg'}
+            )
+        
+        elif export_format == 'png':
+            # PNG экспорт требует html2canvas на фронтенде
+            # На бэкенде мы можем использовать canvas или другую библиотеку
+            return jsonify({
+                'success': False,
+                'error': 'PNG export должен выполняться на клиенте',
+            }), 400
+        
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Неподдерживаемый формат: {export_format}',
+            }), 400
+            
+    except Exception as e:
+        print(f"[ERD] Error exporting diagram: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def generate_svg_from_erd(data):
+    """
+    Генерировать SVG из данных диаграммы
+    
+    Args:
+        data: dict с информацией о таблицах и связях
+    
+    Returns:
+        SVG строка
+    """
+    svg_lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">',
+        '<style>',
+        '.table { stroke: #333; fill: #fff; }',
+        '.table-name { font-weight: bold; font-size: 12px; }',
+        '.column { font-size: 10px; }',
+        '.pk { fill: #52b788; }',
+        '.fk { fill: #f0a843; }',
+        '.relation { stroke: #f0a843; fill: none; stroke-width: 1.5; }',
+        '</style>',
+    ]
+    
+    # Добавляем таблицы
+    x, y = 50, 50
+    for table in data.get('tables', []):
+        svg_lines.append(f'<rect class="table" x="{x}" y="{y}" width="200" height="120"/>')
+        svg_lines.append(f'<text class="table-name" x="{x + 10}" y="{y + 20}">{table.get("name", "Unknown")}</text>')
+        
+        column_y = y + 35
+        for col in table.get('columns', [])[:5]:  # Max 5 columns per table
+            badge = 'pk' if col.get('is_pk') else 'fk' if col.get('is_fk') else ''
+            svg_lines.append(
+                f'<text class="column {badge}" x="{x + 10}" y="{column_y}">'
+                f'{col.get("name", "")}: {col.get("type", "")}</text>'
+            )
+            column_y += 15
+        
+        x += 250
+        if x > 1000:
+            x = 50
+            y += 200
+    
+    # Добавляем связи
+    for rel in data.get('relationships', []):
+        # Упрощенное представление связей
+        svg_lines.append(
+            f'<line class="relation" x1="100" y1="100" x2="200" y2="200"/>'
+        )
+    
+    svg_lines.append('</svg>')
+    return '\n'.join(svg_lines)
+
 
 def get_existing_ssh_tunnel(ssh_host, ssh_port, ssh_user, remote_db_host, remote_db_port):
     """
@@ -2488,6 +2924,7 @@ def get_network_parameters():
 # ═════════════════════════════════════════════════════════════════════════════
 
 @app.route('/api/table/<table_name>/relations', methods=['GET'])
+@login_required
 def get_table_relations(table_name):
     """
     Получить схему связей таблицы с использованием функции report_get_possible_joins.

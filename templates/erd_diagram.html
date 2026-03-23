@@ -1,0 +1,1153 @@
+{% extends "base.html" %}
+{% block title %}ER Диаграмма — Report Builder{% endblock %}
+{% block topbar_title %}ER Диаграмма {% endblock %}
+
+{% block content %}
+<style>
+  .erd-container {
+    display: flex;
+    height: calc(100vh - 140px);
+    gap: 12px;
+    background: var(--bg);
+  }
+
+  .erd-sidebar {
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    border-radius: 4px;
+  }
+
+  .erd-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .erd-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .erd-canvas-wrapper {
+    flex: 1;
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  #erdCanvas {
+    position: absolute;
+    inset: 0;
+    cursor: grab;
+  }
+
+  #erdCanvas.panning {
+    cursor: grabbing;
+  }
+
+  .sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+
+  .sidebar-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sidebar-section-title .toggle-btn {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+  }
+
+  .sidebar-section-title .toggle-btn.collapsed {
+    transform: rotate(-90deg);
+  }
+
+  .sidebar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 11px;
+  }
+
+  .sidebar-item:hover {
+    background: var(--bg-4);
+    border-color: var(--amber);
+  }
+
+  .sidebar-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--amber);
+  }
+
+  .sidebar-item .item-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-3);
+  }
+
+  .sidebar-item .item-badge {
+    font-size: 8px;
+    padding: 1px 4px;
+    background: var(--amber-glow);
+    color: var(--amber);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .erd-toolbar-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 0 4px;
+    border-right: 1px solid var(--line);
+  }
+
+  .erd-toolbar-group:last-child {
+    border-right: none;
+  }
+
+  .erd-separator {
+    width: 1px;
+    height: 20px;
+    background: var(--line);
+  }
+
+  .legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-size: 10px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .stats-bar {
+    display: flex;
+    gap: 12px;
+    padding: 6px 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--text-3);
+  }
+
+  .stats-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.show {
+    display: flex;
+  }
+
+  .modal-content {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  .modal-header {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .form-group label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .form-group input,
+  .form-group select {
+    font-size: 11px;
+    padding: 6px 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 2px;
+    font-family: var(--font-mono);
+  }
+
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: var(--amber);
+    box-shadow: 0 0 0 2px var(--amber-glow);
+  }
+
+  @media (max-width: 768px) {
+    .erd-container {
+      flex-direction: column;
+    }
+
+    .erd-sidebar {
+      width: 100%;
+      max-height: 200px;
+    }
+  }
+</style>
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Entity Relationship <span>Diagram</span></div>
+    <div style="font-size: 11px; color: var(--text-3); margin-top: 4px; letter-spacing: .04em;">
+      ИНТЕРАКТИВНАЯ ДИАГРАММА СВЯЗЕЙ ТАБЛИЦ
+    </div>
+  </div>
+</div>
+
+<div class="erd-container">
+  <!-- Боковая панель -->
+  <div class="erd-sidebar">
+    <!-- Выбор источника -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">
+        <span><i class="bi bi-database"></i> Источник</span>
+      </div>
+      <select id="tableSelect" class="form-control" style="font-size: 11px;">
+        <option value="">-- Выберите таблицу --</option>
+      </select>
+      <div style="display: flex; gap: 4px;">
+        <button onclick="loadERDForTable()" class="btn btn-primary btn-sm" style="flex: 1;">
+          <i class="bi bi-arrow-repeat"></i> Загрузить
+        </button>
+        <button onclick="showLoadModal()" class="btn btn-secondary btn-sm" style="flex: 1;">
+          <i class="bi bi-folder"></i> Открыть
+        </button>
+      </div>
+    </div>
+
+    <!-- Таблицы -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">
+        <span><i class="bi bi-table"></i> Таблицы</span>
+        <button class="toggle-btn" id="toggleTables"></button>
+      </div>
+      <div class="sidebar-list" id="tablesList"></div>
+    </div>
+
+    <!-- Связи -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">
+        <span><i class="bi bi-diagram-3"></i> Связи</span>
+        <button class="toggle-btn" id="toggleRelations"></button>
+      </div>
+      <div class="sidebar-list" id="relationsList"></div>
+    </div>
+
+    <!-- Легенда -->
+    <div class="legend">
+      <strong style="font-size: 10px; color: var(--text-2);">Легенда</strong>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background: var(--pk); opacity: 0.5;"></div>
+        <span>Primary Key</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background: var(--fk); opacity: 0.5;"></div>
+        <span>Foreign Key</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background: var(--hover); opacity: 0.5;"></div>
+        <span>Активная таблица</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background: var(--red); opacity: 0.5;"></div>
+        <span>Выбранная</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Основная область -->
+  <div class="erd-main">
+    <!-- Тулбар -->
+    <div class="erd-toolbar">
+      <div class="erd-toolbar-group">
+        <button onclick="erdManager?.autoLayout()" class="btn btn-secondary btn-sm" title="Автоматический лейаут">
+          <i class="bi bi-diagram-2"></i> Лейаут
+        </button>
+        <button onclick="erdManager?.resetView()" class="btn btn-secondary btn-sm" title="Сброс вида">
+          <i class="bi bi-fullscreen"></i> Fit
+        </button>
+      </div>
+
+      <div class="erd-toolbar-group">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px;">
+          <input type="checkbox" id="showColumns" checked onchange="toggleShowColumns()">
+          <span>Колонки</span>
+        </label>
+      </div>
+
+      <div class="erd-toolbar-group">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px;">
+          <input type="checkbox" id="showCardinality" checked onchange="toggleShowCardinality()">
+          <span>Кардинальность</span>
+        </label>
+      </div>
+
+      <div class="erd-toolbar-group">
+        <select id="depthSelect" class="form-select" style="font-size: 11px; width: auto;">
+          <option value="1">Уровень 1</option>
+          <option value="2" selected>Уровень 2</option>
+          <option value="3">Уровень 3</option>
+          <option value="5">Уровень 5</option>
+        </select>
+      </div>
+
+      <div class="erd-toolbar-group">
+        <button onclick="erdManager?.export('png')" class="btn btn-secondary btn-sm" title="Экспортировать PNG">
+          <i class="bi bi-download"></i> PNG
+        </button>
+        <button onclick="erdManager?.export('svg')" class="btn btn-secondary btn-sm" title="Экспортировать SVG">
+          <i class="bi bi-download"></i> SVG
+        </button>
+      </div>
+
+      <div class="erd-toolbar-group">
+        <button onclick="showSettingsModal()" class="btn btn-secondary btn-sm" title="Настройки">
+          <i class="bi bi-gear"></i> Параметры
+        </button>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="erd-canvas-wrapper">
+      <canvas id="erdCanvas"></canvas>
+    </div>
+
+    <!-- Статистика -->
+    <div class="stats-bar">
+      <div class="stats-item">
+        <i class="bi bi-table"></i>
+        <span id="statTables">0 таблиц</span>
+      </div>
+      <div class="stats-item">
+        <i class="bi bi-diagram-3"></i>
+        <span id="statRelations">0 связей</span>
+      </div>
+      <div class="stats-item">
+        <i class="bi bi-zoom-in"></i>
+        <span id="statZoom">100%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Load Modal -->
+<div id="loadModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span>Загрузить диаграмму</span>
+      <button onclick="hideLoadModal()" class="btn btn-secondary btn-sm">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Выберите объект</label>
+        <select id="objectSelect" class="form-control" onchange="loadObjectTables()">
+          <option value="">-- Загружаю объекты --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Выберите таблицу</label>
+        <select id="objectTableSelect" class="form-control">
+          <option value="">-- Выберите таблицу --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Глубина связей</label>
+        <select id="loadDepth" class="form-control">
+          <option value="1">1 уровень</option>
+          <option value="2" selected>2 уровня</option>
+          <option value="3">3 уровня</option>
+        </select>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button onclick="loadSelectedERD()" class="btn btn-primary" style="flex: 1;">
+          <i class="bi bi-check"></i> Загрузить
+        </button>
+        <button onclick="hideLoadModal()" class="btn btn-secondary" style="flex: 1;">
+          Отмена
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span>Параметры диаграммы</span>
+      <button onclick="hideSettingsModal()" class="btn btn-secondary btn-sm">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Скорость анимации (мс)</label>
+        <input type="number" id="animationSpeed" value="300" min="0" max="1000">
+      </div>
+      <div class="form-group">
+        <label style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="autolayout">
+          <span>Автолейаут при загрузке</span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Тема оформления</label>
+        <select id="themeSelect" class="form-control">
+          <option value="dark">Тёмная</option>
+          <option value="light">Светлая</option>
+          <option value="auto">Авто</option>
+        </select>
+      </div>
+      <button onclick="saveSettings()" class="btn btn-primary" style="width: 100%;">
+        <i class="bi bi-check"></i> Сохранить
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+  // ERD Manager Class - handles rendering of Entity Relationship Diagrams
+  class ERDManager {
+    constructor(config) {
+      this.canvas = config.canvas;
+      this.ctx = this.canvas.getContext('2d');
+      this.container = config.container;
+      this.darkMode = config.darkMode !== false;
+      
+      this.config = {
+        showColumns: config.showColumns !== false,
+        showCardinality: config.showCardinality !== false,
+        autoLayout: config.autoLayout !== false,
+        animationSpeed: config.animationSpeed || 300,
+        tableWidth: 220,
+        tableMinHeight: 80,
+        tablePadding: 10,
+        columnHeight: 22,
+        tableGap: 80,
+        lineColor: '#fbbf24',
+        pkColor: '#f59e0b',
+        fkColor: '#3b82f6',
+        tableBg: this.darkMode ? '#1e3a5f' : '#fff',
+        tableBorder: this.darkMode ? '#60a5fa' : '#334155',
+        headerBg: this.darkMode ? '#2563eb' : '#1e40af',
+        textColor: this.darkMode ? '#f1f5f9' : '#1e293b',
+      };
+      
+      this.tables = new Map();
+      this.relationships = new Map();
+      
+      // View state
+      this.offsetX = 0;
+      this.offsetY = 0;
+      this.zoom = 1;
+      this.isPanning = false;
+      this.lastMouseX = 0;
+      this.lastMouseY = 0;
+      
+      this.initCanvas();
+      this.bindEvents();
+    }
+    
+    initCanvas() {
+      const rect = this.container.getBoundingClientRect();
+      this.canvas.width = rect.width;
+      this.canvas.height = rect.height;
+      this.render();
+    }
+    
+    bindEvents() {
+      // Panning
+      this.canvas.addEventListener('mousedown', (e) => {
+        this.isPanning = true;
+        this.lastMouseX = e.clientX;
+        this.lastMouseY = e.clientY;
+        this.canvas.classList.add('panning');
+      });
+      
+      window.addEventListener('mouseup', () => {
+        this.isPanning = false;
+        this.canvas.classList.remove('panning');
+      });
+      
+      this.canvas.addEventListener('mousemove', (e) => {
+        if (!this.isPanning) return;
+        const dx = e.clientX - this.lastMouseX;
+        const dy = e.clientY - this.lastMouseY;
+        this.offsetX += dx;
+        this.offsetY += dy;
+        this.lastMouseX = e.clientX;
+        this.lastMouseY = e.clientY;
+        this.render();
+      });
+      
+      // Zooming
+      this.canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        this.zoom = Math.max(0.1, Math.min(3, this.zoom * delta));
+        document.getElementById('statZoom').textContent = `${Math.round(this.zoom * 100)}%`;
+        this.render();
+      });
+      
+      // Resize
+      window.addEventListener('resize', () => this.initCanvas());
+    }
+    
+    loadFromAPI(data) {
+      this.tables.clear();
+      this.relationships.clear();
+      console.log('Loading from API:', data);
+      
+      // Parse data - could be from /api/table/{table}/relations
+      if (data.tables) {
+        data.tables.forEach(t => {
+          this.tables.set(t.name, t);
+        });
+      }
+      
+      if (data.relations) {
+        data.relations.forEach(r => {
+          if (r.target_table) {
+            this.relationships.set(r.target_table, r);
+          }
+        });
+      }
+      
+      console.log('Tables loaded:', this.tables.size);
+      console.log('Relationships loaded:', this.relationships.size);
+      
+      if (this.config.autoLayout) {
+        this.autoLayout();
+      }
+      this.render();
+    }
+    
+    autoLayout() {
+      // Grid layout
+      const tablesArr = Array.from(this.tables.values());
+      if (tablesArr.length === 0) return;
+      
+      const cols = Math.ceil(Math.sqrt(tablesArr.length));
+      let col = 0, row = 0;
+      const startX = 50;
+      const startY = 50;
+      const gapX = this.config.tableWidth + this.config.tableGap;
+      const gapY = 200;
+      
+      tablesArr.forEach((table, idx) => {
+        table.x = startX + (col * gapX);
+        table.y = startY + (row * gapY);
+        col++;
+        if (col >= cols) {
+          col = 0;
+          row++;
+        }
+      });
+      
+      this.centerView();
+    }
+    
+    centerView() {
+      if (this.tables.size === 0) return;
+      
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      this.tables.forEach(t => {
+        minX = Math.min(minX, t.x);
+        minY = Math.min(minY, t.y);
+        maxX = Math.max(maxX, t.x + this.config.tableWidth);
+        maxY = Math.max(maxY, t.y + this.config.tableMinHeight + (this.config.showColumns ? (t.columns?.length || 3) * this.config.columnHeight : 0));
+      });
+      
+      const cw = this.canvas.width;
+      const ch = this.canvas.height;
+      const contentW = maxX - minX;
+      const contentH = maxY - minY;
+      
+      this.zoom = Math.min(cw / contentW, ch / contentH, 1) * 0.9;
+      this.offsetX = (cw - contentW * this.zoom) / 2 - minX * this.zoom;
+      this.offsetY = (ch - contentH * this.zoom) / 2 - minY * this.zoom;
+    }
+    
+    resetView() {
+      this.centerView();
+      this.render();
+    }
+    
+    toggleColumns() {
+      this.config.showColumns = !this.config.showColumns;
+      document.getElementById('showColumns').checked = this.config.showColumns;
+      this.render();
+    }
+    
+    render() {
+      const ctx = this.ctx;
+      ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      
+      ctx.save();
+      ctx.translate(this.offsetX, this.offsetY);
+      ctx.scale(this.zoom, this.zoom);
+      
+      // Draw relationships first (behind tables)
+      this.relationships.forEach(rel => {
+        const fromTable = this.tables.get(rel.source_table || this.tables.keys().next().value);
+        const toTable = this.tables.get(rel.target_table);
+        if (fromTable && toTable) {
+          this.drawRelationship(ctx, fromTable, toTable, rel);
+        }
+      });
+      
+      // Draw tables
+      this.tables.forEach((table, name) => {
+        this.drawTable(ctx, table);
+      });
+      
+      ctx.restore();
+    }
+    
+    // Helper for rounded rect if not available
+    roundRect(ctx, x, y, w, h, r) {
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        // Fallback for older browsers
+        const r1 = Array.isArray(r) ? r : [r, r, r, r];
+        ctx.moveTo(x + r1[0], y);
+        ctx.lineTo(x + w - r1[1], y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r1[1]);
+        ctx.lineTo(x + w, y + h - r1[2]);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r1[2], y + h);
+        ctx.lineTo(x + r1[3], y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r1[3]);
+        ctx.lineTo(x, y + r1[0]);
+        ctx.quadraticCurveTo(x, y, x + r1[0], y);
+      }
+    }
+    
+    drawTable(ctx, table) {
+      const x = table.x || 0;
+      const y = table.y || 0;
+      const w = this.config.tableWidth;
+      const cols = table.columns || [];
+      const h = this.config.tableMinHeight + (this.config.showColumns ? Math.max(cols.length, 1) * this.config.columnHeight : 0);
+      
+      console.log('Drawing table:', table.name, 'at', x, y, 'with', cols.length, 'columns');
+      
+      // Table shadow
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 3;
+      
+      // Background
+      ctx.fillStyle = this.config.tableBg;
+      ctx.strokeStyle = this.config.tableBorder;
+      ctx.lineWidth = 2;
+      
+      // Table body
+      ctx.beginPath();
+      this.roundRect(ctx, x, y, w, h, 6);
+      ctx.fill();
+      ctx.stroke();
+      
+      ctx.shadowColor = 'transparent';
+      
+      // Header
+      const headerH = 32;
+      ctx.fillStyle = this.config.headerBg;
+      ctx.beginPath();
+      this.roundRect(ctx, x, y, w, headerH, [6, 6, 0, 0]);
+      ctx.fill();
+      
+      // Table name - draw after header so it's visible
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px system-ui';
+      ctx.textAlign = 'center';
+      const tableName = table.name || 'Unknown';
+      ctx.fillText(tableName, x + w/2, y + 20);
+      
+      // Draw column header if no columns
+      if (!cols || cols.length === 0) {
+        ctx.fillStyle = this.darkMode ? '#94a3b8' : '#64748b';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('(нет колонок)', x + w/2, y + headerH + 20);
+      }
+      
+      // Columns
+      if (this.config.showColumns && cols && cols.length > 0) {
+        ctx.font = '12px system-ui';
+        cols.forEach((col, i) => {
+          const cy = y + headerH + 8 + i * this.config.columnHeight;
+          
+          // Key indicator
+          if (col.is_pk) {
+            ctx.fillStyle = this.config.pkColor;
+            ctx.beginPath();
+            ctx.arc(x + 15, cy - 2, 5, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (col.is_fk) {
+            ctx.fillStyle = this.config.fkColor;
+            ctx.beginPath();
+            ctx.arc(x + 15, cy - 2, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
+          ctx.fillStyle = this.config.textColor;
+          ctx.textAlign = 'left';
+          const colName = col.name || '';
+          ctx.fillText(colName.substring(0, 20), x + 28, cy);
+          
+          ctx.fillStyle = this.darkMode ? '#94a3b8' : '#64748b';
+          ctx.textAlign = 'right';
+          const colType = col.type || '';
+          ctx.fillText(colType.substring(0, 12), x + w - 10, cy);
+        });
+      }
+      
+      table._width = w;
+      table._height = h;
+    }
+    
+    drawRelationship(ctx, fromTable, toTable, rel) {
+      if (!fromTable || !toTable) return;
+      
+      const fromW = fromTable._width || this.config.tableWidth;
+      const fromH = fromTable._height || this.config.tableMinHeight;
+      const toW = toTable._width || this.config.tableWidth;
+      const toH = toTable._height || this.config.tableMinHeight;
+      
+      const fromX = (fromTable.x || 0) + fromW;
+      const fromY = (fromTable.y || 0) + fromH / 2;
+      const toX = toTable.x || 0;
+      const toY = (toTable.y || 0) + toH / 2;
+      
+      // Line shadow
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = 4;
+      
+      ctx.strokeStyle = this.config.lineColor;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(fromX, fromY);
+      
+      // Curved line
+      const midX = (fromX + toX) / 2;
+      ctx.bezierCurveTo(midX, fromY, midX, toY, toX, toY);
+      ctx.stroke();
+      
+      // Arrow
+      ctx.shadowColor = 'transparent';
+      ctx.beginPath();
+      ctx.moveTo(toX, toY);
+      ctx.lineTo(toX - 12, toY - 6);
+      ctx.lineTo(toX - 12, toY + 6);
+      ctx.closePath();
+      ctx.fillStyle = this.config.lineColor;
+      ctx.fill();
+      
+      // Label for relation type
+      if (rel && rel.relation_type) {
+        const labelX = (fromX + toX) / 2;
+        const labelY = (fromY + toY) / 2;
+        ctx.fillStyle = this.darkMode ? '#fbbf24' : '#d97706';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(rel.relation_type === 'FOREIGN_KEY' ? '1:N' : 'N:1', labelX, labelY - 5);
+      }
+    }
+    
+    export(format) {
+      if (format === 'png') {
+        const link = document.createElement('a');
+        link.download = 'erd-diagram.png';
+        link.href = this.canvas.toDataURL('image/png');
+        link.click();
+      } else if (format === 'svg') {
+        alert('SVG export not yet implemented');
+      }
+    }
+  }
+
+  let erdManager = null;
+  let currentData = null;
+
+  // Initialize
+  async function initERD() {
+    const canvas = document.getElementById('erdCanvas');
+    const container = document.querySelector('.erd-canvas-wrapper');
+
+    // Динамически импортируем класс (если используется модульная система)
+    // Для простоты используем глобальный класс
+    erdManager = new ERDManager({
+      canvas,
+      container,
+      darkMode: !document.body.classList.contains('light-theme'),
+      showColumns: true,
+      showCardinality: true,
+      autoLayout: true,
+      animationSpeed: 300,
+    });
+
+    loadTables();
+  }
+
+  async function loadTables() {
+    try {
+      const response = await fetch('/api/get-tables');
+      const result = await response.json();
+      
+      if (result.success) {
+        const select = document.getElementById('tableSelect');
+        select.innerHTML = '<option value="">-- Выберите таблицу --</option>';
+        
+        result.data.forEach(table => {
+          const option = document.createElement('option');
+          option.value = table.table_name;
+          // API returns 'schema' not 'table_schema'
+          option.textContent = `${table.schema || 'public'}.${table.table_name}`;
+          select.appendChild(option);
+        });
+      }
+    } catch (error) {
+      console.error('Error loading tables:', error);
+    }
+  }
+
+  async function loadERDForTable() {
+    const tableName = document.getElementById('tableSelect').value;
+    if (!tableName) {
+      alert('Выберите таблицу');
+      return;
+    }
+
+    try {
+      // Get table info (columns, PK/FK)
+      const infoRes = await fetch(`/api/erd/table-info?table=${tableName}`);
+      const infoResult = await infoRes.json();
+      
+      // Get relations
+      const relRes = await fetch(`/api/table/${tableName}/relations?levels=2`);
+      const relResult = await relRes.json();
+      
+      console.log('Table info:', infoResult);
+      console.log('Relations:', relResult);
+      
+      if (infoResult.success && relResult.success) {
+        const tableData = infoResult.data;
+        const relations = relResult.data || [];
+        
+        const tables = {};
+        // Main table centered on left
+        tables[tableName] = {
+          name: tableName,
+          x: 50,
+          y: 200,
+          columns: tableData.columns || []
+        };
+        
+        // Load columns for related tables
+        const targetTables = [...new Set(relations.map(r => r.target_table).filter(t => t))];
+        
+        // Get column info for each related table
+        const colPromises = targetTables.map(async (target) => {
+          try {
+            const colRes = await fetch(`/api/erd/table-info?table=${target}`);
+            const colResult = await colRes.json();
+            return { table: target, columns: colResult.success ? (colResult.data.columns || []) : [] };
+          } catch (e) {
+            return { table: target, columns: [] };
+          }
+        });
+        
+        const colResults = await Promise.all(colPromises);
+        const colMap = {};
+        colResults.forEach(cr => colMap[cr.table] = cr.columns);
+        
+        // Place related tables in a grid on the right
+        const cols = Math.ceil(Math.sqrt(targetTables.length)) || 1;
+        let col = 0, row = 0;
+        
+        targetTables.forEach((target, idx) => {
+          tables[target] = {
+            name: target,
+            x: 350 + (col * 300),
+            y: 100 + (row * 200),
+            columns: colMap[target] || []
+          };
+          col++;
+          if (col >= cols) { col = 0; row++; }
+        });
+        
+        const data = {
+          tables: Object.values(tables),
+          relations: relations
+        };
+        
+        console.log('ERD Data:', data);
+        currentData = data;
+        renderERD(data);
+      } else {
+        alert('Ошибка при загрузке данных таблицы');
+      }
+    } catch (error) {
+      console.error('Error loading ERD:', error);
+      alert('Ошибка при загрузке диаграммы: ' + error.message);
+    }
+  }
+
+  function renderERD(data) {
+    if (!erdManager) return;
+
+    // Очищаем старые данные
+    erdManager.tables?.clear();
+    erdManager.relationships?.clear();
+
+    // Загружаем новые данные
+    erdManager.loadFromAPI(data);
+    updateStats();
+  }
+
+  function toggleShowColumns() {
+    if (erdManager) {
+      erdManager.toggleColumns();
+    }
+  }
+
+  function toggleShowCardinality() {
+    if (erdManager) {
+      erdManager.config.showCardinality = !erdManager.config.showCardinality;
+      erdManager.render();
+    }
+  }
+
+  function updateStats() {
+    if (erdManager) {
+      document.getElementById('statTables').textContent = `${erdManager.tables.size} таблиц`;
+      document.getElementById('statRelations').textContent = `${erdManager.relationships.size} связей`;
+    }
+  }
+
+  function showLoadModal() {
+    loadObjects();
+    document.getElementById('loadModal').classList.add('show');
+  }
+
+  function hideLoadModal() {
+    document.getElementById('loadModal').classList.remove('show');
+  }
+
+  async function loadObjects() {
+    try {
+      const response = await fetch('/api/network/objects');
+      const result = await response.json();
+      
+      if (result.success) {
+        const select = document.getElementById('objectSelect');
+        select.innerHTML = '<option value="">-- Выберите объект --</option>';
+        
+        result.data.forEach(obj => {
+          const option = document.createElement('option');
+          option.value = obj.object_id;
+          option.textContent = obj.object_name;
+          select.appendChild(option);
+        });
+      }
+    } catch (error) {
+      console.error('Error loading objects:', error);
+    }
+  }
+
+  async function loadObjectTables() {
+    const objectId = document.getElementById('objectSelect').value;
+    if (!objectId) return;
+
+    try {
+      const response = await fetch(`/api/network/nodes?object_id=${objectId}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        const select = document.getElementById('objectTableSelect');
+        select.innerHTML = '<option value="">-- Выберите узел --</option>';
+        
+        result.data.forEach(node => {
+          const option = document.createElement('option');
+          option.value = node.node_id;
+          option.textContent = node.node_name;
+          select.appendChild(option);
+        });
+      }
+    } catch (error) {
+      console.error('Error loading nodes:', error);
+    }
+  }
+
+  async function loadSelectedERD() {
+    const nodeId = document.getElementById('objectTableSelect').value;
+    const depth = document.getElementById('loadDepth').value;
+
+    if (!nodeId) {
+      alert('Выберите узел');
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/network/tree?root_node_id=${nodeId}&use_accounting=false`
+      );
+      const result = await response.json();
+      
+      if (result.success) {
+        currentData = result;
+        renderERD(result);
+        hideLoadModal();
+      }
+    } catch (error) {
+      console.error('Error loading ERD:', error);
+      alert('Ошибка при загрузке диаграммы');
+    }
+  }
+
+  function showSettingsModal() {
+    document.getElementById('settingsModal').classList.add('show');
+  }
+
+  function hideSettingsModal() {
+    document.getElementById('settingsModal').classList.remove('show');
+  }
+
+  function saveSettings() {
+    if (erdManager) {
+      erdManager.config.animationSpeed = parseInt(
+        document.getElementById('animationSpeed').value
+      );
+      erdManager.config.autoLayout = document.getElementById('autolayout').checked;
+    }
+    hideSettingsModal();
+    alert('Параметры сохранены');
+  }
+
+  // Close modals on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      hideLoadModal();
+      hideSettingsModal();
+    }
+  });
+
+  // Initialize on page load
+  document.addEventListener('DOMContentLoaded', initERD);
+</script>
+
+{% endblock %}
