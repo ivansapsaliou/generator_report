@@ -531,18 +531,23 @@
         showCardinality: config.showCardinality !== false,
         autoLayout: config.autoLayout !== false,
         animationSpeed: config.animationSpeed || 300,
-        tableWidth: 220,
-        tableMinHeight: 80,
+        tableWidth: 240,
+        tableMinHeight: 90,
         tablePadding: 10,
-        columnHeight: 22,
+        columnHeight: 24,
         tableGap: 80,
+        // Красивые градиентные цвета
         lineColor: '#fbbf24',
-        pkColor: '#f59e0b',
+        pkColor: '#10b981',
         fkColor: '#3b82f6',
-        tableBg: this.darkMode ? '#1e3a5f' : '#fff',
-        tableBorder: this.darkMode ? '#60a5fa' : '#334155',
-        headerBg: this.darkMode ? '#2563eb' : '#1e40af',
-        textColor: this.darkMode ? '#f1f5f9' : '#1e293b',
+        // Улучшенные цвета для темной темы
+        tableBg: this.darkMode ? '#1f2937' : '#ffffff',
+        tableBorder: this.darkMode ? '#4b5563' : '#d1d5db',
+        headerBg: this.darkMode ? '#374151' : '#1e40af',
+        headerBg2: this.darkMode ? '#1f3a6f' : '#1e3a8a',  // для градиента
+        textColor: this.darkMode ? '#f3f4f6' : '#1f2937',
+        textSecondary: this.darkMode ? '#d1d5db' : '#6b7280',
+        shadowColor: this.darkMode ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.3)',
       };
       
       this.tables = new Map();
@@ -555,6 +560,7 @@
       this.isPanning = false;
       this.lastMouseX = 0;
       this.lastMouseY = 0;
+      this.renderScheduled = false;
       
       this.initCanvas();
       this.bindEvents();
@@ -635,16 +641,17 @@
     }
     
     autoLayout() {
-      // Grid layout
+      // Grid layout с улучшенным расстоянием
       const tablesArr = Array.from(this.tables.values());
       if (tablesArr.length === 0) return;
       
       const cols = Math.ceil(Math.sqrt(tablesArr.length));
       let col = 0, row = 0;
-      const startX = 50;
-      const startY = 50;
-      const gapX = this.config.tableWidth + this.config.tableGap;
-      const gapY = 200;
+      const startX = 100;
+      const startY = 100;
+      // Значительно увеличиваем расстояние между таблицами
+      const gapX = this.config.tableWidth + 200;  // было 80, теперь 200
+      const gapY = 400;  // было 200, теперь 400
       
       tablesArr.forEach((table, idx) => {
         table.x = startX + (col * gapX);
@@ -692,28 +699,40 @@
     }
     
     render() {
-      const ctx = this.ctx;
-      ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      // Оптимизация: используем requestAnimationFrame для плавной отрисовки
+      if (this.renderScheduled) return;
+      this.renderScheduled = true;
       
-      ctx.save();
-      ctx.translate(this.offsetX, this.offsetY);
-      ctx.scale(this.zoom, this.zoom);
-      
-      // Draw relationships first (behind tables)
-      this.relationships.forEach(rel => {
-        const fromTable = this.tables.get(rel.source_table || this.tables.keys().next().value);
-        const toTable = this.tables.get(rel.target_table);
-        if (fromTable && toTable) {
-          this.drawRelationship(ctx, fromTable, toTable, rel);
-        }
+      requestAnimationFrame(() => {
+        this.renderScheduled = false;
+        
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Установка фона
+        ctx.fillStyle = this.darkMode ? '#111827' : '#f9fafb';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        ctx.save();
+        ctx.translate(this.offsetX, this.offsetY);
+        ctx.scale(this.zoom, this.zoom);
+        
+        // Draw relationships first (behind tables)
+        this.relationships.forEach(rel => {
+          const fromTable = this.tables.get(rel.source_table || this.tables.keys().next().value);
+          const toTable = this.tables.get(rel.target_table);
+          if (fromTable && toTable) {
+            this.drawRelationship(ctx, fromTable, toTable, rel);
+          }
+        });
+        
+        // Draw tables
+        this.tables.forEach((table, name) => {
+          this.drawTable(ctx, table);
+        });
+        
+        ctx.restore();
       });
-      
-      // Draw tables
-      this.tables.forEach((table, name) => {
-        this.drawTable(ctx, table);
-      });
-      
-      ctx.restore();
     }
     
     // Helper for rounded rect if not available
@@ -742,77 +761,107 @@
       const cols = table.columns || [];
       const h = this.config.tableMinHeight + (this.config.showColumns ? Math.max(cols.length, 1) * this.config.columnHeight : 0);
       
-      console.log('Drawing table:', table.name, 'at', x, y, 'with', cols.length, 'columns');
+      // Table shadow - улучшенная тень
+      ctx.shadowColor = this.config.shadowColor;
+      ctx.shadowBlur = 15;
+      ctx.shadowOffsetX = 4;
+      ctx.shadowOffsetY = 4;
       
-      // Table shadow
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 10;
-      ctx.shadowOffsetX = 3;
-      ctx.shadowOffsetY = 3;
-      
-      // Background
+      // Background с скругленными углами
       ctx.fillStyle = this.config.tableBg;
       ctx.strokeStyle = this.config.tableBorder;
       ctx.lineWidth = 2;
       
-      // Table body
       ctx.beginPath();
-      this.roundRect(ctx, x, y, w, h, 6);
+      this.roundRect(ctx, x, y, w, h, 8);
       ctx.fill();
       ctx.stroke();
       
       ctx.shadowColor = 'transparent';
       
-      // Header
-      const headerH = 32;
-      ctx.fillStyle = this.config.headerBg;
+      // Header с градиентом
+      const headerH = 40;
+      
+      // Создаём градиент для заголовка
+      const gradient = ctx.createLinearGradient(x, y, x, y + headerH);
+      gradient.addColorStop(0, this.config.headerBg);
+      gradient.addColorStop(1, this.config.headerBg2);
+      ctx.fillStyle = gradient;
+      
       ctx.beginPath();
-      this.roundRect(ctx, x, y, w, headerH, [6, 6, 0, 0]);
+      this.roundRect(ctx, x, y, w, headerH, [8, 8, 0, 0]);
       ctx.fill();
       
-      // Table name - draw after header so it's visible
+      // Table name
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 14px system-ui';
+      ctx.font = 'bold 13px system-ui';
       ctx.textAlign = 'center';
       const tableName = table.name || 'Unknown';
-      ctx.fillText(tableName, x + w/2, y + 20);
+      const displayName = tableName.length > 20 ? tableName.substring(0, 17) + '...' : tableName;
+      ctx.fillText(displayName, x + w/2, y + 25);
+      
+      // Разделитель между заголовком и колонками
+      ctx.strokeStyle = this.config.tableBorder;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 8, y + headerH);
+      ctx.lineTo(x + w - 8, y + headerH);
+      ctx.stroke();
       
       // Draw column header if no columns
       if (!cols || cols.length === 0) {
-        ctx.fillStyle = this.darkMode ? '#94a3b8' : '#64748b';
+        ctx.fillStyle = this.config.textSecondary;
         ctx.font = '11px system-ui';
         ctx.textAlign = 'center';
-        ctx.fillText('(нет колонок)', x + w/2, y + headerH + 20);
+        ctx.fillText('(нет колонок)', x + w/2, y + headerH + 28);
       }
       
       // Columns
       if (this.config.showColumns && cols && cols.length > 0) {
-        ctx.font = '12px system-ui';
+        ctx.font = '11px system-ui';
         cols.forEach((col, i) => {
-          const cy = y + headerH + 8 + i * this.config.columnHeight;
+          const cy = y + headerH + 12 + i * this.config.columnHeight;
           
-          // Key indicator
+          // Чередующаяся подсветка строк
+          if (i % 2 === 0) {
+            ctx.fillStyle = this.darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)';
+            ctx.fillRect(x + 2, cy - 12, w - 4, this.config.columnHeight);
+          }
+          
+          // Key indicator - красивые иконки
           if (col.is_pk) {
             ctx.fillStyle = this.config.pkColor;
             ctx.beginPath();
-            ctx.arc(x + 15, cy - 2, 5, 0, Math.PI * 2);
+            ctx.arc(x + 16, cy - 4, 6, 0, Math.PI * 2);
             ctx.fill();
+            // Белая иконка внутри
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 8px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText('K', x + 16, cy - 1);
           } else if (col.is_fk) {
             ctx.fillStyle = this.config.fkColor;
             ctx.beginPath();
-            ctx.arc(x + 15, cy - 2, 5, 0, Math.PI * 2);
+            ctx.arc(x + 16, cy - 4, 6, 0, Math.PI * 2);
             ctx.fill();
+            // Белая иконка внутри
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 8px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText('F', x + 16, cy - 1);
           }
           
+          // Column name
           ctx.fillStyle = this.config.textColor;
           ctx.textAlign = 'left';
           const colName = col.name || '';
-          ctx.fillText(colName.substring(0, 20), x + 28, cy);
+          ctx.fillText(colName.substring(0, 18), x + 32, cy);
           
-          ctx.fillStyle = this.darkMode ? '#94a3b8' : '#64748b';
+          // Column type
+          ctx.fillStyle = this.config.textSecondary;
           ctx.textAlign = 'right';
           const colType = col.type || '';
-          ctx.fillText(colType.substring(0, 12), x + w - 10, cy);
+          ctx.fillText(colType.substring(0, 12), x + w - 8, cy);
         });
       }
       
@@ -901,6 +950,7 @@
     });
 
     loadTables();
+    initToggleButtons(); 
   }
 
   async function loadTables() {
@@ -1009,14 +1059,12 @@
 
   function renderERD(data) {
     if (!erdManager) return;
-
-    // Очищаем старые данные
     erdManager.tables?.clear();
     erdManager.relationships?.clear();
-
-    // Загружаем новые данные
     erdManager.loadFromAPI(data);
     updateStats();
+    updateTablesList();      // ← Добавить эту строку
+    updateRelationsList();   // ← Добавить эту строку
   }
 
   function toggleShowColumns() {
@@ -1036,6 +1084,73 @@
     if (erdManager) {
       document.getElementById('statTables').textContent = `${erdManager.tables.size} таблиц`;
       document.getElementById('statRelations').textContent = `${erdManager.relationships.size} связей`;
+    }
+  }
+
+  // Обновить список таблиц в сайдбаре
+  function updateTablesList() {
+    const tablesList = document.getElementById('tablesList');
+    tablesList.innerHTML = '';
+    
+    if (!erdManager || erdManager.tables.size === 0) {
+      tablesList.innerHTML = '<div style="padding: 8px; color: var(--text-3); font-size: 11px;">Нет таблиц</div>';
+      return;
+    }
+    
+    erdManager.tables.forEach((table, name) => {
+      const item = document.createElement('div');
+      item.className = 'sidebar-item';
+      item.innerHTML = `
+        <input type="checkbox" checked>
+        <span class="item-label" title="${name}">${name}</span>
+        <span class="item-badge">${(table.columns || []).length}</span>
+      `;
+      tablesList.appendChild(item);
+    });
+  }
+
+  // Обновить список связей в сайдбаре
+  function updateRelationsList() {
+    const relationsList = document.getElementById('relationsList');
+    relationsList.innerHTML = '';
+    
+    if (!erdManager || erdManager.relationships.size === 0) {
+      relationsList.innerHTML = '<div style="padding: 8px; color: var(--text-3); font-size: 11px;">Нет связей</div>';
+      return;
+    }
+    
+    erdManager.relationships.forEach((rel, targetTable) => {
+      const item = document.createElement('div');
+      item.className = 'sidebar-item';
+      const relType = rel.relation_type === 'FOREIGN_KEY' ? '1:N' : 'N:1';
+      item.innerHTML = `
+        <span style="color: var(--amber); font-weight: bold;">◆</span>
+        <span class="item-label" title="${rel.source_table || '?'} → ${targetTable}">${rel.source_table || '?'} → ${targetTable}</span>
+        <span class="item-badge">${relType}</span>
+      `;
+      relationsList.appendChild(item);
+    });
+  }
+
+  // Переключение видимости списков в сайдбаре
+  function initToggleButtons() {
+    const toggleTables = document.getElementById('toggleTables');
+    const toggleRelations = document.getElementById('toggleRelations');
+    const tablesList = document.getElementById('tablesList');
+    const relationsList = document.getElementById('relationsList');
+    
+    if (toggleTables) {
+      toggleTables.addEventListener('click', () => {
+        toggleTables.classList.toggle('collapsed');
+        tablesList.style.display = tablesList.style.display === 'none' ? 'flex' : 'none';
+      });
+    }
+    
+    if (toggleRelations) {
+      toggleRelations.addEventListener('click', () => {
+        toggleRelations.classList.toggle('collapsed');
+        relationsList.style.display = relationsList.style.display === 'none' ? 'flex' : 'none';
+      });
     }
   }
 
