@@ -269,6 +269,41 @@
             stroke: currentColor;
         }
 
+        .display-mode-toggle {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .display-mode-toggle::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(99, 102, 241, 0.18));
+            opacity: 0;
+            transition: opacity 0.22s ease;
+        }
+
+        .display-mode-toggle.active {
+            color: var(--primary);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.18);
+        }
+
+        .display-mode-toggle.active::before {
+            opacity: 1;
+        }
+
+        .display-mode-toggle .toggle-icon {
+            position: relative;
+            z-index: 1;
+            transition: transform 0.24s ease;
+            transform-origin: center;
+        }
+
+        .display-mode-toggle.active .toggle-icon {
+            transform: scaleX(-1) scale(1.05);
+        }
+
         .legend-item {
             display: flex;
             align-items: center;
@@ -432,6 +467,21 @@
                     <input type="month" id="accountingMonth" onchange="onAccountingMonthChange()">
                 </div>
                 <div class="filter-actions">
+                    <button
+                        class="icon-action-btn display-mode-toggle"
+                        id="displayModeToggle"
+                        type="button"
+                        onclick="toggleDisplayMode()"
+                        title="Режим отображения: стандартный">
+                        <svg class="toggle-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="5" cy="7" r="1.5"></circle>
+                            <circle cx="12" cy="12" r="1.5"></circle>
+                            <circle cx="19" cy="17" r="1.5"></circle>
+                            <path d="M6.5 7.8L10.8 11"></path>
+                            <path d="M13.2 13l4.3 3.2"></path>
+                            <path d="M4 19h16"></path>
+                        </svg>
+                    </button>
                     <button class="icon-action-btn" type="button" onclick="loadNetwork()" title="Построить сеть">
                         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
@@ -517,6 +567,7 @@ let objectLegendColors = {}; // object_id -> border color (для легенды
 let objectLegendEntries = []; // [{ id, name, color }] для боковой легенды
 let accountingData = {}; // node_calculate_parameter_id -> accounting types
 let selectedAccountingMonth = null;
+let currentDisplayMode = 'default';
 const searchableSelectState = {
     objectSelect: { options: [] },
     nodeSelect: { options: [] },
@@ -570,6 +621,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // иначе при первом запуске loadNetwork() в режиме accounting будет ругаться,
     // хотя в input месяц визуально уже выбран.
     onAccountingMonthChange();
+    updateDisplayModeToggle();
 
     document.addEventListener('click', function(event) {
         ['objectSelect', 'nodeSelect', 'parameterSelect'].forEach(baseId => {
@@ -823,6 +875,27 @@ function onAccountingMonthChange() {
     }
 }
 
+function updateDisplayModeToggle() {
+    const btn = document.getElementById('displayModeToggle');
+    if (!btn) return;
+
+    const isLtr = currentDisplayMode === 'ltr';
+    btn.classList.toggle('active', isLtr);
+    btn.setAttribute('aria-pressed', isLtr ? 'true' : 'false');
+    btn.title = isLtr
+        ? 'Режим отображения: слева направо'
+        : 'Режим отображения: стандартный';
+}
+
+function toggleDisplayMode() {
+    currentDisplayMode = currentDisplayMode === 'ltr' ? 'default' : 'ltr';
+    updateDisplayModeToggle();
+
+    if (rawData.length > 0) {
+        buildNetworkGraph(rawData);
+    }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // NETWORK BUILDER - Конструктор сети
 // ═════════════════════════════════════════════════════════════════════════════
@@ -881,6 +954,7 @@ async function loadNetwork() {
 function buildNetworkGraph(treeData) {
     const nodes = new vis.DataSet();
     const edges = new vis.DataSet();
+    const isLeftToRightMode = currentDisplayMode === 'ltr';
 
     const processedNodes = new Set();
     const processedEdges = new Set();
@@ -1057,7 +1131,18 @@ function buildNetworkGraph(treeData) {
         ctx.closePath();
     };
 
-    const getObjectBounds = (visIds, padding = 28) => {
+    const OBJECT_SIDE_PADDING = 28;
+    const OBJECT_BOTTOM_PADDING = 28;
+    const OBJECT_TITLE_HEIGHT = 34;
+    const OBJECT_TITLE_GAP = 10;
+    const OBJECT_TOP_PADDING = OBJECT_TITLE_HEIGHT + OBJECT_TITLE_GAP + 18;
+
+    const estimateObjectLabelWidth = (labelText) => {
+        const safeText = String(labelText || '');
+        return Math.max(110, Math.min(360, safeText.length * 7.2 + 20));
+    };
+
+    const getObjectBounds = (visIds, labelText = '', labelWidth = null) => {
         if (!network || !Array.isArray(visIds) || visIds.length === 0) return null;
 
         const positions = network.getPositions(visIds);
@@ -1076,11 +1161,24 @@ function buildNetworkGraph(treeData) {
             maxY = Math.max(maxY, p.y);
         });
 
+        minX -= OBJECT_SIDE_PADDING;
+        maxX += OBJECT_SIDE_PADDING;
+        minY -= OBJECT_TOP_PADDING;
+        maxY += OBJECT_BOTTOM_PADDING;
+
+        const requiredInnerWidth = (labelWidth ?? estimateObjectLabelWidth(labelText)) + 20;
+        const currentWidth = maxX - minX;
+        if (currentWidth < requiredInnerWidth) {
+            const extraHalf = (requiredInnerWidth - currentWidth) / 2;
+            minX -= extraHalf;
+            maxX += extraHalf;
+        }
+
         return {
-            minX: minX - padding,
-            minY: minY - padding,
-            maxX: maxX + padding,
-            maxY: maxY + padding
+            minX,
+            minY,
+            maxX,
+            maxY
         };
     };
 
@@ -1111,17 +1209,18 @@ function buildNetworkGraph(treeData) {
         const placedBounds = [];
         const groups = Array.from(objectGroupsForDrawing.entries()).map(([oid, info]) => ({
             oid,
+            name: info.name,
             visIds: Array.from(info.visIds)
         }));
 
         groups.sort((a, b) => {
-            const boundsA = getObjectBounds(a.visIds, 28);
-            const boundsB = getObjectBounds(b.visIds, 28);
+            const boundsA = getObjectBounds(a.visIds, a.name);
+            const boundsB = getObjectBounds(b.visIds, b.name);
             return (boundsA?.minY ?? 0) - (boundsB?.minY ?? 0);
         });
 
         groups.forEach(group => {
-            let bounds = getObjectBounds(group.visIds, 28);
+            let bounds = getObjectBounds(group.visIds, group.name);
             if (!bounds) return;
 
             let requiredShift = 0;
@@ -1133,7 +1232,7 @@ function buildNetworkGraph(treeData) {
 
             if (requiredShift > 0) {
                 shiftObjectGroup(group.visIds, requiredShift);
-                bounds = getObjectBounds(group.visIds, 28);
+                bounds = getObjectBounds(group.visIds, group.name);
                 if (!bounds) return;
             }
 
@@ -1273,7 +1372,9 @@ function buildNetworkGraph(treeData) {
                 color: '#9CA3AF',
                 highlight: '#FF6B6B'
             },
-            smooth: { type: 'continuous' },
+            smooth: isLeftToRightMode
+                ? { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.35 }
+                : { type: 'continuous' },
             title: row.line_name ? String(row.line_name) : ''
         });
     });
@@ -1285,7 +1386,9 @@ function buildNetworkGraph(treeData) {
     const data = { nodes, edges };
 
     const options = {
-        physics: {
+        physics: isLeftToRightMode ? {
+            enabled: false
+        } : {
             enabled: document.getElementById('showPhysics')?.checked ?? true,
             solver: 'forceAtlas2Based',
             forceAtlas2Based: {
@@ -1298,7 +1401,19 @@ function buildNetworkGraph(treeData) {
             },
             stabilization: { iterations: 150 }
         },
-        layout: { improvedLayout: true },
+        layout: isLeftToRightMode ? {
+            hierarchical: {
+                enabled: true,
+                direction: 'LR',
+                sortMethod: 'directed',
+                levelSeparation: 220,
+                nodeSpacing: 130,
+                treeSpacing: 180,
+                blockShifting: true,
+                edgeMinimization: true,
+                parentCentralization: true
+            }
+        } : { improvedLayout: true },
         nodes: {
             borderWidth: 2,
             shadow: {
@@ -1344,6 +1459,11 @@ function buildNetworkGraph(treeData) {
         if (separationApplied) return;
         separationApplied = true;
         enforceObjectSeparation();
+        if (isLeftToRightMode) {
+            network.fit({
+                animation: false
+            });
+        }
         network.redraw();
         container.classList.remove('network-hidden');
     };
@@ -1355,52 +1475,68 @@ function buildNetworkGraph(treeData) {
         if (!objectGroupsForDrawing || objectGroupsForDrawing.size === 0) return;
 
         const isLight = document.body.classList.contains('light-theme');
-        const labelFill = isLight ? '#374151' : '#e5e7eb';
         const fillAlpha = isLight ? 0.07 : 0.09;
-        const pad = 28;
         const lineW = 2;
 
         objectGroupsForDrawing.forEach((info, oid) => {
             const ids = Array.from(info.visIds);
             if (ids.length === 0) return;
-
-            const positions = network.getPositions(ids);
-            const coords = Object.values(positions).filter(p => p && typeof p.x === 'number' && typeof p.y === 'number');
-            if (coords.length === 0) return;
-
-            let minX = Infinity;
-            let minY = Infinity;
-            let maxX = -Infinity;
-            let maxY = -Infinity;
-            coords.forEach(p => {
-                minX = Math.min(minX, p.x);
-                minY = Math.min(minY, p.y);
-                maxX = Math.max(maxX, p.x);
-                maxY = Math.max(maxY, p.y);
-            });
-
-            minX -= pad;
-            minY -= pad;
-            maxX += pad;
-            maxY += pad;
-
-            const w = maxX - minX;
-            const h = maxY - minY;
             const borderColor = objectLegendColors[String(oid)] || objectBoxPalette[0];
+            const rawName = info.name || `Объект ${oid}`;
+            const label = rawName.length > 42 ? rawName.substring(0, 39) + '…' : rawName;
 
             ctx.save();
+            ctx.font = '600 13px Arial, sans-serif';
+            const measuredLabelWidth = ctx.measureText(label).width;
+            const bounds = getObjectBounds(ids, label, measuredLabelWidth);
+            if (!bounds) {
+                ctx.restore();
+                return;
+            }
+
+            const minX = bounds.minX;
+            const minY = bounds.minY;
+            const w = bounds.maxX - bounds.minX;
+            const h = bounds.maxY - bounds.minY;
+
             ctx.lineWidth = lineW;
             ctx.fillStyle = hexToRgba(borderColor, fillAlpha);
             ctx.strokeStyle = hexToRgba(borderColor, isLight ? 0.45 : 0.55);
             roundRectPath(ctx, minX, minY, w, h, 14);
             ctx.fill();
             ctx.stroke();
+            ctx.restore();
+        });
+    });
 
-            ctx.fillStyle = labelFill;
-            ctx.font = '600 13px Arial, sans-serif';
+    network.on('afterDrawing', function(ctx) {
+        if (!objectGroupsForDrawing || objectGroupsForDrawing.size === 0) return;
+
+        const isLight = document.body.classList.contains('light-theme');
+        const labelFill = isLight ? '#374151' : '#e5e7eb';
+
+        objectGroupsForDrawing.forEach((info, oid) => {
+            const ids = Array.from(info.visIds);
+            if (ids.length === 0) return;
+
             const rawName = info.name || `Объект ${oid}`;
             const label = rawName.length > 42 ? rawName.substring(0, 39) + '…' : rawName;
-            ctx.fillText(label, minX + 10, minY + 18);
+
+            ctx.save();
+            ctx.font = '600 13px Arial, sans-serif';
+            const measuredLabelWidth = ctx.measureText(label).width;
+            const bounds = getObjectBounds(ids, label, measuredLabelWidth);
+            if (!bounds) {
+                ctx.restore();
+                return;
+            }
+
+            const minX = bounds.minX;
+            const minY = bounds.minY;
+
+            ctx.fillStyle = labelFill;
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, minX + 14, minY + (OBJECT_TITLE_HEIGHT / 2) + 6);
             ctx.restore();
         });
     });
@@ -1415,6 +1551,8 @@ function buildNetworkGraph(treeData) {
 
     // Ensure tooltips update with fresh accounting data
     network.on('hoverNode', function(params) {
+        if (currentDisplayMode === 'ltr') return;
+
         const nodeVisId = params.node;
         const m = String(nodeVisId).match(/^node-(\d+)$/);
         if (!m) return;
