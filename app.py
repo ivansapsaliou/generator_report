@@ -2613,8 +2613,16 @@ def get_network_tree():
                 tree_cte.path_str,
                 tree_cte.node_name,
                 tree_cte.node_type_name,
-                tree_cte.node_calculate_parameter_id
+                tree_cte.node_calculate_parameter_id,
+                ro.object_id::BIGINT AS object_id,
+                ro.object_name::TEXT AS object_name
             FROM tree_cte
+            LEFT JOIN public.rul_node_calculate_parameter rncp
+                ON rncp.node_calculate_parameter_id = tree_cte.child_id
+            LEFT JOIN public.rul_node rn
+                ON rn.node_id = rncp.node_id
+            LEFT JOIN public.rul_object ro
+                ON ro.object_id = rn.object_id
             ORDER BY tree_cte.level, tree_cte.path_str
             LIMIT 10000
         """
@@ -2636,7 +2644,9 @@ def get_network_tree():
                 'path_str': row['path_str'],
                 'node_name': row['node_name'],
                 'node_type_name': row['node_type_name'],
-                'node_calculate_parameter_id': row['node_calculate_parameter_id']
+                'node_calculate_parameter_id': row['node_calculate_parameter_id'],
+                'object_id': row['object_id'],
+                'object_name': row['object_name']
             })
         
         # Если включен режим "Использовать способ учета"
@@ -3903,4 +3913,4 @@ def sql_table_stats():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5005)

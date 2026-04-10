@@ -20,6 +20,10 @@
             background: var(--bg);
             margin-top: 12px;
         }
+
+        #network-container.network-hidden {
+            visibility: hidden;
+        }
         
         #network-sidebar {
             min-width: 300px;
@@ -139,6 +143,84 @@
         .filter-input-wrapper {
             position: relative;
         }
+
+        .searchable-select {
+            position: relative;
+            width: 100%;
+        }
+
+        .searchable-select-input {
+            width: 100%;
+            padding: 8px 36px 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .searchable-select-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .searchable-select::after {
+            content: '\F282';
+            font-family: 'bootstrap-icons';
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
+            font-size: 12px;
+        }
+
+        .searchable-select.open::after {
+            transform: translateY(-50%) rotate(180deg);
+        }
+
+        .searchable-select-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            max-height: 240px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card-bg);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+            z-index: 20;
+            display: none;
+        }
+
+        .searchable-select.open .searchable-select-dropdown {
+            display: block;
+        }
+
+        .searchable-select-option {
+            padding: 8px 12px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .searchable-select-option:last-child {
+            border-bottom: none;
+        }
+
+        .searchable-select-option:hover,
+        .searchable-select-option.active {
+            background: rgba(59, 130, 246, 0.12);
+        }
+
+        .searchable-select-empty {
+            padding: 8px 12px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
         
         .filter-input-wrapper .search-icon {
             position: absolute;
@@ -149,60 +231,44 @@
             pointer-events: none;
         }
         
-        .filter-mode-toggle {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
-            padding: 8px;
-            background: var(--bg);
-            border-radius: 6px;
-            border: 1px solid var(--border);
-        }
-        
-        .filter-mode-toggle label {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13px;
-            color: var(--text);
-            cursor: pointer;
-        }
-        
-        .accounting-month-selector {
-            display: none;
-            margin-bottom: 16px;
-            padding: 12px;
-            background: var(--bg);
-            border-radius: 6px;
-            border: 1px solid var(--border);
-        }
-        
-        .accounting-month-selector.visible {
-            display: block !important;
-        }
-        
-        .accounting-month-selector label {
-            display: block;
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-        }
-        
-        .accounting-month-selector input[type="month"] {
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: var(--bg);
-            color: var(--text);
-            font-size: 14px;
-        }
-        
         .filter-actions {
             display: flex;
             gap: 8px;
             align-items: flex-end;
         }
-        
+
+        .filter-item.filter-item-month {
+            flex: 0 0 180px;
+            min-width: 180px;
+        }
+
+        .icon-action-btn {
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text);
+            cursor: pointer;
+            transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+            padding: 0;
+        }
+
+        .icon-action-btn:hover {
+            transform: translateY(-1px);
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .icon-action-btn svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+        }
+
         .legend-item {
             display: flex;
             align-items: center;
@@ -306,55 +372,78 @@
         </div>
 
         <div class="content">
-            <!-- Переключатель режимов -->
-            <div class="filter-mode-toggle">
-                <label>
-                    <input type="radio" name="buildMode" value="standard" checked onchange="onBuildModeChange()">
-                    Стандартный режим
-                </label>
-                <label>
-                    <input type="radio" name="buildMode" value="accounting" onchange="onBuildModeChange()">
-                    Использовать способ учета
-                </label>
-            </div>
-
-            <!-- Селектор месяца для режима учета -->
-            <div id="accountingMonthSelector" class="accounting-month-selector">
-                <label>Выберите месяц для построения:</label>
-                <input type="month" id="accountingMonth" onchange="onAccountingMonthChange()">
-            </div>
-
             <!-- Каскадные фильтры -->
             <div class="filter-group">
                 <div class="filter-item">
                     <label>Объект</label>
                     <div class="filter-input-wrapper">
-                        <select id="objectSelect" onchange="onObjectChange()">
-                            <option value="">Выберите объект...</option>
-                        </select>
+                        <div class="searchable-select" id="objectSelectWrapper">
+                            <input
+                                type="text"
+                                id="objectSelectInput"
+                                class="searchable-select-input"
+                                placeholder="Выберите объект..."
+                                autocomplete="off"
+                                onfocus="openSearchableSelect('objectSelect')"
+                                oninput="handleSearchableInput('objectSelect', this.value)">
+                            <input type="hidden" id="objectSelect" value="">
+                            <div class="searchable-select-dropdown" id="objectSelectDropdown"></div>
+                        </div>
                     </div>
-                    <input type="text" id="objectSearch" placeholder="Поиск..." style="margin-top: 4px;" oninput="filterSelect('objectSelect', this.value)">
                 </div>
                 <div class="filter-item">
                     <label>Узел</label>
-                    <select id="nodeSelect" onchange="onNodeChange()" disabled>
-                        <option value="">Сначала выберите объект</option>
-                    </select>
-                    <input type="text" id="nodeSearch" placeholder="Поиск..." style="margin-top: 4px;" oninput="filterSelect('nodeSelect', this.value)" disabled>
+                    <div class="filter-input-wrapper">
+                        <div class="searchable-select" id="nodeSelectWrapper">
+                            <input
+                                type="text"
+                                id="nodeSelectInput"
+                                class="searchable-select-input"
+                                placeholder="Сначала выберите объект"
+                                autocomplete="off"
+                                disabled
+                                onfocus="openSearchableSelect('nodeSelect')"
+                                oninput="handleSearchableInput('nodeSelect', this.value)">
+                            <input type="hidden" id="nodeSelect" value="">
+                            <div class="searchable-select-dropdown" id="nodeSelectDropdown"></div>
+                        </div>
+                    </div>
                 </div>
                 <div class="filter-item">
                     <label>Расчетный параметр (Node ID)</label>
-                    <select id="parameterSelect" onchange="onParameterChange()" disabled>
-                        <option value="">Сначала выберите узел</option>
-                    </select>
-                    <input type="text" id="parameterSearch" placeholder="Поиск..." style="margin-top: 4px;" oninput="filterSelect('parameterSelect', this.value)" disabled>
+                    <div class="filter-input-wrapper">
+                        <div class="searchable-select" id="parameterSelectWrapper">
+                            <input
+                                type="text"
+                                id="parameterSelectInput"
+                                class="searchable-select-input"
+                                placeholder="Сначала выберите узел"
+                                autocomplete="off"
+                                disabled
+                                onfocus="openSearchableSelect('parameterSelect')"
+                                oninput="handleSearchableInput('parameterSelect', this.value)">
+                            <input type="hidden" id="parameterSelect" value="">
+                            <div class="searchable-select-dropdown" id="parameterSelectDropdown"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="filter-item filter-item-month">
+                    <label>Месяц учета</label>
+                    <input type="month" id="accountingMonth" onchange="onAccountingMonthChange()">
                 </div>
                 <div class="filter-actions">
-                    <button class="btn btn-primary" onclick="loadNetwork()">
-                        <i class="bi bi-arrow-repeat"></i> Загрузить сеть
+                    <button class="icon-action-btn" type="button" onclick="loadNetwork()" title="Построить сеть">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+                            <path d="M21 3v6h-6"/>
+                        </svg>
                     </button>
-                    <button class="btn btn-secondary" onclick="exportNetwork()">
-                        <i class="bi bi-download"></i> Экспорт CSV
+                    <button class="icon-action-btn" type="button" onclick="exportNetwork()" title="Выгрузить CSV">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 3v12"/>
+                            <path d="M7 10l5 5 5-5"/>
+                            <path d="M5 21h14"/>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -391,6 +480,9 @@
                     <h6 style="margin-top: 16px;">Типы узлов (легенда)</h6>
                     <div id="typeLegend" style="margin-bottom: 12px;"></div>
 
+                    <h6 style="margin-top: 16px;">Объекты (рамки на схеме)</h6>
+                    <div id="objectLegend" style="margin-bottom: 12px;"></div>
+
                     <h6 style="margin-top: 16px;">Выбранный элемент</h6>
                     <div id="nodeDetails" style="color: var(--text-muted); font-size: 12px;">
                         Выберите узел на графе для отображения информации
@@ -401,11 +493,9 @@
                             <input type="checkbox" id="showLabels" checked onchange="updateNetworkOptions()">
                             Показывать метки
                         </label>
-                        <br>
-                        <label style="font-size: 12px; color: var(--text);">
-                            <input type="checkbox" id="showPhysics" onchange="updateNetworkOptions()">
-                            Физическое моделирование
-                        </label>
+                        <div style="display: none;">
+                            <input type="checkbox" id="showPhysics">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -423,9 +513,15 @@ let nodesData = [];
 let edgesData = [];
 let rawData = [];
 let nodeTypeColors = {};
+let objectLegendColors = {}; // object_id -> border color (для легенды)
+let objectLegendEntries = []; // [{ id, name, color }] для боковой легенды
 let accountingData = {}; // node_calculate_parameter_id -> accounting types
-let currentBuildMode = 'standard';
 let selectedAccountingMonth = null;
+const searchableSelectState = {
+    objectSelect: { options: [] },
+    nodeSelect: { options: [] },
+    parameterSelect: { options: [] }
+};
 
 // ═════════════════════════════════════════════════════════════════════════════
 // THEME MANAGEMENT - Управление темой
@@ -474,11 +570,142 @@ document.addEventListener('DOMContentLoaded', function() {
     // иначе при первом запуске loadNetwork() в режиме accounting будет ругаться,
     // хотя в input месяц визуально уже выбран.
     onAccountingMonthChange();
+
+    document.addEventListener('click', function(event) {
+        ['objectSelect', 'nodeSelect', 'parameterSelect'].forEach(baseId => {
+            const wrapper = document.getElementById(`${baseId}Wrapper`);
+            if (wrapper && !wrapper.contains(event.target)) {
+                closeSearchableSelect(baseId, true);
+            }
+        });
+    });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CASCADE FILTERS - Каскадные фильтры
 // ═════════════════════════════════════════════════════════════════════════════
+
+function getSearchableSelectElements(baseId) {
+    return {
+        wrapper: document.getElementById(`${baseId}Wrapper`),
+        input: document.getElementById(`${baseId}Input`),
+        hidden: document.getElementById(baseId),
+        dropdown: document.getElementById(`${baseId}Dropdown`)
+    };
+}
+
+function setSearchableSelectOptions(baseId, options, placeholder, disabled = false) {
+    const state = searchableSelectState[baseId];
+    const { input, hidden } = getSearchableSelectElements(baseId);
+    if (!state || !input || !hidden) return;
+
+    state.options = Array.isArray(options) ? options : [];
+    input.value = '';
+    hidden.value = '';
+    input.placeholder = placeholder;
+    input.disabled = disabled;
+    closeSearchableSelect(baseId);
+}
+
+function openSearchableSelect(baseId) {
+    const { wrapper, input } = getSearchableSelectElements(baseId);
+    if (!wrapper || !input || input.disabled) return;
+    wrapper.classList.add('open');
+    renderSearchableSelectOptions(baseId, input.value);
+}
+
+function closeSearchableSelect(baseId, trySelectExact = false) {
+    const { wrapper, input } = getSearchableSelectElements(baseId);
+    if (!wrapper || !input) return;
+
+    if (trySelectExact && input.value.trim()) {
+        tryResolveSearchableSelectExactMatch(baseId);
+    }
+
+    wrapper.classList.remove('open');
+}
+
+function renderSearchableSelectOptions(baseId, searchText = '') {
+    const state = searchableSelectState[baseId];
+    const { dropdown, hidden } = getSearchableSelectElements(baseId);
+    if (!state || !dropdown) return;
+
+    const normalizedSearch = String(searchText || '').trim().toLowerCase();
+    const filteredOptions = state.options.filter(option =>
+        option.label.toLowerCase().includes(normalizedSearch)
+    );
+
+    if (filteredOptions.length === 0) {
+        dropdown.innerHTML = '<div class="searchable-select-empty">Ничего не найдено</div>';
+        return;
+    }
+
+    dropdown.innerHTML = filteredOptions.map(option => {
+        const isActive = String(hidden.value) === String(option.value);
+        const safeLabel = escapeHtml(option.label);
+        return `<div class="searchable-select-option${isActive ? ' active' : ''}" data-value="${escapeHtml(String(option.value))}">${safeLabel}</div>`;
+    }).join('');
+
+    dropdown.querySelectorAll('.searchable-select-option').forEach(el => {
+        el.addEventListener('mousedown', function(event) {
+            event.preventDefault();
+            selectSearchableOption(baseId, {
+                value: this.dataset.value,
+                label: this.textContent || ''
+            });
+        });
+    });
+}
+
+function handleSearchableInput(baseId, searchText) {
+    const { hidden } = getSearchableSelectElements(baseId);
+    if (!hidden) return;
+    hidden.value = '';
+    openSearchableSelect(baseId);
+    renderSearchableSelectOptions(baseId, searchText);
+}
+
+function tryResolveSearchableSelectExactMatch(baseId) {
+    const state = searchableSelectState[baseId];
+    const { input, hidden } = getSearchableSelectElements(baseId);
+    if (!state || !input || !hidden) return;
+
+    if (hidden.value) return;
+
+    const normalizedInput = input.value.trim().toLowerCase();
+    if (!normalizedInput) return;
+
+    const exactMatch = state.options.find(option => option.label.trim().toLowerCase() === normalizedInput);
+    if (exactMatch) {
+        selectSearchableOption(baseId, exactMatch);
+    }
+}
+
+function selectSearchableOption(baseId, option) {
+    const { input, hidden } = getSearchableSelectElements(baseId);
+    if (!input || !hidden) return;
+
+    input.value = option.label;
+    hidden.value = option.value;
+    closeSearchableSelect(baseId);
+
+    if (baseId === 'objectSelect') {
+        onObjectChange();
+    } else if (baseId === 'nodeSelect') {
+        onNodeChange();
+    } else if (baseId === 'parameterSelect') {
+        onParameterChange();
+    }
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 async function loadObjects() {
     try {
@@ -499,15 +726,15 @@ async function loadObjects() {
             return;
         }
         
-        const select = document.getElementById('objectSelect');
-        select.innerHTML = '<option value="">Выберите объект...</option>';
-        
-        data.data.forEach(obj => {
-            const option = document.createElement('option');
-            option.value = obj.object_id;
-            option.textContent = obj.object_name;
-            select.appendChild(option);
-        });
+        setSearchableSelectOptions(
+            'objectSelect',
+            data.data.map(obj => ({
+                value: obj.object_id,
+                label: obj.object_name || `Объект ${obj.object_id}`
+            })),
+            'Выберите объект...',
+            false
+        );
         
         console.log('[NETWORK] Objects count:', data.data.length);
         
@@ -518,21 +745,10 @@ async function loadObjects() {
 
 async function onObjectChange() {
     const objectId = document.getElementById('objectSelect').value;
-    const nodeSelect = document.getElementById('nodeSelect');
-    const parameterSelect = document.getElementById('parameterSelect');
-    const nodeSearch = document.getElementById('nodeSearch');
-    const parameterSearch = document.getElementById('parameterSearch');
     
     // Сброс всех зависимых фильтров
-    nodeSelect.innerHTML = '<option value="">Сначала выберите объект</option>';
-    nodeSelect.disabled = true;
-    nodeSearch.disabled = true;
-    nodeSearch.value = '';
-    
-    parameterSelect.innerHTML = '<option value="">Сначала выберите узел</option>';
-    parameterSelect.disabled = true;
-    parameterSearch.disabled = true;
-    parameterSearch.value = '';
+    setSearchableSelectOptions('nodeSelect', [], 'Сначала выберите объект', true);
+    setSearchableSelectOptions('parameterSelect', [], 'Сначала выберите узел', true);
     
     if (!objectId) return;
     
@@ -545,17 +761,15 @@ async function onObjectChange() {
             return;
         }
         
-        nodeSelect.innerHTML = '<option value="">Выберите узел...</option>';
-        
-        data.data.forEach(node => {
-            const option = document.createElement('option');
-            option.value = node.node_id;
-            option.textContent = node.node_name || `Node ${node.node_id}`;
-            nodeSelect.appendChild(option);
-        });
-        
-        nodeSelect.disabled = false;
-        nodeSearch.disabled = false;
+        setSearchableSelectOptions(
+            'nodeSelect',
+            data.data.map(node => ({
+                value: node.node_id,
+                label: node.node_name || `Node ${node.node_id}`
+            })),
+            'Выберите узел...',
+            false
+        );
         
     } catch (error) {
         console.error('Error loading nodes:', error);
@@ -564,14 +778,9 @@ async function onObjectChange() {
 
 async function onNodeChange() {
     const nodeId = document.getElementById('nodeSelect').value;
-    const parameterSelect = document.getElementById('parameterSelect');
-    const parameterSearch = document.getElementById('parameterSearch');
     
     // Сброс зависимого фильтра
-    parameterSelect.innerHTML = '<option value="">Сначала выберите узел</option>';
-    parameterSelect.disabled = true;
-    parameterSearch.disabled = true;
-    parameterSearch.value = '';
+    setSearchableSelectOptions('parameterSelect', [], 'Сначала выберите узел', true);
     
     if (!nodeId) return;
     
@@ -584,17 +793,15 @@ async function onNodeChange() {
             return;
         }
         
-        parameterSelect.innerHTML = '<option value="">Выберите параметр...</option>';
-        
-        data.data.forEach(param => {
-            const option = document.createElement('option');
-            option.value = param.node_calculate_parameter_id;
-            option.textContent = param.parameter_name;
-            parameterSelect.appendChild(option);
-        });
-        
-        parameterSelect.disabled = false;
-        parameterSearch.disabled = false;
+        setSearchableSelectOptions(
+            'parameterSelect',
+            data.data.map(param => ({
+                value: param.node_calculate_parameter_id,
+                label: param.parameter_name
+            })),
+            'Выберите параметр...',
+            false
+        );
         
     } catch (error) {
         console.error('Error loading parameters:', error);
@@ -605,52 +812,6 @@ function onParameterChange() {
     const paramId = document.getElementById('parameterSelect').value;
     // Можно добавить дополнительную логику при выборе параметра
     console.log('Selected parameter ID:', paramId);
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// FILTER FUNCTIONS - Функции фильтрации
-// ═════════════════════════════════════════════════════════════════════════════
-
-function filterSelect(selectId, searchText) {
-    const select = document.getElementById(selectId);
-    const search = searchText.toLowerCase();
-    
-    for (let i = 0; i < select.options.length; i++) {
-        const option = select.options[i];
-        const text = option.text.toLowerCase();
-        option.style.display = text.includes(search) ? '' : 'none';
-    }
-}
-
-function onBuildModeChange() {
-    const mode = document.querySelector('input[name="buildMode"]:checked').value;
-    currentBuildMode = mode;
-    console.log('[NETWORK] Build mode changed to:', mode);
-    
-    const monthSelector = document.getElementById('accountingMonthSelector');
-    console.log('[NETWORK] Month selector element:', monthSelector);
-    console.log('[NETWORK] Current classes:', monthSelector.className);
-    
-    if (mode === 'accounting') {
-        monthSelector.classList.add('visible');
-    } else {
-        monthSelector.classList.remove('visible');
-    }
-    
-    console.log('[NETWORK] New classes:', monthSelector.className);
-    
-    // Сбрасываем данные
-    rawData = [];
-    accountingData = {};
-    if (network) {
-        network.destroy();
-        network = null;
-    }
-    document.getElementById('nodeCount').textContent = '0';
-    document.getElementById('lineCount').textContent = '0';
-    document.getElementById('maxLevel').textContent = '0';
-    document.getElementById('edgeCount').textContent = '0';
-    document.getElementById('typeLegend').innerHTML = '';
 }
 
 function onAccountingMonthChange() {
@@ -675,23 +836,16 @@ async function loadNetwork() {
         return;
     }
     
-    // Если выбран режим "Использовать способ учета", проверяем месяц
-    if (currentBuildMode === 'accounting') {
-        if (!selectedAccountingMonth) {
-            alert('Пожалуйста, выберите месяц для построения');
-            return;
-        }
+    if (!selectedAccountingMonth) {
+        alert('Пожалуйста, выберите месяц для построения');
+        return;
     }
         
     try {
-        console.log(`[NETWORK] Loading network tree for node ${rootNodeId}, mode: ${currentBuildMode}`);
+        console.log(`[NETWORK] Loading network tree for node ${rootNodeId} in accounting mode`);
         
         let url = `/api/network/tree?root_node_id=${rootNodeId}`;
-        
-        // Добавляем параметры для режима с способами учета
-        if (currentBuildMode === 'accounting' && selectedAccountingMonth) {
-            url += `&accounting_month=${selectedAccountingMonth}&use_accounting=true`;
-        }
+        url += `&accounting_month=${selectedAccountingMonth}&use_accounting=true`;
         
         const response = await fetch(url);
         
@@ -716,7 +870,6 @@ async function loadNetwork() {
         
         buildNetworkGraph(data.data);
         updateNetworkStats();
-        updateTypeLegend();
         console.log(`[NETWORK] ✅ Network loaded successfully with ${data.data.length} nodes`);
         
     } catch (error) {
@@ -747,6 +900,245 @@ function buildNetworkGraph(treeData) {
             typeColorIndex++;
         }
         return nodeTypeColorsLocal[key];
+    };
+
+    const hexToRgba = (hexColor, alpha) => {
+        if (!hexColor || typeof hexColor !== 'string') {
+            return `rgba(156, 163, 175, ${alpha})`;
+        }
+        const hex = hexColor.replace('#', '');
+        if (hex.length !== 6) {
+            return `rgba(156, 163, 175, ${alpha})`;
+        }
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+            return `rgba(156, 163, 175, ${alpha})`;
+        }
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    const hasActiveAccounting = (nodeId) => {
+        const acc = accountingData?.[String(nodeId)] ?? accountingData?.[nodeId];
+        return Array.isArray(acc?.types) && acc.types.length > 0;
+    };
+
+    const calculateDimmedNodesForAccounting = () => {
+        const adjacency = new Map();
+        const indegree = new Map();
+
+        const ensureNodeInGraph = (nodeId) => {
+            if (!indegree.has(nodeId)) indegree.set(nodeId, 0);
+            if (!adjacency.has(nodeId)) adjacency.set(nodeId, new Set());
+        };
+
+        treeData.forEach(row => {
+            const nodeId = Number(row.child_id ?? row.node_calculate_parameter_id ?? row.node_id);
+            if (!Number.isNaN(nodeId)) ensureNodeInGraph(nodeId);
+        });
+
+        treeData.forEach(row => {
+            const parentId = Number(row.node_id);
+            const childId = Number(row.child_id);
+
+            if (Number.isNaN(parentId) || Number.isNaN(childId)) return;
+            if (parentId === childId) return;
+
+            ensureNodeInGraph(parentId);
+            ensureNodeInGraph(childId);
+
+            if (!adjacency.get(parentId).has(childId)) {
+                adjacency.get(parentId).add(childId);
+                indegree.set(childId, (indegree.get(childId) || 0) + 1);
+            }
+        });
+
+        let roots = Array.from(indegree.entries())
+            .filter(([, degree]) => degree === 0)
+            .map(([nodeId]) => nodeId);
+
+        if (roots.length === 0) {
+            roots = treeData
+                .filter(row => Number(row.level) === 0)
+                .map(row => Number(row.child_id ?? row.node_id))
+                .filter(nodeId => !Number.isNaN(nodeId));
+        }
+
+        const queue = roots.map(nodeId => ({ nodeId, blocked: false }));
+        const visitedStates = new Set();
+        const reachableHealthy = new Set();
+        const reachableBlocked = new Set();
+
+        queue.forEach(({ nodeId }) => {
+            reachableHealthy.add(nodeId);
+        });
+
+        while (queue.length > 0) {
+            const { nodeId, blocked } = queue.shift();
+            const stateKey = `${nodeId}|${blocked ? 1 : 0}`;
+            if (visitedStates.has(stateKey)) continue;
+            visitedStates.add(stateKey);
+
+            const children = adjacency.get(nodeId);
+            if (!children || children.size === 0) continue;
+
+            const parentHasAccounting = hasActiveAccounting(nodeId);
+
+            children.forEach(childId => {
+                // Затемняем только последующие узлы:
+                // если на пути уже был проблемный узел ИЛИ текущий родитель без активного способа учета.
+                const nextBlocked = blocked || !parentHasAccounting;
+                if (nextBlocked) {
+                    reachableBlocked.add(childId);
+                } else {
+                    reachableHealthy.add(childId);
+                }
+                queue.push({ nodeId: childId, blocked: nextBlocked });
+            });
+        }
+
+        return new Set(
+            Array.from(reachableBlocked).filter(nodeId => !reachableHealthy.has(nodeId))
+        );
+    };
+
+    const dimmedNodeIds = calculateDimmedNodesForAccounting();
+
+    const objectBoxPalette = [
+        '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#eab308',
+        '#f97316', '#84cc16'
+    ];
+
+    const buildObjectGroupsForDrawing = () => {
+        const map = new Map();
+        treeData.forEach(row => {
+            const oid = row.object_id;
+            if (oid == null || oid === undefined) return;
+            const cid = row.child_id;
+            if (cid == null) return;
+            const visId = `node-${cid}`;
+            const key = Number(oid);
+            if (!map.has(key)) {
+                map.set(key, {
+                    name: (row.object_name && String(row.object_name).trim()) ? row.object_name : `Объект ${key}`,
+                    visIds: new Set()
+                });
+            }
+            map.get(key).visIds.add(visId);
+        });
+        return map;
+    };
+
+    const objectGroupsForDrawing = buildObjectGroupsForDrawing();
+
+    objectLegendColors = {};
+    objectLegendEntries = [];
+    const sortedObjectIds = Array.from(objectGroupsForDrawing.keys()).sort((a, b) => a - b);
+    sortedObjectIds.forEach((oid, idx) => {
+        const c = objectBoxPalette[idx % objectBoxPalette.length];
+        objectLegendColors[String(oid)] = c;
+        const info = objectGroupsForDrawing.get(oid);
+        objectLegendEntries.push({
+            id: oid,
+            name: info ? info.name : `Объект ${oid}`,
+            color: c
+        });
+    });
+
+    const roundRectPath = (ctx, x, y, w, h, r) => {
+        const rr = Math.min(Math.max(0, r), Math.abs(w) / 2, Math.abs(h) / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr);
+        ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.closePath();
+    };
+
+    const getObjectBounds = (visIds, padding = 28) => {
+        if (!network || !Array.isArray(visIds) || visIds.length === 0) return null;
+
+        const positions = network.getPositions(visIds);
+        const coords = Object.values(positions).filter(p => p && typeof p.x === 'number' && typeof p.y === 'number');
+        if (coords.length === 0) return null;
+
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+
+        coords.forEach(p => {
+            minX = Math.min(minX, p.x);
+            minY = Math.min(minY, p.y);
+            maxX = Math.max(maxX, p.x);
+            maxY = Math.max(maxY, p.y);
+        });
+
+        return {
+            minX: minX - padding,
+            minY: minY - padding,
+            maxX: maxX + padding,
+            maxY: maxY + padding
+        };
+    };
+
+    const boxesOverlap = (a, b, gap = 24) => {
+        if (!a || !b) return false;
+        return !(
+            a.maxX + gap < b.minX ||
+            a.minX - gap > b.maxX ||
+            a.maxY + gap < b.minY ||
+            a.minY - gap > b.maxY
+        );
+    };
+
+    const shiftObjectGroup = (visIds, deltaY) => {
+        if (!network || !deltaY || !Array.isArray(visIds) || visIds.length === 0) return;
+
+        const positions = network.getPositions(visIds);
+        visIds.forEach(visId => {
+            const pos = positions[visId];
+            if (!pos) return;
+            network.moveNode(visId, pos.x, pos.y + deltaY);
+        });
+    };
+
+    const enforceObjectSeparation = () => {
+        if (!network || !objectGroupsForDrawing || objectGroupsForDrawing.size <= 1) return;
+
+        const placedBounds = [];
+        const groups = Array.from(objectGroupsForDrawing.entries()).map(([oid, info]) => ({
+            oid,
+            visIds: Array.from(info.visIds)
+        }));
+
+        groups.sort((a, b) => {
+            const boundsA = getObjectBounds(a.visIds, 28);
+            const boundsB = getObjectBounds(b.visIds, 28);
+            return (boundsA?.minY ?? 0) - (boundsB?.minY ?? 0);
+        });
+
+        groups.forEach(group => {
+            let bounds = getObjectBounds(group.visIds, 28);
+            if (!bounds) return;
+
+            let requiredShift = 0;
+            placedBounds.forEach(prevBounds => {
+                if (boxesOverlap(bounds, prevBounds, 36)) {
+                    requiredShift = Math.max(requiredShift, prevBounds.maxY - bounds.minY + 48);
+                }
+            });
+
+            if (requiredShift > 0) {
+                shiftObjectGroup(group.visIds, requiredShift);
+                bounds = getObjectBounds(group.visIds, 28);
+                if (!bounds) return;
+            }
+
+            placedBounds.push(bounds);
+        });
     };
 
     const getNodeLabel = (row, nodeId) => {
@@ -798,10 +1190,10 @@ function buildNetworkGraph(treeData) {
         html += `<strong>Line:</strong> ${row?.line_name || 'N/A'}<br>`;
         html += `<strong>Type:</strong> ${row?.node_type_name || 'N/A'}<br>`;
         html += `<strong>Level:</strong> ${row?.level ?? 'N/A'}<br>`;
-
-        if (currentBuildMode === 'accounting') {
-            html += buildAccountingHtml(nodeId);
+        if (row?.object_id != null || row?.object_name) {
+            html += `<strong>Объект:</strong> ${row?.object_name || 'N/A'} <small>(ID: ${row?.object_id ?? '—'})</small><br>`;
         }
+        html += buildAccountingHtml(nodeId);
         return html;
     };
 
@@ -818,6 +1210,7 @@ function buildNetworkGraph(treeData) {
 
         const typeName = row.node_type_name || 'N/A';
         const color = getTypeColor(typeName);
+        const isDimmed = dimmedNodeIds.has(Number(nodeId));
 
         processedNodes.add(visNodeId);
         nodes.add({
@@ -826,14 +1219,23 @@ function buildNetworkGraph(treeData) {
             title: buildNodeTitle(row, nodeId),
             shape: 'dot',
             size: 22,
+            level: Number.isFinite(Number(row?.level)) ? Number(row.level) : undefined,
             color: {
-                background: color,
-                border: '#2C2C2C',
-                highlight: { background: color, border: '#FF6B6B' },
-                hover: { background: color, border: '#FFD166' }
+                background: isDimmed ? hexToRgba(color, 0.28) : color,
+                border: isDimmed ? '#6B7280' : '#2C2C2C',
+                highlight: {
+                    background: isDimmed ? hexToRgba(color, 0.4) : color,
+                    border: isDimmed ? '#9CA3AF' : '#FF6B6B'
+                },
+                hover: {
+                    background: isDimmed ? hexToRgba(color, 0.35) : color,
+                    border: isDimmed ? '#9CA3AF' : '#FFD166'
+                }
             },
             font: {
-                color: document.body.classList.contains('light-theme') ? '#111827' : '#E5E7EB',
+                color: isDimmed
+                    ? (document.body.classList.contains('light-theme') ? '#9CA3AF' : '#6B7280')
+                    : (document.body.classList.contains('light-theme') ? '#111827' : '#E5E7EB'),
                 size: 12,
                 face: 'Arial'
             }
@@ -934,24 +1336,89 @@ function buildNetworkGraph(treeData) {
         network = null;
     }
 
+    container.classList.add('network-hidden');
     network = new vis.Network(container, data, options);
+
+    let separationApplied = false;
+    const applyObjectSeparationOnce = () => {
+        if (separationApplied) return;
+        separationApplied = true;
+        enforceObjectSeparation();
+        network.redraw();
+        container.classList.remove('network-hidden');
+    };
+
+    setTimeout(applyObjectSeparationOnce, 250);
+    network.once('stabilized', applyObjectSeparationOnce);
+
+    network.on('beforeDrawing', function(ctx) {
+        if (!objectGroupsForDrawing || objectGroupsForDrawing.size === 0) return;
+
+        const isLight = document.body.classList.contains('light-theme');
+        const labelFill = isLight ? '#374151' : '#e5e7eb';
+        const fillAlpha = isLight ? 0.07 : 0.09;
+        const pad = 28;
+        const lineW = 2;
+
+        objectGroupsForDrawing.forEach((info, oid) => {
+            const ids = Array.from(info.visIds);
+            if (ids.length === 0) return;
+
+            const positions = network.getPositions(ids);
+            const coords = Object.values(positions).filter(p => p && typeof p.x === 'number' && typeof p.y === 'number');
+            if (coords.length === 0) return;
+
+            let minX = Infinity;
+            let minY = Infinity;
+            let maxX = -Infinity;
+            let maxY = -Infinity;
+            coords.forEach(p => {
+                minX = Math.min(minX, p.x);
+                minY = Math.min(minY, p.y);
+                maxX = Math.max(maxX, p.x);
+                maxY = Math.max(maxY, p.y);
+            });
+
+            minX -= pad;
+            minY -= pad;
+            maxX += pad;
+            maxY += pad;
+
+            const w = maxX - minX;
+            const h = maxY - minY;
+            const borderColor = objectLegendColors[String(oid)] || objectBoxPalette[0];
+
+            ctx.save();
+            ctx.lineWidth = lineW;
+            ctx.fillStyle = hexToRgba(borderColor, fillAlpha);
+            ctx.strokeStyle = hexToRgba(borderColor, isLight ? 0.45 : 0.55);
+            roundRectPath(ctx, minX, minY, w, h, 14);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = labelFill;
+            ctx.font = '600 13px Arial, sans-serif';
+            const rawName = info.name || `Объект ${oid}`;
+            const label = rawName.length > 42 ? rawName.substring(0, 39) + '…' : rawName;
+            ctx.fillText(label, minX + 10, minY + 18);
+            ctx.restore();
+        });
+    });
 
     // Click node -> details
     network.on('click', function(params) {
         if (params.nodes.length > 0) {
             const nodeVisId = params.nodes[0]; // "node-409"
-            // showNodeDetails ожидает, судя по вашему коду, числовой ID
-            const nodeIdNum = parseInt(String(nodeVisId).split('-')[1], 10);
-            showNodeDetails(nodeIdNum);
+            showNodeDetails(nodeVisId);
         }
     });
 
-    // Ensure tooltips update on hover in accounting mode (if you update accountingData dynamically)
+    // Ensure tooltips update with fresh accounting data
     network.on('hoverNode', function(params) {
-        if (currentBuildMode !== 'accounting') return;
-
         const nodeVisId = params.node;
-        const nodeIdNum = parseInt(String(nodeVisId).split('-')[1], 10);
+        const m = String(nodeVisId).match(/^node-(\d+)$/);
+        if (!m) return;
+        const nodeIdNum = parseInt(m[1], 10);
 
         const node = nodes.get(nodeVisId);
         if (!node) return;
@@ -973,19 +1440,33 @@ function buildNetworkGraph(treeData) {
     } else {
         nodeTypeColors = { ...nodeTypeColorsLocal };
     }
+
+    if (typeof updateObjectLegend === 'function') updateObjectLegend();
 }
 
 function showNodeDetails(visNodeId) {
-    const nodeId = parseInt(visNodeId.split('-')[1]);
+    const m = String(visNodeId).match(/^node-(\d+)$/);
+    if (!m) return;
+    const nodeId = parseInt(m[1], 10);
     const items = rawData.filter(item => item.child_id === nodeId || item.node_id === nodeId);
     
     let html = '';
     if (items.length > 0) {
         const item = items[0];
+        const objectBlock = (item.object_id != null || item.object_name)
+            ? `
+            <div class="node-info">
+                <strong>Объект:</strong> ${item.object_name || 'N/A'}
+            </div>
+            <div class="node-info">
+                <strong>Object ID:</strong> ${item.object_id != null ? item.object_id : 'N/A'}
+            </div>`
+            : '';
         html = `
             <div class="node-info">
                 <strong>Node ID:</strong> ${item.child_id || item.node_id}
             </div>
+            ${objectBlock}
             <div class="node-info">
                 <strong>Line:</strong> ${item.line_name || 'N/A'}
             </div>
@@ -1043,10 +1524,31 @@ function updateTypeLegend() {
     legendContainer.innerHTML = html;
 }
 
+function updateObjectLegend() {
+    const legendContainer = document.getElementById('objectLegend');
+    if (!legendContainer) return;
+
+    if (!objectLegendEntries || objectLegendEntries.length === 0) {
+        legendContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 12px;">Нет привязки узлов к объекту</div>';
+        return;
+    }
+
+    let html = '';
+    objectLegendEntries.forEach(entry => {
+        html += `
+            <div class="legend-item">
+                <div class="legend-color" style="background: transparent; border: 2px solid ${entry.color};"></div>
+                <span title="ID ${entry.id}">${entry.name}</span>
+            </div>
+        `;
+    });
+    legendContainer.innerHTML = html;
+}
+
 function updateNetworkOptions() {
     if (network && nodesData && edgesData) {
         const showLabels = document.getElementById('showLabels').checked;
-        const usePhysics = document.getElementById('showPhysics').checked;
+        const usePhysics = document.getElementById('showPhysics')?.checked ?? true;
         
         // Обновляем метки
         nodesData.forEach(node => {
@@ -1056,12 +1558,11 @@ function updateNetworkOptions() {
                 node.label = '';
             }
         });
-        
-        // Обновляем физику
+
         if (network.physics) {
             network.setOptions({ physics: { enabled: usePhysics } });
         }
-        
+
         network.redraw();
     }
 }
