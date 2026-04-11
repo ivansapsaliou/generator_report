@@ -318,6 +318,259 @@
             border-radius: 50%;
             border: 1px solid var(--border);
         }
+
+        .network-context-menu {
+            position: fixed;
+            min-width: 220px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+            padding: 6px;
+            z-index: 1200;
+            display: none;
+        }
+
+        .network-context-menu.open {
+            display: block;
+        }
+
+        .network-context-menu-item {
+            width: 100%;
+            border: none;
+            background: transparent;
+            color: var(--text);
+            padding: 10px 12px;
+            border-radius: 8px;
+            text-align: left;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .network-context-menu-item:hover {
+            background: rgba(59, 130, 246, 0.12);
+        }
+
+        .network-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1250;
+            padding: 20px;
+        }
+
+        .network-modal-overlay.open {
+            display: flex;
+        }
+
+        .network-modal {
+            width: min(calc(100vw - 24px), 1820px);
+            max-height: calc(100vh - 24px);
+            overflow-y: auto;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+        }
+
+        .network-modal-header,
+        .network-modal-body,
+        .network-modal-footer {
+            padding: 14px 16px;
+        }
+
+        .network-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .network-modal-title {
+            margin: 0;
+            font-size: 18px;
+            color: var(--text);
+        }
+
+        .network-modal-close {
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .network-modal-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 1.35fr 1fr 1.2fr 1fr 1fr 1.35fr;
+            gap: 14px;
+            align-items: end;
+        }
+
+        .network-modal-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .network-modal-field label {
+            font-size: 13px;
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        .network-modal-field input,
+        .network-modal-field select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .network-modal-hint {
+            margin: 0 0 14px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .attach-node-table {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(59, 130, 246, 0.03);
+        }
+
+        .attach-node-table-header,
+        .attach-node-row-grid {
+            display: grid;
+            grid-template-columns: 72px minmax(130px, 1.1fr) minmax(165px, 1.35fr) minmax(120px, 0.9fr) minmax(160px, 1.25fr) minmax(120px, 0.9fr) minmax(130px, 1fr) minmax(165px, 1.2fr) 76px;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .attach-node-table-header {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 12px;
+        }
+
+        .attach-node-table-head {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            white-space: normal;
+            line-height: 1.2;
+        }
+
+        .attach-node-rows {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .attach-node-row {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .attach-node-row:last-child {
+            border-bottom: none;
+        }
+
+        .attach-node-cell input,
+        .attach-node-cell select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        .attach-node-tree-cell {
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+        }
+
+        .attach-node-tree-svg {
+            width: 100%;
+            height: 36px;
+            overflow: visible;
+        }
+
+        .attach-node-action-cell {
+            display: flex;
+            justify-content: center;
+        }
+
+        .attach-node-action-btn {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+        }
+
+        .attach-node-action-btn:hover {
+            border-color: #ef4444;
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.08);
+        }
+
+        .attach-node-action-btn svg {
+            width: 15px;
+            height: 15px;
+            stroke: currentColor;
+        }
+
+        .network-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .network-modal-btn {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 9px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .network-modal-btn.primary {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #ffffff;
+        }
+
+        .network-modal-btn.plus {
+            width: 38px;
+            min-width: 38px;
+            padding: 8px 0;
+            font-size: 20px;
+            line-height: 1;
+            font-weight: 600;
+        }
         
         /* Grid background pattern for network container */
         #network-container {
@@ -554,6 +807,47 @@
 
 </div>
 
+<div id="networkNodeContextMenu" class="network-context-menu">
+    <button type="button" class="network-context-menu-item" onclick="openAttachNodeModalFromContextMenu()">
+        Присоединить узел
+    </button>
+</div>
+
+<div id="attachNodeModalOverlay" class="network-modal-overlay">
+    <div class="network-modal" role="dialog" aria-modal="true" aria-labelledby="attachNodeModalTitle">
+        <div class="network-modal-header">
+            <h2 id="attachNodeModalTitle" class="network-modal-title">Присоединить узел</h2>
+            <button type="button" class="network-modal-close" onclick="closeAttachNodeModal()" aria-label="Закрыть">×</button>
+        </div>
+        <form id="attachNodeForm" onsubmit="submitAttachNodeForm(event)">
+            <div class="network-modal-body">
+                <p id="attachNodeModalHint" class="network-modal-hint">
+                    Новый узел будет добавлен только визуально на текущую схему.
+                </p>
+                <div class="attach-node-table">
+                    <div class="attach-node-table-header">
+                        <div class="attach-node-table-head">Связь</div>
+                        <div class="attach-node-table-head">Объект</div>
+                        <div class="attach-node-table-head">Название узла</div>
+                        <div class="attach-node-table-head">Тип узла</div>
+                        <div class="attach-node-table-head">Тип расчетного параметра</div>
+                        <div class="attach-node-table-head">Назначение</div>
+                        <div class="attach-node-table-head">Тип способа учета</div>
+                        <div class="attach-node-table-head">Название линии</div>
+                        <div class="attach-node-table-head"></div>
+                    </div>
+                    <div id="attachNodeRows" class="attach-node-rows"></div>
+                </div>
+            </div>
+            <div class="network-modal-footer">
+                <button type="button" class="network-modal-btn" onclick="closeAttachNodeModal()">Отмена</button>
+                <button type="button" class="network-modal-btn plus" onclick="addAnotherNodeFromModal()" title="Добавить строку верхнего уровня" aria-label="Добавить строку верхнего уровня">+</button>
+                <button type="submit" class="network-modal-btn primary">Добавить на схему</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 // ═════════════════════════════════════════════════════════════════════════════
 // GLOBAL VARIABLES
@@ -566,6 +860,7 @@ let nodeTypeColors = {};
 let objectLegendColors = {}; // object_id -> border color (для легенды)
 let objectLegendEntries = []; // [{ id, name, color }] для боковой легенды
 let accountingData = {}; // node_calculate_parameter_id -> accounting types
+let connectionData = {}; // node_calculate_parameter_id -> active connections in period
 let selectedAccountingMonth = null;
 let currentDisplayMode = 'default';
 const searchableSelectState = {
@@ -573,6 +868,17 @@ const searchableSelectState = {
     nodeSelect: { options: [] },
     parameterSelect: { options: [] }
 };
+let virtualRows = [];
+let virtualNodeSequence = -1;
+let currentContextMenuNodeId = null;
+let currentAttachParentNodeVisId = null;
+let pendingNodeSelectionId = null;
+let pendingContextMenuNodeId = null;
+let preservedSelectionBeforeContextMenu = [];
+let attachModalOptions = null;
+let attachNodeRowSequence = 0;
+let attachNodeInstanceSequence = 0;
+let attachDraftRows = [];
 
 // ═════════════════════════════════════════════════════════════════════════════
 // THEME MANAGEMENT - Управление темой
@@ -602,8 +908,8 @@ document.addEventListener('DOMContentLoaded', function() {
         applyTheme(next);
         
         // Перестраиваем граф при смене темы
-        if (rawData.length > 0) {
-            buildNetworkGraph(rawData);
+        if (rawData.length > 0 || virtualRows.length > 0) {
+            buildNetworkGraph(getCombinedTreeData());
         }
     });
     
@@ -630,6 +936,90 @@ document.addEventListener('DOMContentLoaded', function() {
                 closeSearchableSelect(baseId, true);
             }
         });
+
+        const contextMenu = document.getElementById('networkNodeContextMenu');
+        if (contextMenu && !contextMenu.contains(event.target)) {
+            hideNodeContextMenu();
+        }
+    });
+
+    document.getElementById('attachNodeModalOverlay')?.addEventListener('click', function(event) {
+        if (event.target === this) {
+            closeAttachNodeModal();
+        }
+    });
+
+    document.getElementById('attachNodeRows')?.addEventListener('input', function(event) {
+        const field = event.target?.dataset?.field;
+        const row = event.target?.closest('.attach-node-row');
+        if (!field || !row?.dataset?.rowId) return;
+        updateAttachDraftRow(row.dataset.rowId, field, event.target.value);
+    });
+
+    document.getElementById('attachNodeRows')?.addEventListener('change', function(event) {
+        const field = event.target?.dataset?.field;
+        const row = event.target?.closest('.attach-node-row');
+        if (!field || !row?.dataset?.rowId) return;
+        updateAttachDraftRow(row.dataset.rowId, field, event.target.value);
+    });
+
+    const networkContainer = document.getElementById('network-container');
+    if (networkContainer) {
+        networkContainer.addEventListener('mousedown', function(event) {
+            if (event.button !== 2 || !network) return;
+
+            const rect = this.getBoundingClientRect();
+            const nodeVisId = network.getNodeAt({
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            });
+
+            preservedSelectionBeforeContextMenu = network.getSelectedNodes();
+            pendingContextMenuNodeId = nodeVisId || null;
+            if (!nodeVisId) {
+                hideNodeContextMenu();
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation();
+            }
+            setTimeout(restoreSelectionAfterContextMenu, 0);
+        }, true);
+
+        networkContainer.addEventListener('contextmenu', function(event) {
+            if (!network) return;
+
+            const rect = this.getBoundingClientRect();
+            const nodeVisId = pendingContextMenuNodeId || network.getNodeAt({
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            });
+
+            pendingContextMenuNodeId = null;
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation();
+            }
+
+            if (!nodeVisId) {
+                hideNodeContextMenu();
+                return;
+            }
+
+            showNodeContextMenu(event.clientX, event.clientY, nodeVisId);
+            setTimeout(restoreSelectionAfterContextMenu, 0);
+        }, true);
+    }
+
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            hideNodeContextMenu();
+            closeAttachNodeModal();
+        }
     });
 });
 
@@ -757,6 +1147,580 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function getCombinedTreeData() {
+    return [...rawData, ...virtualRows];
+}
+
+function getNodeDataByParameterId(nodeId) {
+    const normalizedNodeId = Number(nodeId);
+    return getCombinedTreeData().find(item => Number(item.child_id) === normalizedNodeId)
+        || getCombinedTreeData().find(item => Number(item.node_id) === normalizedNodeId)
+        || null;
+}
+
+function getUniqueValues(values, fallbackValues = []) {
+    const result = [];
+    const seen = new Set();
+    [...values, ...fallbackValues].forEach(value => {
+        const text = String(value || '').trim();
+        if (!text || seen.has(text)) return;
+        seen.add(text);
+        result.push(text);
+    });
+    return result;
+}
+
+function getObjectOptionsForModal(parentRow) {
+    const existingOptions = searchableSelectState.objectSelect?.options || [];
+    const options = existingOptions.map(option => ({
+        value: String(option.value),
+        label: option.label
+    }));
+
+    if (parentRow?.object_id != null) {
+        const parentValue = String(parentRow.object_id);
+        if (!options.some(option => option.value === parentValue)) {
+            options.unshift({
+                value: parentValue,
+                label: parentRow.object_name || `Объект ${parentValue}`
+            });
+        }
+    }
+
+    if (options.length === 0) {
+        return [
+            { value: '-101', label: 'Тестовый объект 1' },
+            { value: '-102', label: 'Тестовый объект 2' },
+            { value: '-103', label: 'Тестовый объект 3' }
+        ];
+    }
+
+    return options;
+}
+
+function setSelectOptions(selectId, options, selectedValue = '') {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    const normalizedSelectedValue = String(selectedValue ?? '');
+    select.innerHTML = options.map(option => {
+        const value = String(option.value ?? option.label ?? '');
+        const label = String(option.label ?? option.value ?? '');
+        const isSelected = value === normalizedSelectedValue;
+        return `<option value="${escapeHtml(value)}"${isSelected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+
+    if (!select.value && options.length > 0) {
+        select.value = String(options[0].value ?? options[0].label ?? '');
+    }
+}
+
+function buildSelectOptionsHtml(options, selectedValue = '') {
+    const normalizedSelectedValue = String(selectedValue ?? '');
+    return options.map(option => {
+        const value = String(option.value ?? option.label ?? '');
+        const label = String(option.label ?? option.value ?? '');
+        const isSelected = value === normalizedSelectedValue;
+        return `<option value="${escapeHtml(value)}"${isSelected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+}
+
+function createAttachDraftRow(overrides = {}) {
+    attachNodeInstanceSequence += 1;
+    return {
+        id: overrides.id || `attach-row-${attachNodeInstanceSequence}`,
+        parentRowId: overrides.parentRowId ?? null,
+        objectValue: overrides.objectValue ?? attachModalOptions?.defaults?.objectValue ?? '',
+        nodeName: overrides.nodeName ?? '',
+        nodeTypeValue: overrides.nodeTypeValue ?? attachModalOptions?.defaults?.nodeTypeValue ?? '',
+        parameterTypeValue: overrides.parameterTypeValue ?? attachModalOptions?.defaults?.parameterTypeValue ?? '',
+        purposeValue: overrides.purposeValue ?? attachModalOptions?.defaults?.purposeValue ?? '',
+        accountingTypeValue: overrides.accountingTypeValue ?? attachModalOptions?.defaults?.accountingTypeValue ?? '',
+        lineName: overrides.lineName ?? attachModalOptions?.defaults?.lineName ?? ''
+    };
+}
+
+function getAttachDraftRowById(rowId) {
+    return attachDraftRows.find(row => row.id === rowId) || null;
+}
+
+function getAttachDraftRowDepth(rowId) {
+    let depth = 0;
+    let current = getAttachDraftRowById(rowId);
+    const guard = new Set();
+
+    while (current?.parentRowId) {
+        if (guard.has(current.id)) break;
+        guard.add(current.id);
+        depth += 1;
+        current = getAttachDraftRowById(current.parentRowId);
+    }
+
+    return depth;
+}
+
+function getAttachDraftAncestorIds(rowId) {
+    const ancestors = [];
+    let current = getAttachDraftRowById(rowId);
+    const guard = new Set();
+
+    while (current?.parentRowId) {
+        const parent = getAttachDraftRowById(current.parentRowId);
+        if (!parent || guard.has(parent.id)) break;
+        ancestors.unshift(parent.id);
+        guard.add(parent.id);
+        current = parent;
+    }
+
+    return ancestors;
+}
+
+function attachDraftHasNextSibling(rowId) {
+    const row = getAttachDraftRowById(rowId);
+    if (!row) return false;
+
+    const currentIndex = attachDraftRows.findIndex(item => item.id === rowId);
+    for (let idx = currentIndex + 1; idx < attachDraftRows.length; idx += 1) {
+        if (attachDraftRows[idx].parentRowId === row.parentRowId) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function isAttachDraftDescendantOf(rowId, parentId) {
+    let current = getAttachDraftRowById(rowId);
+    const guard = new Set();
+
+    while (current?.parentRowId) {
+        if (current.parentRowId === parentId) return true;
+        if (guard.has(current.parentRowId)) break;
+        guard.add(current.parentRowId);
+        current = getAttachDraftRowById(current.parentRowId);
+    }
+    return false;
+}
+
+function getAttachDraftSubtreeEndIndex(rowId) {
+    const startIndex = attachDraftRows.findIndex(item => item.id === rowId);
+    if (startIndex === -1) return attachDraftRows.length - 1;
+
+    let endIndex = startIndex;
+    for (let idx = startIndex + 1; idx < attachDraftRows.length; idx += 1) {
+        if (isAttachDraftDescendantOf(attachDraftRows[idx].id, rowId)) {
+            endIndex = idx;
+        } else {
+            break;
+        }
+    }
+    return endIndex;
+}
+
+function buildAttachRowTreeSvg(rowId) {
+    const depth = getAttachDraftRowDepth(rowId);
+    const ancestors = getAttachDraftAncestorIds(rowId);
+    const step = 18;
+    const startX = 10;
+    const centerY = 18;
+    const nodeX = startX + (depth * step);
+    const width = Math.max(28, nodeX + 14);
+    const parts = [];
+
+    ancestors.forEach((ancestorId, index) => {
+        if (!attachDraftHasNextSibling(ancestorId)) return;
+        const x = startX + (index * step);
+        parts.push(`<path d="M${x} 0 V36" />`);
+    });
+
+    if (depth > 0) {
+        const parentX = startX + ((depth - 1) * step);
+        parts.push(`<path d="M${parentX} 18 H${nodeX}" />`);
+        parts.push(`<path d="M${parentX} 0 V18" />`);
+    }
+
+    if (attachDraftHasNextSibling(rowId)) {
+        parts.push(`<path d="M${nodeX} 18 V36" />`);
+    }
+
+    parts.push(`<circle cx="${nodeX}" cy="${centerY}" r="4.5" fill="currentColor" stroke="none" />`);
+
+    return `
+        <svg class="attach-node-tree-svg" viewBox="0 0 ${width} 36" preserveAspectRatio="xMinYMid meet" aria-hidden="true">
+            <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                ${parts.join('')}
+            </g>
+        </svg>
+    `;
+}
+
+function renderAttachNodeRow(row) {
+    if (!attachModalOptions) return '';
+
+    return `
+        <div class="attach-node-row attach-node-row-grid" data-row-id="${escapeHtml(row.id)}">
+            <div class="attach-node-cell attach-node-tree-cell">
+                ${buildAttachRowTreeSvg(row.id)}
+            </div>
+            <div class="attach-node-cell">
+                <select class="attach-object-select" data-field="objectValue" required>${buildSelectOptionsHtml(attachModalOptions.objectOptions, row.objectValue)}</select>
+            </div>
+            <div class="attach-node-cell">
+                <input type="text" class="attach-node-name-input" data-field="nodeName" maxlength="150" placeholder="Введите название узла" value="${escapeHtml(row.nodeName)}" required>
+            </div>
+            <div class="attach-node-cell">
+                <select class="attach-node-type-select" data-field="nodeTypeValue" required>${buildSelectOptionsHtml(attachModalOptions.nodeTypeOptions, row.nodeTypeValue)}</select>
+            </div>
+            <div class="attach-node-cell">
+                <select class="attach-parameter-type-select" data-field="parameterTypeValue" required>${buildSelectOptionsHtml(attachModalOptions.parameterTypeOptions, row.parameterTypeValue)}</select>
+            </div>
+            <div class="attach-node-cell">
+                <select class="attach-purpose-select" data-field="purposeValue" required>${buildSelectOptionsHtml(attachModalOptions.purposeOptions, row.purposeValue)}</select>
+            </div>
+            <div class="attach-node-cell">
+                <select class="attach-accounting-type-select" data-field="accountingTypeValue" required>${buildSelectOptionsHtml(attachModalOptions.accountingTypeOptions, row.accountingTypeValue)}</select>
+            </div>
+            <div class="attach-node-cell">
+                <input type="text" class="attach-line-name-input" data-field="lineName" maxlength="150" placeholder="Введите название линии" value="${escapeHtml(row.lineName)}" required>
+            </div>
+            <div class="attach-node-action-cell">
+                <div style="display:flex; gap:6px;">
+                    <button type="button" class="attach-node-action-btn" onclick="addChildAttachNodeRow('${escapeHtml(row.id)}')" title="Добавить дочерний узел" aria-label="Добавить дочерний узел">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 5v14"></path>
+                            <path d="M5 12h14"></path>
+                        </svg>
+                    </button>
+                    <button type="button" class="attach-node-action-btn" onclick="removeAttachNodeRow('${escapeHtml(row.id)}')" title="Удалить строку" aria-label="Удалить строку">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 6h18"></path>
+                            <path d="M8 6V4h8v2"></path>
+                            <path d="M19 6l-1 14H6L5 6"></path>
+                            <path d="M10 11v6"></path>
+                            <path d="M14 11v6"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderAttachDraftRows(focusRowId = null) {
+    const rowsContainer = document.getElementById('attachNodeRows');
+    if (!rowsContainer || !attachModalOptions) return;
+
+    rowsContainer.innerHTML = attachDraftRows.map(row => renderAttachNodeRow(row)).join('');
+    if (focusRowId) {
+        rowsContainer.querySelector(`[data-row-id="${focusRowId}"] .attach-node-name-input`)?.focus();
+    }
+}
+
+function updateAttachDraftRow(rowId, field, value) {
+    const row = getAttachDraftRowById(rowId);
+    if (!row) return;
+    row[field] = value;
+}
+
+function appendAttachNodeRow(rowValues = {}, focusName = false) {
+    const newRow = createAttachDraftRow(rowValues);
+    attachDraftRows.push(newRow);
+    renderAttachDraftRows(focusName ? newRow.id : null);
+}
+
+function addChildAttachNodeRow(parentRowId) {
+    const parentRow = getAttachDraftRowById(parentRowId);
+    if (!parentRow) return;
+
+    const childRow = createAttachDraftRow({
+        parentRowId,
+        objectValue: parentRow.objectValue,
+        nodeTypeValue: parentRow.nodeTypeValue,
+        parameterTypeValue: parentRow.parameterTypeValue,
+        purposeValue: parentRow.purposeValue,
+        accountingTypeValue: parentRow.accountingTypeValue,
+        lineName: parentRow.lineName
+    });
+
+    const insertIndex = getAttachDraftSubtreeEndIndex(parentRowId) + 1;
+    attachDraftRows.splice(insertIndex, 0, childRow);
+    renderAttachDraftRows(childRow.id);
+}
+
+function removeAttachNodeRow(rowId) {
+    const idsToRemove = new Set([rowId]);
+    let changed = true;
+
+    while (changed) {
+        changed = false;
+        attachDraftRows.forEach(row => {
+            if (row.parentRowId && idsToRemove.has(row.parentRowId) && !idsToRemove.has(row.id)) {
+                idsToRemove.add(row.id);
+                changed = true;
+            }
+        });
+    }
+
+    attachDraftRows = attachDraftRows.filter(row => !idsToRemove.has(row.id));
+
+    if (attachDraftRows.length === 0) {
+        attachDraftRows = [createAttachDraftRow()];
+        renderAttachDraftRows(attachDraftRows[0].id);
+        return;
+    }
+
+    renderAttachDraftRows();
+}
+
+function hideNodeContextMenu() {
+    const menu = document.getElementById('networkNodeContextMenu');
+    if (menu) {
+        menu.classList.remove('open');
+    }
+    currentContextMenuNodeId = null;
+}
+
+function restoreSelectionAfterContextMenu() {
+    if (!network) return;
+
+    const selectedNodes = Array.isArray(preservedSelectionBeforeContextMenu)
+        ? preservedSelectionBeforeContextMenu.filter(Boolean)
+        : [];
+
+    if (selectedNodes.length > 0) {
+        network.selectNodes(selectedNodes);
+    } else {
+        network.unselectAll();
+    }
+}
+
+function showNodeContextMenu(x, y, nodeVisId) {
+    const menu = document.getElementById('networkNodeContextMenu');
+    if (!menu) return;
+
+    currentContextMenuNodeId = nodeVisId;
+    menu.classList.add('open');
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+
+    const menuRect = menu.getBoundingClientRect();
+    const maxLeft = Math.max(8, window.innerWidth - menuRect.width - 8);
+    const maxTop = Math.max(8, window.innerHeight - menuRect.height - 8);
+
+    menu.style.left = `${Math.min(x, maxLeft)}px`;
+    menu.style.top = `${Math.min(y, maxTop)}px`;
+}
+
+function openAttachNodeModalFromContextMenu() {
+    if (!currentContextMenuNodeId) return;
+    const nodeVisId = currentContextMenuNodeId;
+    hideNodeContextMenu();
+    openAttachNodeModal(nodeVisId);
+}
+
+function openAttachNodeModal(nodeVisId) {
+    const match = String(nodeVisId || '').match(/^node-(-?\d+)$/);
+    if (!match) return;
+
+    const parentNodeId = parseInt(match[1], 10);
+    const parentRow = getNodeDataByParameterId(parentNodeId);
+    if (!parentRow) {
+        alert('Не удалось определить данные выбранного узла.');
+        return;
+    }
+
+    currentAttachParentNodeVisId = nodeVisId;
+
+    const objectOptions = getObjectOptionsForModal(parentRow);
+    const nodeTypeValues = getUniqueValues(
+        getCombinedTreeData().map(item => item.node_type_name),
+        [parentRow.node_type_name, 'Распределительный узел', 'Контрольный узел', 'Узел учета']
+    );
+    const parameterTypeValues = getUniqueValues(
+        getCombinedTreeData().map(item => item.parameter_type_name),
+        ['Как у родительского узла', 'Расход', 'Давление', 'Объем']
+    );
+    const purposeValues = getUniqueValues(
+        getCombinedTreeData().map(item => item.purpose_name),
+        ['Основное', 'Резервное', 'Технологическое', 'Прочее']
+    );
+    const accountingTypeValues = getUniqueValues(
+        Object.values(accountingData || {}).flatMap(item => Array.isArray(item?.types) ? item.types : []),
+        ['Коммерческий', 'Технический', 'Расчетный']
+    );
+    attachModalOptions = {
+        objectOptions,
+        nodeTypeOptions: nodeTypeValues.map(value => ({ value, label: value })),
+        parameterTypeOptions: parameterTypeValues.map(value => ({ value, label: value })),
+        purposeOptions: purposeValues.map(value => ({ value, label: value })),
+        accountingTypeOptions: accountingTypeValues.map(value => ({ value, label: value })),
+        defaults: {
+            objectValue: parentRow.object_id != null ? String(parentRow.object_id) : String(objectOptions[0]?.value || ''),
+            nodeTypeValue: parentRow.node_type_name || nodeTypeValues[0],
+            parameterTypeValue: parameterTypeValues[0],
+            purposeValue: purposeValues[0],
+            accountingTypeValue: accountingTypeValues[0],
+            lineName: parentRow.line_name && parentRow.line_name !== 'root'
+                ? `${parentRow.line_name} (новая ветка)`
+                : 'Новая линия'
+        }
+    };
+    attachNodeRowSequence = 0;
+    attachDraftRows = [createAttachDraftRow()];
+    renderAttachDraftRows(attachDraftRows[0].id);
+
+    document.getElementById('attachNodeModalHint').textContent =
+        `Новый узел будет визуально присоединен к "${parentRow.node_name || ('Node ' + parentNodeId)}" без сохранения в БД.`;
+
+    document.getElementById('attachNodeModalOverlay')?.classList.add('open');
+}
+
+function closeAttachNodeModal() {
+    document.getElementById('attachNodeModalOverlay')?.classList.remove('open');
+    currentAttachParentNodeVisId = null;
+    attachModalOptions = null;
+    attachDraftRows = [];
+}
+
+function createVirtualNodeForConfig(parentNodeId, parentRow, rowData) {
+    const objectIdValue = Number(rowData.objectValue);
+    const objectId = Number.isNaN(objectIdValue) ? null : objectIdValue;
+    const objectName = attachModalOptions?.objectOptions?.find(option => String(option.value) === String(rowData.objectValue))?.label || 'Без объекта';
+    const newNodeId = virtualNodeSequence--;
+    const parentLevel = Number(parentRow.level) || 0;
+    const parentPath = Array.isArray(parentRow.path) ? [...parentRow.path] : [parentNodeId];
+
+    virtualRows.push({
+        line_id: `virtual-line-${Math.abs(newNodeId)}`,
+        line_name: rowData.lineName,
+        node_id: parentNodeId,
+        child_id: newNodeId,
+        level: parentLevel + 1,
+        path: [...parentPath, newNodeId],
+        path_str: `${parentRow.path_str || parentNodeId}->${newNodeId}`,
+        node_name: rowData.nodeName,
+        node_type_name: rowData.nodeTypeValue,
+        node_calculate_parameter_id: newNodeId,
+        object_id: objectId,
+        object_name: objectName,
+        parameter_type_name: rowData.parameterTypeValue,
+        purpose_name: rowData.purposeValue,
+        accounting_type_name: rowData.accountingTypeValue,
+        is_virtual: true
+    });
+
+    accountingData[newNodeId] = {
+        types: rowData.accountingTypeValue ? [rowData.accountingTypeValue] : [],
+        valid_periods: []
+    };
+    connectionData[newNodeId] = { count: 0, connections: [] };
+    pendingNodeSelectionId = `node-${newNodeId}`;
+
+    return {
+        nodeId: newNodeId,
+        row: virtualRows[virtualRows.length - 1]
+    };
+}
+
+function createVirtualNodesFromModal() {
+    if (!currentAttachParentNodeVisId) return false;
+
+    const match = String(currentAttachParentNodeVisId).match(/^node-(-?\d+)$/);
+    if (!match) return false;
+
+    const parentNodeId = parseInt(match[1], 10);
+    const parentRow = getNodeDataByParameterId(parentNodeId);
+    if (!parentRow) {
+        alert('Не удалось определить родительский узел.');
+        return false;
+    }
+
+    if (attachDraftRows.length === 0) {
+        alert('Добавьте хотя бы одну строку для создания узла.');
+        return false;
+    }
+
+    const rowConfigs = [];
+    for (let idx = 0; idx < attachDraftRows.length; idx += 1) {
+        const rowData = { ...attachDraftRows[idx] };
+        if (!rowData.nodeName || !rowData.lineName) {
+            alert(`Заполните название узла и название линии в строке ${idx + 1}.`);
+            renderAttachDraftRows(rowData.id);
+            return false;
+        }
+        rowData.displayIndex = idx + 1;
+        rowConfigs.push(rowData);
+    }
+
+    const pendingRows = [...rowConfigs];
+    const createdRows = new Map();
+    const baseParent = { nodeId: parentNodeId, row: parentRow };
+    const createdNodeIds = [];
+
+    while (pendingRows.length > 0) {
+        let createdInPass = 0;
+
+        for (let idx = pendingRows.length - 1; idx >= 0; idx -= 1) {
+            const rowData = pendingRows[idx];
+            let parentTarget = null;
+
+            if (!rowData.parentRowId) {
+                parentTarget = baseParent;
+            } else {
+                parentTarget = createdRows.get(rowData.parentRowId) || null;
+            }
+
+            if (!parentTarget) {
+                continue;
+            }
+
+            const created = createVirtualNodeForConfig(parentTarget.nodeId, parentTarget.row, rowData);
+            createdRows.set(rowData.id, created);
+            createdNodeIds.push(created.nodeId);
+            pendingRows.splice(idx, 1);
+            createdInPass += 1;
+        }
+
+        if (createdInPass === 0) {
+            if (createdNodeIds.length > 0) {
+                const createdIdSet = new Set(createdNodeIds);
+                virtualRows = virtualRows.filter(item => !createdIdSet.has(item.child_id));
+                createdNodeIds.forEach(nodeId => {
+                    delete accountingData[nodeId];
+                    delete connectionData[nodeId];
+                });
+            }
+            const unresolvedRows = pendingRows.map(row => row.displayIndex).join(', ');
+            alert(`Не удалось построить вложенность для строк: ${unresolvedRows}. Проверьте дочерние связи и уберите циклические ссылки.`);
+            return false;
+        }
+    }
+
+    buildNetworkGraph(getCombinedTreeData());
+    updateNetworkStats();
+    return true;
+}
+
+function addAnotherNodeFromModal() {
+    const lastTopLevelRow = [...attachDraftRows].reverse().find(row => !row.parentRowId);
+    appendAttachNodeRow({
+        parentRowId: null,
+        objectValue: lastTopLevelRow?.objectValue,
+        nodeTypeValue: lastTopLevelRow?.nodeTypeValue,
+        parameterTypeValue: lastTopLevelRow?.parameterTypeValue,
+        purposeValue: lastTopLevelRow?.purposeValue,
+        accountingTypeValue: lastTopLevelRow?.accountingTypeValue,
+        lineName: lastTopLevelRow?.lineName,
+        nodeName: ''
+    }, true);
+}
+
+function submitAttachNodeForm(event) {
+    event.preventDefault();
+    if (createVirtualNodesFromModal()) {
+        closeAttachNodeModal();
+    }
 }
 
 async function loadObjects() {
@@ -891,8 +1855,8 @@ function toggleDisplayMode() {
     currentDisplayMode = currentDisplayMode === 'ltr' ? 'default' : 'ltr';
     updateDisplayModeToggle();
 
-    if (rawData.length > 0) {
-        buildNetworkGraph(rawData);
+    if (rawData.length > 0 || virtualRows.length > 0) {
+        buildNetworkGraph(getCombinedTreeData());
     }
 }
 
@@ -933,15 +1897,26 @@ async function loadNetwork() {
             return;
         }
         
+        virtualRows = [];
+        pendingNodeSelectionId = null;
         rawData = data.data;
         
         // Сохраняем данные о способах учета, если они есть
         if (data.accounting_data) {
             accountingData = data.accounting_data;
             console.log(`[NETWORK] ✅ Loaded accounting data for ${Object.keys(accountingData).length} nodes`);
+        } else {
+            accountingData = {};
+        }
+
+        if (data.connection_data) {
+            connectionData = data.connection_data;
+            console.log(`[NETWORK] ✅ Loaded connection data for ${Object.keys(connectionData).length} nodes`);
+        } else {
+            connectionData = {};
         }
         
-        buildNetworkGraph(data.data);
+        buildNetworkGraph(getCombinedTreeData());
         updateNetworkStats();
         console.log(`[NETWORK] ✅ Network loaded successfully with ${data.data.length} nodes`);
         
@@ -996,6 +1971,17 @@ function buildNetworkGraph(treeData) {
     const hasActiveAccounting = (nodeId) => {
         const acc = accountingData?.[String(nodeId)] ?? accountingData?.[nodeId];
         return Array.isArray(acc?.types) && acc.types.length > 0;
+    };
+
+    const getConnectionsForNode = (nodeId) => {
+        const data = connectionData?.[String(nodeId)] ?? connectionData?.[nodeId];
+        return Array.isArray(data?.connections) ? data.connections : [];
+    };
+
+    const getConnectionCountForNode = (nodeId) => {
+        const data = connectionData?.[String(nodeId)] ?? connectionData?.[nodeId];
+        if (typeof data?.count === 'number') return data.count;
+        return getConnectionsForNode(nodeId).length;
     };
 
     const calculateDimmedNodesForAccounting = () => {
@@ -1083,6 +2069,7 @@ function buildNetworkGraph(treeData) {
         '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#eab308',
         '#f97316', '#84cc16'
     ];
+    const BASE_NODE_SIZE = 22;
 
     const buildObjectGroupsForDrawing = () => {
         const map = new Map();
@@ -1131,11 +2118,12 @@ function buildNetworkGraph(treeData) {
         ctx.closePath();
     };
 
-    const OBJECT_SIDE_PADDING = 28;
-    const OBJECT_BOTTOM_PADDING = 28;
-    const OBJECT_TITLE_HEIGHT = 34;
+    const OBJECT_SIDE_PADDING = 14;
+    const OBJECT_BOTTOM_PADDING = 22;
+    const OBJECT_TITLE_HEIGHT = 38;
     const OBJECT_TITLE_GAP = 10;
-    const OBJECT_TOP_PADDING = OBJECT_TITLE_HEIGHT + OBJECT_TITLE_GAP + 18;
+    const OBJECT_TOP_PADDING = OBJECT_TITLE_HEIGHT + OBJECT_TITLE_GAP + 14;
+    const OBJECT_TITLE_FONT = '600 15px Arial, sans-serif';
 
     const estimateObjectLabelWidth = (labelText) => {
         const safeText = String(labelText || '');
@@ -1146,7 +2134,20 @@ function buildNetworkGraph(treeData) {
         if (!network || !Array.isArray(visIds) || visIds.length === 0) return null;
 
         const positions = network.getPositions(visIds);
-        const coords = Object.values(positions).filter(p => p && typeof p.x === 'number' && typeof p.y === 'number');
+        const coords = visIds
+            .map(visId => {
+                const pos = positions[visId];
+                const node = nodes.get(visId);
+                const radius = Number(node?.size || BASE_NODE_SIZE);
+                if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return null;
+                return {
+                    minX: pos.x - radius,
+                    maxX: pos.x + radius,
+                    minY: pos.y - radius,
+                    maxY: pos.y + radius
+                };
+            })
+            .filter(Boolean);
         if (coords.length === 0) return null;
 
         let minX = Infinity;
@@ -1154,11 +2155,11 @@ function buildNetworkGraph(treeData) {
         let maxX = -Infinity;
         let maxY = -Infinity;
 
-        coords.forEach(p => {
-            minX = Math.min(minX, p.x);
-            minY = Math.min(minY, p.y);
-            maxX = Math.max(maxX, p.x);
-            maxY = Math.max(maxY, p.y);
+        coords.forEach(box => {
+            minX = Math.min(minX, box.minX);
+            minY = Math.min(minY, box.minY);
+            maxX = Math.max(maxX, box.maxX);
+            maxY = Math.max(maxY, box.maxY);
         });
 
         minX -= OBJECT_SIDE_PADDING;
@@ -1240,6 +2241,49 @@ function buildNetworkGraph(treeData) {
         });
     };
 
+    const spreadVirtualNodes = () => {
+        if (!network) return;
+
+        const virtualRowsSorted = treeData
+            .filter(row => row?.is_virtual && row?.child_id != null && row?.node_id != null)
+            .sort((a, b) => (Number(a.level) || 0) - (Number(b.level) || 0));
+
+        if (virtualRowsSorted.length === 0) return;
+
+        const siblingCounts = new Map();
+        virtualRowsSorted.forEach(row => {
+            const key = String(row.node_id);
+            siblingCounts.set(key, (siblingCounts.get(key) || 0) + 1);
+        });
+
+        const siblingIndexes = new Map();
+        virtualRowsSorted.forEach(row => {
+            const parentVisId = `node-${row.node_id}`;
+            const childVisId = `node-${row.child_id}`;
+            const positions = network.getPositions([parentVisId, childVisId]);
+            const parentPos = positions[parentVisId];
+
+            if (!parentPos) return;
+
+            const siblingKey = String(row.node_id);
+            const siblingIndex = siblingIndexes.get(siblingKey) || 0;
+            siblingIndexes.set(siblingKey, siblingIndex + 1);
+
+            const siblingCount = siblingCounts.get(siblingKey) || 1;
+            const centeredOffset = siblingIndex - ((siblingCount - 1) / 2);
+            const level = Number(row.level) || 0;
+
+            const targetX = isLeftToRightMode
+                ? parentPos.x + 220
+                : parentPos.x + 150 + (level * 12);
+            const targetY = isLeftToRightMode
+                ? parentPos.y + (centeredOffset * 100)
+                : parentPos.y + (centeredOffset * 118) + ((level % 2 === 0 ? 1 : -1) * 18);
+
+            network.moveNode(childVisId, targetX, targetY);
+        });
+    };
+
     const getNodeLabel = (row, nodeId) => {
         const name = row?.node_name || `Node ${nodeId}`;
         return name.length > 20 ? name.substring(0, 17) + '...' : name;
@@ -1283,16 +2327,49 @@ function buildNetworkGraph(treeData) {
         return html;
     };
 
+    const buildConnectionsHtml = (nodeId) => {
+        const connections = getConnectionsForNode(nodeId);
+        let html = `<hr style="margin:6px 0;opacity:.25;">`;
+        html += `<strong>Подключения:</strong> ${connections.length || '0'}<br>`;
+
+        if (connections.length === 0) {
+            html += `Нет активных подключений в выбранном месяце<br>`;
+            return html;
+        }
+
+        connections.forEach((conn, idx) => {
+            const start = formatRuDateTime(conn.start_date) || 'без даты начала';
+            const end = conn.end_date ? formatRuDateTime(conn.end_date) : 'без даты окончания';
+            html += `&nbsp;&nbsp;${idx + 1}) ${conn.connection_name} <small>(ID: ${conn.connection_id})</small><br>`;
+            html += `&nbsp;&nbsp;&nbsp;&nbsp;${start} — ${end}<br>`;
+        });
+
+        return html;
+    };
+
     const buildNodeTitle = (row, nodeId) => {
         let html = `<strong>Node ID:</strong> ${nodeId}<br>`;
         html += `<strong>Name:</strong> ${row?.node_name || 'N/A'}<br>`;
         html += `<strong>Line:</strong> ${row?.line_name || 'N/A'}<br>`;
         html += `<strong>Type:</strong> ${row?.node_type_name || 'N/A'}<br>`;
+        if (row?.parameter_type_name) {
+            html += `<strong>Тип расчетного параметра:</strong> ${row.parameter_type_name}<br>`;
+        }
+        if (row?.purpose_name) {
+            html += `<strong>Назначение:</strong> ${row.purpose_name}<br>`;
+        }
+        if (row?.accounting_type_name) {
+            html += `<strong>Выбранный способ учета:</strong> ${row.accounting_type_name}<br>`;
+        }
         html += `<strong>Level:</strong> ${row?.level ?? 'N/A'}<br>`;
         if (row?.object_id != null || row?.object_name) {
             html += `<strong>Объект:</strong> ${row?.object_name || 'N/A'} <small>(ID: ${row?.object_id ?? '—'})</small><br>`;
         }
+        if (row?.is_virtual) {
+            html += `<strong>Статус:</strong> Временный узел (не сохранен в БД)<br>`;
+        }
         html += buildAccountingHtml(nodeId);
+        html += buildConnectionsHtml(nodeId);
         return html;
     };
 
@@ -1310,33 +2387,40 @@ function buildNetworkGraph(treeData) {
         const typeName = row.node_type_name || 'N/A';
         const color = getTypeColor(typeName);
         const isDimmed = dimmedNodeIds.has(Number(nodeId));
+        const connectionCount = getConnectionCountForNode(nodeId);
+        const hasConnections = connectionCount > 0;
 
         processedNodes.add(visNodeId);
         nodes.add({
             id: visNodeId,
             label: getNodeLabel(row, nodeId),
+            baseLabel: getNodeLabel(row, nodeId),
             title: buildNodeTitle(row, nodeId),
             shape: 'dot',
-            size: 22,
+            size: hasConnections ? 24 : BASE_NODE_SIZE,
             level: Number.isFinite(Number(row?.level)) ? Number(row.level) : undefined,
+            connectionCount,
+            borderWidth: hasConnections ? 3 : 2,
             color: {
                 background: isDimmed ? hexToRgba(color, 0.28) : color,
-                border: isDimmed ? '#6B7280' : '#2C2C2C',
+                border: isDimmed ? '#6B7280' : (hasConnections ? '#64748B' : '#2C2C2C'),
                 highlight: {
                     background: isDimmed ? hexToRgba(color, 0.4) : color,
-                    border: isDimmed ? '#9CA3AF' : '#FF6B6B'
+                    border: isDimmed ? '#9CA3AF' : (hasConnections ? '#94A3B8' : '#FF6B6B')
                 },
                 hover: {
                     background: isDimmed ? hexToRgba(color, 0.35) : color,
-                    border: isDimmed ? '#9CA3AF' : '#FFD166'
+                    border: isDimmed ? '#9CA3AF' : (hasConnections ? '#CBD5E1' : '#FFD166')
                 }
             },
             font: {
                 color: isDimmed
                     ? (document.body.classList.contains('light-theme') ? '#9CA3AF' : '#6B7280')
                     : (document.body.classList.contains('light-theme') ? '#111827' : '#E5E7EB'),
-                size: 12,
-                face: 'Arial'
+                size: 14,
+                face: 'Arial',
+                multi: true,
+                vadjust: 6
             }
         });
     };
@@ -1441,7 +2525,9 @@ function buildNetworkGraph(treeData) {
             hover: true,
             tooltipDelay: 200,
             navigationButtons: true,
-            keyboard: true
+            keyboard: true,
+            dragNodes: !isLeftToRightMode,
+            dragView: true
         }
     };
 
@@ -1458,6 +2544,7 @@ function buildNetworkGraph(treeData) {
     const applyObjectSeparationOnce = () => {
         if (separationApplied) return;
         separationApplied = true;
+        spreadVirtualNodes();
         enforceObjectSeparation();
         if (isLeftToRightMode) {
             network.fit({
@@ -1466,6 +2553,15 @@ function buildNetworkGraph(treeData) {
         }
         network.redraw();
         container.classList.remove('network-hidden');
+        if (pendingNodeSelectionId && nodes.get(pendingNodeSelectionId)) {
+            network.selectNodes([pendingNodeSelectionId]);
+            network.focus(pendingNodeSelectionId, {
+                scale: isLeftToRightMode ? 1 : 1.1,
+                animation: { duration: 250, easingFunction: 'easeInOutQuad' }
+            });
+            showNodeDetails(pendingNodeSelectionId);
+            pendingNodeSelectionId = null;
+        }
     };
 
     setTimeout(applyObjectSeparationOnce, 250);
@@ -1486,7 +2582,7 @@ function buildNetworkGraph(treeData) {
             const label = rawName.length > 42 ? rawName.substring(0, 39) + '…' : rawName;
 
             ctx.save();
-            ctx.font = '600 13px Arial, sans-serif';
+            ctx.font = OBJECT_TITLE_FONT;
             const measuredLabelWidth = ctx.measureText(label).width;
             const bounds = getObjectBounds(ids, label, measuredLabelWidth);
             if (!bounds) {
@@ -1510,41 +2606,68 @@ function buildNetworkGraph(treeData) {
     });
 
     network.on('afterDrawing', function(ctx) {
-        if (!objectGroupsForDrawing || objectGroupsForDrawing.size === 0) return;
-
         const isLight = document.body.classList.contains('light-theme');
+
         const labelFill = isLight ? '#374151' : '#e5e7eb';
 
-        objectGroupsForDrawing.forEach((info, oid) => {
-            const ids = Array.from(info.visIds);
-            if (ids.length === 0) return;
+        if (objectGroupsForDrawing && objectGroupsForDrawing.size > 0) {
+            objectGroupsForDrawing.forEach((info, oid) => {
+                const ids = Array.from(info.visIds);
+                if (ids.length === 0) return;
 
-            const rawName = info.name || `Объект ${oid}`;
-            const label = rawName.length > 42 ? rawName.substring(0, 39) + '…' : rawName;
+                const rawName = info.name || `Объект ${oid}`;
+                const label = rawName.length > 42 ? rawName.substring(0, 39) + '…' : rawName;
+
+                ctx.save();
+                ctx.font = OBJECT_TITLE_FONT;
+                const measuredLabelWidth = ctx.measureText(label).width;
+                const bounds = getObjectBounds(ids, label, measuredLabelWidth);
+                if (!bounds) {
+                    ctx.restore();
+                    return;
+                }
+
+                const minX = bounds.minX;
+                const minY = bounds.minY;
+
+                ctx.fillStyle = labelFill;
+                ctx.textBaseline = 'middle';
+                ctx.fillText(label, minX + 14, minY + (OBJECT_TITLE_HEIGHT / 2) + 6);
+                ctx.restore();
+            });
+        }
+
+        const nodePositions = network.getPositions();
+        nodes.get().forEach(node => {
+            const connectionCount = Number(node.connectionCount || 0);
+            if (!connectionCount) return;
+
+            const pos = nodePositions[node.id];
+            if (!pos) return;
+
+            const displayCount = connectionCount > 99 ? '99+' : String(connectionCount);
+            const nodeRadius = Number(node.size || BASE_NODE_SIZE);
+            const targetFontSize = Math.max(12, Math.round(nodeRadius * 0.95));
+            const fontSize = displayCount.length >= 3
+                ? Math.round(targetFontSize * 0.68)
+                : (displayCount.length === 2 ? Math.round(targetFontSize * 0.82) : targetFontSize);
 
             ctx.save();
-            ctx.font = '600 13px Arial, sans-serif';
-            const measuredLabelWidth = ctx.measureText(label).width;
-            const bounds = getObjectBounds(ids, label, measuredLabelWidth);
-            if (!bounds) {
-                ctx.restore();
-                return;
-            }
-
-            const minX = bounds.minX;
-            const minY = bounds.minY;
-
-            ctx.fillStyle = labelFill;
+            ctx.font = `700 ${fontSize}px Arial, sans-serif`;
+            ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(label, minX + 14, minY + (OBJECT_TITLE_HEIGHT / 2) + 6);
+            ctx.fillStyle = isLight ? '#0F172A' : '#F8FAFC';
+            ctx.fillText(displayCount, pos.x, pos.y);
             ctx.restore();
         });
     });
 
     // Click node -> details
     network.on('click', function(params) {
+        hideNodeContextMenu();
         if (params.nodes.length > 0) {
             const nodeVisId = params.nodes[0]; // "node-409"
+            network.selectNodes([nodeVisId]);
             showNodeDetails(nodeVisId);
         }
     });
@@ -1554,7 +2677,7 @@ function buildNetworkGraph(treeData) {
         if (currentDisplayMode === 'ltr') return;
 
         const nodeVisId = params.node;
-        const m = String(nodeVisId).match(/^node-(\d+)$/);
+        const m = String(nodeVisId).match(/^node-(-?\d+)$/);
         if (!m) return;
         const nodeIdNum = parseInt(m[1], 10);
 
@@ -1583,14 +2706,35 @@ function buildNetworkGraph(treeData) {
 }
 
 function showNodeDetails(visNodeId) {
-    const m = String(visNodeId).match(/^node-(\d+)$/);
-    if (!m) return;
-    const nodeId = parseInt(m[1], 10);
-    const items = rawData.filter(item => item.child_id === nodeId || item.node_id === nodeId);
+    const match = String(visNodeId).match(/^node-(-?\d+)$/);
+    if (!match) return;
+    const nodeId = parseInt(match[1], 10);
+    const items = getCombinedTreeData().filter(item => Number(item.child_id) === nodeId || Number(item.node_id) === nodeId);
     
     let html = '';
     if (items.length > 0) {
         const item = items[0];
+        const extraInfo = `
+            ${item.parameter_type_name ? `<div class="node-info"><strong>Тип расчетного параметра:</strong> ${item.parameter_type_name}</div>` : ''}
+            ${item.purpose_name ? `<div class="node-info"><strong>Назначение:</strong> ${item.purpose_name}</div>` : ''}
+            ${item.accounting_type_name ? `<div class="node-info"><strong>Выбранный способ учета:</strong> ${item.accounting_type_name}</div>` : ''}
+            ${item.is_virtual ? `<div class="node-info"><strong>Статус:</strong> Временный узел, только на схеме</div>` : ''}
+        `;
+        const connections = getConnectionsForNode(nodeId);
+        const connectionsBlock = connections.length > 0
+            ? `
+            <div class="node-info">
+                <strong>Подключения:</strong>
+                ${connections.map((conn, idx) => {
+                    const start = formatRuDateTime(conn.start_date) || 'без даты начала';
+                    const end = conn.end_date ? formatRuDateTime(conn.end_date) : 'без даты окончания';
+                    return `${idx + 1}. ${conn.connection_name} (ID: ${conn.connection_id})<br><small>${start} — ${end}</small>`;
+                }).join('<br>')}
+            </div>`
+            : `
+            <div class="node-info">
+                <strong>Подключения:</strong> Нет активных подключений в выбранном месяце
+            </div>`;
         const objectBlock = (item.object_id != null || item.object_name)
             ? `
             <div class="node-info">
@@ -1614,12 +2758,14 @@ function showNodeDetails(visNodeId) {
             <div class="node-info">
                 <strong>Type:</strong> ${item.node_type_name || 'N/A'}
             </div>
+            ${extraInfo}
             <div class="node-info">
                 <strong>Level:</strong> ${item.level}
             </div>
             <div class="node-info">
                 <strong>Path:</strong> <code style="font-size: 11px;">${item.path_str}</code>
             </div>
+            ${connectionsBlock}
         `;
     } else {
         html = '<div style="color: var(--text-muted);">Информация не найдена</div>';
@@ -1629,9 +2775,12 @@ function showNodeDetails(visNodeId) {
 }
 
 function updateNetworkStats() {
-    const uniqueNodes = new Set(rawData.flatMap(item => [item.node_id, item.child_id]));
-    const uniqueLines = new Set(rawData.map(item => item.line_id).filter(id => id !== null));
-    const maxLevel = Math.max(...rawData.map(item => item.level), 0);
+    const combinedData = getCombinedTreeData();
+    const uniqueNodes = new Set(
+        combinedData.flatMap(item => [item.node_id, item.child_id]).filter(id => id !== null && id !== undefined)
+    );
+    const uniqueLines = new Set(combinedData.map(item => item.line_id).filter(id => id !== null && id !== undefined));
+    const maxLevel = Math.max(...combinedData.map(item => Number(item.level) || 0), 0);
     
     document.getElementById('nodeCount').textContent = uniqueNodes.size;
     document.getElementById('lineCount').textContent = uniqueLines.size;
@@ -1691,7 +2840,7 @@ function updateNetworkOptions() {
         // Обновляем метки
         nodesData.forEach(node => {
             if (showLabels) {
-                node.label = `Node ${node.id.split('-')[1]}`;
+                node.label = node.baseLabel || `Node ${node.id.split('-')[1]}`;
             } else {
                 node.label = '';
             }
@@ -1714,12 +2863,13 @@ function generateColorPalette(count) {
 }
 
 function exportNetwork() {
-    if (rawData.length === 0) {
+    const combinedData = getCombinedTreeData();
+    if (combinedData.length === 0) {
         alert('Сначала загрузите сеть');
         return;
     }
     
-    const csv = convertToCSV(rawData);
+    const csv = convertToCSV(combinedData);
     downloadCSV(csv, 'network_export.csv');
 }
 

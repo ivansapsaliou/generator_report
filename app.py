@@ -2651,6 +2651,7 @@ def get_network_tree():
         
         # Если включен режим "Использовать способ учета"
         accounting_data = {}
+        connection_data = {}
         if use_accounting and accounting_month:
             # Парсим месяц
             try:
@@ -2704,6 +2705,43 @@ def get_network_tree():
                         })
                     
                     print(f"[NETWORK] ✅ Found accounting data for {len(accounting_data)} nodes")
+
+                    connection_query = """
+                        SELECT
+                            rc.connection_id,
+                            rc.node_calculate_parameter_id,
+                            COALESCE(NULLIF(TRIM(rc.connection_name), ''), 'Подключение #' || rc.connection_id::text) AS connection_name,
+                            rc.start_date,
+                            rc.end_date
+                        FROM public.rul_connection rc
+                        WHERE rc.node_calculate_parameter_id = ANY(%s)
+                            AND COALESCE(rc.deleted, 0) = 0
+                            AND COALESCE(rc.blocked, 0) = 0
+                            AND (rc.start_date IS NULL OR rc.start_date <= %s::timestamp)
+                            AND (rc.end_date IS NULL OR rc.end_date >= %s::timestamp)
+                        ORDER BY rc.node_calculate_parameter_id, rc.connection_name, rc.connection_id
+                    """
+
+                    cur.execute(connection_query, (node_ids, p_end_date, p_start_date))
+                    connection_rows = cur.fetchall()
+
+                    for conn_row in connection_rows:
+                        ncp_id = conn_row['node_calculate_parameter_id']
+                        if ncp_id not in connection_data:
+                            connection_data[ncp_id] = {
+                                'count': 0,
+                                'connections': []
+                            }
+
+                        connection_data[ncp_id]['connections'].append({
+                            'connection_id': conn_row['connection_id'],
+                            'connection_name': conn_row['connection_name'],
+                            'start_date': str(conn_row['start_date']) if conn_row['start_date'] else None,
+                            'end_date': str(conn_row['end_date']) if conn_row['end_date'] else None
+                        })
+                        connection_data[ncp_id]['count'] += 1
+
+                    print(f"[NETWORK] ✅ Found connection data for {len(connection_data)} nodes")
                     
             except Exception as acc_e:
                 print(f"[NETWORK] ❌ Error fetching accounting data: {acc_e}")
@@ -2724,6 +2762,8 @@ def get_network_tree():
         # Добавляем данные о способах учета если есть
         if accounting_data:
             response_data['accounting_data'] = accounting_data
+        if connection_data:
+            response_data['connection_data'] = connection_data
         
         return jsonify(response_data)
         
