@@ -2614,6 +2614,7 @@ def get_network_tree():
                 tree_cte.node_name,
                 tree_cte.node_type_name,
                 tree_cte.node_calculate_parameter_id,
+                rn.node_id::BIGINT AS rul_node_id,
                 ro.object_id::BIGINT AS object_id,
                 ro.object_name::TEXT AS object_name
             FROM tree_cte
@@ -2645,6 +2646,7 @@ def get_network_tree():
                 'node_name': row['node_name'],
                 'node_type_name': row['node_type_name'],
                 'node_calculate_parameter_id': row['node_calculate_parameter_id'],
+                'rul_node_id': row['rul_node_id'],
                 'object_id': row['object_id'],
                 'object_name': row['object_name']
             })
@@ -2676,8 +2678,10 @@ def get_network_tree():
                         SELECT 
                             rat.accounting_type_name,
                             ratn.node_calculate_parameter_id,
-                            GREATEST(COALESCE(ratn.start_date, '1970-01-01'::timestamp), %s::timestamp) as valid_start,
-                            LEAST(COALESCE(ratn.end_date, '2100-12-31'::timestamp), %s::timestamp) as valid_end
+                            ratn.start_date AS acc_start,
+                            ratn.end_date AS acc_end,
+                            GREATEST(COALESCE(ratn.start_date, '1970-01-01'::timestamp), %s::timestamp) AS valid_start,
+                            LEAST(COALESCE(ratn.end_date, '2100-12-31'::timestamp), %s::timestamp) AS valid_end
                         FROM rul_accounting_type_node ratn
                         JOIN rul_accounting_type rat 
                             ON rat.accounting_type_id = ratn.accounting_type_id
@@ -2700,8 +2704,9 @@ def get_network_tree():
                             }
                         accounting_data[ncp_id]['types'].append(acc_row['accounting_type_name'])
                         accounting_data[ncp_id]['valid_periods'].append({
-                            'start': str(acc_row['valid_start']) if acc_row['valid_start'] else None,
-                            'end': str(acc_row['valid_end']) if acc_row['valid_end'] else None
+                            # Даты действия привязки способа учёта к расчётному параметру (как в БД)
+                            'start': str(acc_row['acc_start']) if acc_row['acc_start'] else None,
+                            'end': str(acc_row['acc_end']) if acc_row['acc_end'] else None
                         })
                     
                     print(f"[NETWORK] ✅ Found accounting data for {len(accounting_data)} nodes")
@@ -2841,6 +2846,195 @@ def get_network_info():
         
     except Exception as e:
         print(f"[NETWORK] Error getting network info: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/network/charges-summary', methods=['POST'])
+def get_network_charges_summary():
+    """
+    Агрегировать начисления по подключениям за выбранный месяц.
+
+    Request JSON:
+        connection_ids: [int, ...]
+        accounting_month: YYYY-MM
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        raw_connection_ids = payload.get('connection_ids') or []
+        accounting_month = (payload.get('accounting_month') or '').strip()
+
+        if not accounting_month:
+            return jsonify({
+                'success': False,
+                'error': 'accounting_month is required'
+            }), 400
+
+        try:
+            year, month = map(int, accounting_month.split('-'))
+            period_start = datetime(year, month, 1)
+            if month == 12:
+                period_end = datetime(year + 1, 1, 1) - timedelta(seconds=1)
+            else:
+                period_end = datetime(year, month + 1, 1) - timedelta(seconds=1)
+        except Exception:
+            return jsonify({
+                'success': False,
+                'error': 'accounting_month must have YYYY-MM format'
+            }), 400
+
+        connection_ids = []
+        for value in raw_connection_ids:
+            try:
+                normalized = int(value)
+                if normalized > 0:
+                    connection_ids.append(normalized)
+            except (TypeError, ValueError):
+                continue
+
+        connection_ids = sorted(set(connection_ids))
+
+        if not connection_ids:
+            return jsonify({
+                'success': True,
+                'summary': {
+                    'total': 0.0,
+                    'consumption': 0.0,
+                    'losses': 0.0,
+                    'other': 0.0,
+                    'connection_count': 0
+                },
+                'breakdown': [],
+                'meta': {
+                    'accounting_month': accounting_month,
+                    'amount_column': None
+                }
+            })
+
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+        cur.execute("""
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'rul_charge'
+            ORDER BY ordinal_position
+        """)
+        charge_columns = cur.fetchall()
+        column_names = [row['column_name'] for row in charge_columns]
+
+        required_columns = {'connection_id', 'source_id', 'start_date', 'end_date'}
+        missing_required = [name for name in required_columns if name not in column_names]
+        if missing_required:
+            return jsonify({
+                'success': False,
+                'error': f"В таблице rul_charge отсутствуют обязательные поля: {', '.join(missing_required)}"
+            }), 500
+
+        numeric_types = {
+            'smallint', 'integer', 'bigint',
+            'numeric', 'decimal', 'real', 'double precision'
+        }
+        excluded_numeric = {
+            'charge_id', 'connection_id', 'source_id',
+            'created_by', 'updated_by', 'deleted', 'blocked'
+        }
+        preferred_amount_columns = [
+            'charge_value', 'charge_amount', 'amount', 'value',
+            'charge_sum', 'sum_amount', 'sum_value', 'summa', 'volume'
+        ]
+
+        numeric_columns = [
+            row['column_name']
+            for row in charge_columns
+            if row['data_type'] in numeric_types and row['column_name'] not in excluded_numeric
+        ]
+
+        amount_column = next(
+            (name for name in preferred_amount_columns if name in numeric_columns),
+            numeric_columns[0] if numeric_columns else None
+        )
+
+        if not amount_column:
+            return jsonify({
+                'success': False,
+                'error': 'Не удалось определить колонку с суммой начисления в rul_charge'
+            }), 500
+
+        query = f"""
+            SELECT
+                rc.source_id,
+                ROUND(COALESCE(SUM(COALESCE(rc.{amount_column}, 0)), 0)::numeric, 2) AS total_amount,
+                COUNT(*)::INT AS charge_count
+            FROM public.rul_charge rc
+            WHERE rc.connection_id = ANY(%s)
+              AND (rc.start_date IS NULL OR rc.start_date <= %s::timestamp)
+              AND (rc.end_date IS NULL OR rc.end_date >= %s::timestamp)
+            GROUP BY rc.source_id
+            ORDER BY rc.source_id
+        """
+
+        cur.execute(query, (connection_ids, period_end, period_start))
+        rows = cur.fetchall()
+
+        breakdown = []
+        totals = {
+            'consumption': 0.0,
+            'losses': 0.0,
+            'other': 0.0
+        }
+        source_titles = {
+            1: 'Потребление',
+            2: 'Потери'
+        }
+
+        for row in rows:
+            source_id = int(row['source_id']) if row['source_id'] is not None else 0
+            total_amount = float(row['total_amount'] or 0)
+            charge_count = int(row['charge_count'] or 0)
+
+            if source_id == 1:
+                totals['consumption'] += total_amount
+            elif source_id == 2:
+                totals['losses'] += total_amount
+            else:
+                totals['other'] += total_amount
+
+            breakdown.append({
+                'source_id': source_id,
+                'source_name': source_titles.get(source_id, f'Источник {source_id}'),
+                'total_amount': total_amount,
+                'charge_count': charge_count
+            })
+
+        total_sum = round(totals['consumption'] + totals['losses'] + totals['other'], 2)
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'summary': {
+                'total': total_sum,
+                'consumption': round(totals['consumption'], 2),
+                'losses': round(totals['losses'], 2),
+                'other': round(totals['other'], 2),
+                'connection_count': len(connection_ids)
+            },
+            'breakdown': breakdown,
+            'meta': {
+                'accounting_month': accounting_month,
+                'amount_column': amount_column
+            }
+        })
+
+    except Exception as e:
+        print(f"[NETWORK] ❌ Error calculating charges summary: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)

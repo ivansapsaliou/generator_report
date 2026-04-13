@@ -14,11 +14,12 @@
     <style>
         #network-container {
             width: 100%;
-            height: 600px;
+            height: calc(100vh - 180px);
+            min-height: 560px;
             border: 1px solid var(--border);
             border-radius: 8px;
             background: var(--bg);
-            margin-top: 12px;
+            margin-top: 0;
         }
 
         #network-container.network-hidden {
@@ -33,14 +34,62 @@
             border-radius: 8px;
             padding: 16px;
             overflow-y: auto;
-            max-height: 600px;
+            max-height: calc(100vh - 250px);
             color: var(--text);
+            transition: max-width 0.22s ease, min-width 0.22s ease, padding 0.22s ease, border-width 0.22s ease, opacity 0.22s ease;
         }
         
         .network-layout {
             display: flex;
             gap: 16px;
             margin-top: 16px;
+            align-items: flex-start;
+        }
+
+        .network-graph-panel {
+            flex: 1;
+            min-width: 0;
+            position: relative;
+        }
+
+        .network-sidebar-toggle {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.86);
+            color: #E5E7EB;
+            cursor: pointer;
+            z-index: 20;
+            transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+            backdrop-filter: blur(8px);
+        }
+
+        .network-sidebar-toggle:hover {
+            transform: translateY(-1px);
+            border-color: var(--primary);
+            background: rgba(30, 41, 59, 0.94);
+        }
+
+        .light-theme .network-sidebar-toggle {
+            background: rgba(255, 255, 255, 0.92);
+            color: #111827;
+        }
+
+        .network-layout.sidebar-collapsed #network-sidebar {
+            min-width: 0;
+            max-width: 0;
+            padding: 0;
+            border-width: 0;
+            opacity: 0;
+            overflow: hidden;
+            pointer-events: none;
         }
         
         .node-info {
@@ -132,6 +181,10 @@
             background: var(--bg);
             color: var(--text);
             font-size: 14px;
+        }
+
+        .filter-item select.form-control {
+            cursor: pointer;
         }
         
         .filter-item select:disabled,
@@ -321,22 +374,30 @@
 
         .network-context-menu {
             position: fixed;
-            min-width: 220px;
+            width: max-content;
+            min-width: 0;
+            max-width: 260px;
             background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 10px;
             box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
             padding: 6px;
             z-index: 1200;
-            display: none;
+            display: none !important;
         }
 
         .network-context-menu.open {
-            display: block;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
         }
 
         .network-context-menu-item {
-            width: 100%;
+            width: auto;
+            min-width: 220px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
             border: none;
             background: transparent;
             color: var(--text);
@@ -345,6 +406,7 @@
             text-align: left;
             cursor: pointer;
             font-size: 14px;
+            white-space: nowrap;
         }
 
         .network-context-menu-item:hover {
@@ -571,6 +633,79 @@
             line-height: 1;
             font-weight: 600;
         }
+
+        .connection-modal-section {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(148, 163, 184, 0.16);
+        }
+
+        .connection-modal-section:first-of-type {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: none;
+        }
+
+        .connection-modal-section-title {
+            margin: 0 0 12px;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--primary);
+        }
+
+        .connection-modal-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            align-items: end;
+        }
+
+        .connection-modal-grid.two-columns {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .connection-modal-grid.three-columns {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .connection-modal-help {
+            margin-top: 6px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        @media (max-width: 1400px) {
+            .connection-modal-grid,
+            .connection-modal-grid.two-columns,
+            .connection-modal-grid.three-columns {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 880px) {
+            .connection-modal-grid,
+            .connection-modal-grid.two-columns,
+            .connection-modal-grid.three-columns {
+                grid-template-columns: 1fr;
+            }
+
+            .network-layout {
+                flex-direction: column;
+            }
+
+            #network-container,
+            #network-sidebar {
+                height: auto;
+                min-height: auto;
+                max-height: none;
+            }
+
+            .network-layout.sidebar-collapsed #network-sidebar {
+                display: none;
+            }
+        }
         
         /* Grid background pattern for network container */
         #network-container {
@@ -602,6 +737,373 @@
         #network-container .vis-network {
             position: relative;
             z-index: 1;
+        }
+
+        .node-action-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            z-index: 2000;
+        }
+
+        .node-action-overlay.open {
+            display: block;
+        }
+
+        .node-action-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.52);
+        }
+
+        .node-action-center {
+            position: absolute;
+            width: 52px;
+            height: 52px;
+            border-radius: 999px;
+            border: 2px solid rgba(255, 255, 255, 0.78);
+            box-shadow: 0 0 0 10px rgba(59, 130, 246, 0.12);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .node-hover-action-btn {
+            position: absolute;
+            width: 46px;
+            height: 46px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.38);
+            background: var(--card-bg);
+            color: var(--text);
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+            transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+            z-index: 2;
+        }
+
+        .node-hover-action-btn:hover {
+            transform: translate(-50%, -50%) scale(1.06);
+            border-color: rgba(59, 130, 246, 0.46);
+            background: rgba(59, 130, 246, 0.14);
+            color: var(--primary);
+        }
+
+        .node-hover-action-btn i {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .node-info-popover {
+            position: fixed;
+            width: min(360px, calc(100vw - 32px));
+            display: none;
+            background: color-mix(in srgb, var(--card-bg) 96%, rgba(15, 23, 42, 0.18));
+            border: 1px solid rgba(148, 163, 184, 0.26);
+            border-radius: 18px;
+            box-shadow: 0 22px 48px rgba(15, 23, 42, 0.32);
+            backdrop-filter: blur(14px);
+            overflow: hidden;
+            z-index: 2050;
+        }
+
+        .node-info-popover.open {
+            display: block;
+        }
+
+        .node-info-popover-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px 12px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(99, 102, 241, 0.08));
+        }
+
+        .node-info-popover-title {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .node-info-popover-subtitle {
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .node-info-title-id {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.12);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .node-info-popover-close {
+            width: 32px;
+            height: 32px;
+            flex: 0 0 32px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .node-info-popover-body {
+            padding: 14px 18px 18px;
+            max-height: min(520px, calc(100vh - 80px));
+            overflow: auto;
+        }
+
+        .node-info-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .node-info-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.16);
+            font-size: 12px;
+            color: var(--text);
+        }
+
+        .node-info-section {
+            margin-top: 14px;
+        }
+
+        .node-info-section-title {
+            margin: 0 0 8px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .node-info-connection-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .node-info-connection-item {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.12);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .node-info-accounting-item {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.14);
+        }
+
+        .node-info-accounting-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .node-info-accounting-period {
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .node-info-connection-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .node-info-connection-meta {
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .node-info-empty {
+            padding: 12px;
+            border-radius: 12px;
+            background: rgba(148, 163, 184, 0.08);
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .node-expense-summary {
+            display: grid;
+            grid-template-columns: minmax(0, 156px) minmax(0, 1fr);
+            gap: 14px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .node-expense-donut-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .node-expense-donut {
+            --consumption-angle: 0deg;
+            width: 136px;
+            height: 136px;
+            border-radius: 50%;
+            background: conic-gradient(
+                #38bdf8 0deg var(--consumption-angle),
+                #f59e0b var(--consumption-angle) 360deg
+            );
+            position: relative;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 24px rgba(15, 23, 42, 0.14);
+        }
+
+        .node-expense-donut::after {
+            content: '';
+            position: absolute;
+            inset: 18px;
+            border-radius: 50%;
+            background: var(--card-bg);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .node-expense-donut-center {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+            text-align: center;
+            padding: 0 24px;
+        }
+
+        .node-expense-donut-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1.1;
+        }
+
+        .node-expense-donut-label {
+            margin-top: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+        }
+
+        .node-expense-metrics {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+
+        .node-expense-metric {
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            background: rgba(148, 163, 184, 0.08);
+        }
+
+        .node-expense-metric.consumption {
+            background: rgba(56, 189, 248, 0.08);
+            border-color: rgba(56, 189, 248, 0.18);
+        }
+
+        .node-expense-metric.losses {
+            background: rgba(245, 158, 11, 0.08);
+            border-color: rgba(245, 158, 11, 0.18);
+        }
+
+        .node-expense-metric.total {
+            background: rgba(99, 102, 241, 0.08);
+            border-color: rgba(99, 102, 241, 0.18);
+        }
+
+        .node-expense-metric-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .node-expense-metric-value {
+            margin-top: 6px;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .node-expense-metric-subtext {
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .node-expense-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .node-expense-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.08);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            font-size: 12px;
+            color: var(--text);
+        }
+
+        .node-expense-legend-swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex: 0 0 10px;
+        }
+
+        .node-expense-note {
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(148, 163, 184, 0.08);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.45;
         }
     </style>
 </head>
@@ -682,37 +1184,17 @@
                 <div class="filter-item">
                     <label>Узел</label>
                     <div class="filter-input-wrapper">
-                        <div class="searchable-select" id="nodeSelectWrapper">
-                            <input
-                                type="text"
-                                id="nodeSelectInput"
-                                class="searchable-select-input"
-                                placeholder="Сначала выберите объект"
-                                autocomplete="off"
-                                disabled
-                                onfocus="openSearchableSelect('nodeSelect')"
-                                oninput="handleSearchableInput('nodeSelect', this.value)">
-                            <input type="hidden" id="nodeSelect" value="">
-                            <div class="searchable-select-dropdown" id="nodeSelectDropdown"></div>
-                        </div>
+                        <select id="nodeSelect" class="form-control" disabled onchange="onNodeChange()">
+                            <option value="">Сначала выберите объект</option>
+                        </select>
                     </div>
                 </div>
                 <div class="filter-item">
                     <label>Расчетный параметр (Node ID)</label>
                     <div class="filter-input-wrapper">
-                        <div class="searchable-select" id="parameterSelectWrapper">
-                            <input
-                                type="text"
-                                id="parameterSelectInput"
-                                class="searchable-select-input"
-                                placeholder="Сначала выберите узел"
-                                autocomplete="off"
-                                disabled
-                                onfocus="openSearchableSelect('parameterSelect')"
-                                oninput="handleSearchableInput('parameterSelect', this.value)">
-                            <input type="hidden" id="parameterSelect" value="">
-                            <div class="searchable-select-dropdown" id="parameterSelectDropdown"></div>
-                        </div>
+                        <select id="parameterSelect" class="form-control" disabled onchange="onParameterChange()">
+                            <option value="">Сначала выберите узел</option>
+                        </select>
                     </div>
                 </div>
                 <div class="filter-item filter-item-month">
@@ -754,7 +1236,16 @@
             <!-- Основной контейнер -->
             <div class="network-layout">
                 <!-- Граф сети -->
-                <div style="flex: 1;">
+                <div class="network-graph-panel">
+                    <button
+                        type="button"
+                        id="networkSidebarToggle"
+                        class="network-sidebar-toggle"
+                        onclick="toggleNetworkSidebar()"
+                        title="Скрыть правую панель"
+                        aria-label="Скрыть правую панель">
+                        <i class="bi bi-layout-sidebar-inset"></i>
+                    </button>
                     <div id="network-container"></div>
                 </div>
 
@@ -788,7 +1279,7 @@
 
                     <h6 style="margin-top: 16px;">Выбранный элемент</h6>
                     <div id="nodeDetails" style="color: var(--text-muted); font-size: 12px;">
-                        Выберите узел на графе для отображения информации
+                        Информация об узле теперь открывается прямо на схеме по кнопке "Информация"
                     </div>
 
                     <div style="margin-top: 16px;">
@@ -807,9 +1298,55 @@
 
 </div>
 
+<div id="nodeHoverActions" class="node-action-overlay" aria-label="Действия над узлом" aria-hidden="true">
+    <div class="node-action-backdrop" data-node-action-close="true"></div>
+    <div class="node-action-center" aria-hidden="true"></div>
+    <button type="button" class="node-hover-action-btn" data-action="balance" data-angle="-90" title="Сбалансировать" aria-label="Сбалансировать" onclick="handleNodeActionClick(event, 'balance')">
+        <i class="bi bi-shuffle"></i>
+    </button>
+    <button type="button" class="node-hover-action-btn" data-action="attach" data-angle="-30" title="Добавить узлы" aria-label="Добавить узлы" onclick="handleNodeActionClick(event, 'attach')">
+        <i class="bi bi-plus-circle"></i>
+    </button>
+    <button type="button" class="node-hover-action-btn" data-action="info" data-angle="30" title="Информация" aria-label="Информация" onclick="openNodeInfoFromAction(event)">
+        <i class="bi bi-info-circle"></i>
+    </button>
+    <button type="button" class="node-hover-action-btn" data-action="expenses" data-angle="90" title="Расходы" aria-label="Расходы" onclick="openNodeExpensesFromAction(event)">
+        <i class="bi bi-cash-stack"></i>
+    </button>
+    <button type="button" class="node-hover-action-btn" data-action="connection" data-angle="150" title="Создать подключение" aria-label="Создать подключение" onclick="handleNodeActionClick(event, 'connection')">
+        <i class="bi bi-plug"></i>
+    </button>
+    <button type="button" class="node-hover-action-btn" data-action="toggle-disabled" data-angle="210" title="Выключить узел" aria-label="Выключить узел" onclick="handleNodeActionClick(event, 'toggle-disabled')">
+        <i class="bi bi-toggle-off"></i>
+    </button>
+</div>
+
+<div id="nodeInfoPopover" class="node-info-popover" aria-hidden="true">
+    <div class="node-info-popover-header">
+        <div>
+            <h3 id="nodeInfoPopoverTitle" class="node-info-popover-title">Информация об узле</h3>
+            <div id="nodeInfoPopoverSubtitle" class="node-info-popover-subtitle"></div>
+        </div>
+        <button type="button" class="node-info-popover-close" onclick="hideNodeInfoPopover()" aria-label="Закрыть">×</button>
+    </div>
+    <div id="nodeInfoPopoverBody" class="node-info-popover-body"></div>
+</div>
+
 <div id="networkNodeContextMenu" class="network-context-menu">
+    <button type="button" class="network-context-menu-item" onclick="handleContextMenuAction('balance')">
+        <i class="bi bi-shuffle"></i> Сбалансировать
+    </button>
     <button type="button" class="network-context-menu-item" onclick="openAttachNodeModalFromContextMenu()">
-        Присоединить узел
+        <i class="bi bi-plus-circle"></i> Добавить узлы
+    </button>
+    <button type="button" class="network-context-menu-item" onclick="handleContextMenuAction('info')">
+        <i class="bi bi-info-circle"></i> Информация
+    </button>
+    <button type="button" class="network-context-menu-item" onclick="handleContextMenuAction('expenses')">
+        <i class="bi bi-cash-stack"></i> Расходы
+    </button>
+    <button type="button" class="network-context-menu-item" onclick="handleContextMenuAction('connection')">
+        <i class="bi bi-plug"></i> Создать подключение
     </button>
 </div>
 
@@ -848,6 +1385,162 @@
     </div>
 </div>
 
+<div id="connectionModalOverlay" class="network-modal-overlay">
+    <div class="network-modal" role="dialog" aria-modal="true" aria-labelledby="connectionModalTitle">
+        <div class="network-modal-header">
+            <h2 id="connectionModalTitle" class="network-modal-title">Создать подключение</h2>
+            <button type="button" class="network-modal-close" onclick="closeConnectionModal()" aria-label="Закрыть">×</button>
+        </div>
+        <form id="connectionForm" onsubmit="submitConnectionForm(event)">
+            <div class="network-modal-body">
+                <p id="connectionModalHint" class="network-modal-hint">
+                    Подключение будет создано только для текущей схемы, без сохранения в БД.
+                </p>
+
+                <section class="connection-modal-section">
+                    <h3 class="connection-modal-section-title">Общая информация</h3>
+                    <div class="connection-modal-grid">
+                        <div class="network-modal-field">
+                            <label for="connectionConsumer">Потребитель (Номер договора): *</label>
+                            <input type="text" id="connectionConsumer" required maxlength="150" placeholder="Начните вводить значение">
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionContractStart">Дата начала действия договора: *</label>
+                            <input type="date" id="connectionContractStart" required>
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionContractEnd">Дата окончания действия договора:</label>
+                            <input type="date" id="connectionContractEnd">
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionContractNumber">Номер договора:</label>
+                            <input type="text" id="connectionContractNumber" maxlength="80" placeholder="Укажите номер договора">
+                        </div>
+                    </div>
+                    <div class="connection-modal-grid" style="margin-top:14px;">
+                        <div class="network-modal-field">
+                            <label for="connectionServiceType">Вид услуги (Вид инженерной сети): *</label>
+                            <select id="connectionServiceType" required>
+                                <option value="">Выберите услугу</option>
+                                <option value="Теплоснабжение">Теплоснабжение</option>
+                                <option value="ГВС">ГВС</option>
+                                <option value="ХВС">ХВС</option>
+                                <option value="Электроснабжение">Электроснабжение</option>
+                                <option value="Газоснабжение">Газоснабжение</option>
+                            </select>
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionName">Наименование подключения: *</label>
+                            <input type="text" id="connectionName" required maxlength="150" placeholder="Введите название подключения">
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionNodeStart">Дата подключения к узлу: *</label>
+                            <input type="date" id="connectionNodeStart" required>
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionNodeEnd">Дата отключения от узла:</label>
+                            <input type="date" id="connectionNodeEnd">
+                        </div>
+                    </div>
+                </section>
+
+                <section class="connection-modal-section">
+                    <h3 class="connection-modal-section-title">Финансовая информация</h3>
+                    <div class="connection-modal-grid">
+                        <div class="network-modal-field">
+                            <label for="connectionTariffGroup">Тарифная группа: *</label>
+                            <input type="text" id="connectionTariffGroup" required maxlength="120" placeholder="Начните вводить значение">
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionBaseTariff">Базовый тариф:</label>
+                            <input type="text" id="connectionBaseTariff" maxlength="120" placeholder="Укажите базовый тариф">
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionLossTariffGroup">Тарифная группа для потерь в линиях:</label>
+                            <input type="text" id="connectionLossTariffGroup" maxlength="120" placeholder="Начните вводить значение">
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionLossTariff">Тариф (для потерь):</label>
+                            <input type="text" id="connectionLossTariff" maxlength="120" placeholder="Укажите тариф для потерь">
+                        </div>
+                    </div>
+                    <div class="connection-modal-grid" style="margin-top:14px;">
+                        <div class="network-modal-field">
+                            <label for="connectionMainOperation">Основная операция: *</label>
+                            <select id="connectionMainOperation" required>
+                                <option value="">Выберите операцию</option>
+                                <option value="Начисление">Начисление</option>
+                                <option value="Перерасчет">Перерасчет</option>
+                                <option value="Корректировка">Корректировка</option>
+                            </select>
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionIndexOperation">Операция по индексации:</label>
+                            <select id="connectionIndexOperation">
+                                <option value="">Не выбрано</option>
+                                <option value="Индексировать">Индексировать</option>
+                                <option value="Не индексировать">Не индексировать</option>
+                            </select>
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionAdvanceOperation">Операция по авансам:</label>
+                            <select id="connectionAdvanceOperation">
+                                <option value="">Не выбрано</option>
+                                <option value="Уб2 - Плановое начисление за поставку тепловой энергии">Уб2 - Плановое начисление за поставку тепловой энергии</option>
+                                <option value="Уб1 - Фактическое начисление">Уб1 - Фактическое начисление</option>
+                            </select>
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionIgs">ИГС:</label>
+                            <input type="text" id="connectionIgs" maxlength="50" value="1">
+                        </div>
+                    </div>
+                </section>
+
+                <section class="connection-modal-section">
+                    <h3 class="connection-modal-section-title">Расчетный расход</h3>
+                    <div class="connection-modal-grid">
+                        <div class="network-modal-field">
+                            <label for="connectionUnmetered">При безучетном потреблении *</label>
+                            <select id="connectionUnmetered" required>
+                                <option value="">Не выбрано</option>
+                                <option value="Да">Да</option>
+                                <option value="Нет">Нет</option>
+                            </select>
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionBalancing">Подлежит балансировке *</label>
+                            <select id="connectionBalancing" required>
+                                <option value="Нет">Нет</option>
+                                <option value="Да">Да</option>
+                            </select>
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionDistribution">При распределении расхода по приборам *</label>
+                            <select id="connectionDistribution" required>
+                                <option value="">Не выбрано</option>
+                                <option value="Да">Да</option>
+                                <option value="Нет">Нет</option>
+                            </select>
+                        </div>
+                        <div class="network-modal-field">
+                            <label for="connectionRecalcTpu">Подлежит пересчету по ТПУ *</label>
+                            <select id="connectionRecalcTpu" required>
+                                <option value="Да">Да</option>
+                                <option value="Нет">Нет</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <div class="network-modal-footer">
+                <button type="button" class="network-modal-btn" onclick="closeConnectionModal()">Отмена</button>
+                <button type="submit" class="network-modal-btn primary">Добавить на схему</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 // ═════════════════════════════════════════════════════════════════════════════
 // GLOBAL VARIABLES
@@ -864,14 +1557,13 @@ let connectionData = {}; // node_calculate_parameter_id -> active connections in
 let selectedAccountingMonth = null;
 let currentDisplayMode = 'default';
 const searchableSelectState = {
-    objectSelect: { options: [] },
-    nodeSelect: { options: [] },
-    parameterSelect: { options: [] }
+    objectSelect: { options: [] }
 };
 let virtualRows = [];
 let virtualNodeSequence = -1;
 let currentContextMenuNodeId = null;
 let currentAttachParentNodeVisId = null;
+let currentConnectionParentNodeVisId = null;
 let pendingNodeSelectionId = null;
 let pendingContextMenuNodeId = null;
 let preservedSelectionBeforeContextMenu = [];
@@ -879,6 +1571,11 @@ let attachModalOptions = null;
 let attachNodeRowSequence = 0;
 let attachNodeInstanceSequence = 0;
 let attachDraftRows = [];
+let currentHoverActionNodeId = null;
+let currentInfoPopoverNodeId = null;
+let manuallyDisabledNodeIds = new Set();
+let virtualConnectionSequence = 0;
+let isNetworkSidebarCollapsed = true;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // THEME MANAGEMENT - Управление темой
@@ -928,24 +1625,35 @@ document.addEventListener('DOMContentLoaded', function() {
     // хотя в input месяц визуально уже выбран.
     onAccountingMonthChange();
     updateDisplayModeToggle();
+    applyNetworkSidebarState(false);
 
     document.addEventListener('click', function(event) {
-        ['objectSelect', 'nodeSelect', 'parameterSelect'].forEach(baseId => {
-            const wrapper = document.getElementById(`${baseId}Wrapper`);
-            if (wrapper && !wrapper.contains(event.target)) {
-                closeSearchableSelect(baseId, true);
-            }
-        });
+        const objectWrapper = document.getElementById('objectSelectWrapper');
+        if (objectWrapper && !objectWrapper.contains(event.target)) {
+            closeSearchableSelect('objectSelect', true);
+        }
 
         const contextMenu = document.getElementById('networkNodeContextMenu');
         if (contextMenu && !contextMenu.contains(event.target)) {
             hideNodeContextMenu();
         }
+
+        const infoPopover = document.getElementById('nodeInfoPopover');
+        if (infoPopover && infoPopover.classList.contains('open') && !infoPopover.contains(event.target) && !event.target.closest('.node-hover-action-btn')) {
+            hideNodeInfoPopover();
+        }
+
     });
 
     document.getElementById('attachNodeModalOverlay')?.addEventListener('click', function(event) {
         if (event.target === this) {
             closeAttachNodeModal();
+        }
+    });
+
+    document.getElementById('connectionModalOverlay')?.addEventListener('click', function(event) {
+        if (event.target === this) {
+            closeConnectionModal();
         }
     });
 
@@ -964,6 +1672,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     const networkContainer = document.getElementById('network-container');
+    const nodeHoverActions = document.getElementById('nodeHoverActions');
+    if (nodeHoverActions) {
+        nodeHoverActions.addEventListener('click', function(event) {
+            if (event.target.closest('[data-node-action-close="true"]')) {
+                event.preventDefault();
+                event.stopPropagation();
+                hideNodeHoverActions(true);
+            }
+        });
+    }
+
     if (networkContainer) {
         networkContainer.addEventListener('mousedown', function(event) {
             if (event.button !== 2 || !network) return;
@@ -1007,18 +1726,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (!nodeVisId) {
                 hideNodeContextMenu();
+                hideNodeHoverActions(true);
                 return;
             }
 
-            showNodeContextMenu(event.clientX, event.clientY, nodeVisId);
-            setTimeout(restoreSelectionAfterContextMenu, 0);
+            network.selectNodes([nodeVisId]);
+            showNodeHoverActions(nodeVisId);
+            hideNodeContextMenu();
         }, true);
     }
 
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') {
             hideNodeContextMenu();
+            hideNodeHoverActions(true);
+            hideNodeInfoPopover();
             closeAttachNodeModal();
+            closeConnectionModal();
         }
     });
 });
@@ -1047,6 +1771,23 @@ function setSearchableSelectOptions(baseId, options, placeholder, disabled = fal
     input.placeholder = placeholder;
     input.disabled = disabled;
     closeSearchableSelect(baseId);
+}
+
+function setFilterNativeSelect(selectId, options, placeholder, disabled = false) {
+    const sel = document.getElementById(selectId);
+    if (!sel || sel.tagName !== 'SELECT') return;
+
+    const list = Array.isArray(options) ? options : [];
+    const ph = placeholder || '';
+    let html = `<option value="">${escapeHtml(ph)}</option>`;
+    list.forEach(opt => {
+        const v = String(opt.value ?? '');
+        const lbl = String(opt.label ?? v);
+        html += `<option value="${escapeHtml(v)}">${escapeHtml(lbl)}</option>`;
+    });
+    sel.innerHTML = html;
+    sel.disabled = !!disabled;
+    sel.value = '';
 }
 
 function openSearchableSelect(baseId) {
@@ -1133,10 +1874,6 @@ function selectSearchableOption(baseId, option) {
 
     if (baseId === 'objectSelect') {
         onObjectChange();
-    } else if (baseId === 'nodeSelect') {
-        onNodeChange();
-    } else if (baseId === 'parameterSelect') {
-        onParameterChange();
     }
 }
 
@@ -1151,6 +1888,272 @@ function escapeHtml(value) {
 
 function getCombinedTreeData() {
     return [...rawData, ...virtualRows];
+}
+
+function hasActiveAccounting(nodeId) {
+    const acc = accountingData?.[String(nodeId)] ?? accountingData?.[nodeId];
+    return Array.isArray(acc?.types) && acc.types.length > 0;
+}
+
+function getConnectionsForNode(nodeId) {
+    const data = connectionData?.[String(nodeId)] ?? connectionData?.[nodeId];
+    return Array.isArray(data?.connections) ? data.connections : [];
+}
+
+function getConnectionCountForNode(nodeId) {
+    const data = connectionData?.[String(nodeId)] ?? connectionData?.[nodeId];
+    if (typeof data?.count === 'number') return data.count;
+    return getConnectionsForNode(nodeId).length;
+}
+
+function getAccountingTypesForNode(item, nodeId = null) {
+    const candidateIds = [
+        item?.node_calculate_parameter_id,
+        item?.child_id,
+        item?.node_id,
+        nodeId
+    ].filter(value => value !== null && value !== undefined && value !== '');
+
+    for (const candidateId of candidateIds) {
+        const acc = accountingData?.[String(candidateId)] ?? accountingData?.[candidateId];
+        if (Array.isArray(acc?.types) && acc.types.length > 0) {
+            return acc.types.filter(Boolean);
+        }
+    }
+
+    if (item?.accounting_type_name) {
+        return [item.accounting_type_name];
+    }
+
+    return [];
+}
+
+function getAccountingInfoForNode(item, nodeId = null) {
+    // Только расчётный параметр узла: способ учёта в API привязан к node_calculate_parameter_id
+    const paramId = item?.node_calculate_parameter_id ?? item?.child_id ?? nodeId;
+    if (paramId === null || paramId === undefined || paramId === '') {
+        return { types: [], valid_periods: [] };
+    }
+
+    const acc = accountingData?.[String(paramId)] ?? accountingData?.[paramId];
+    if (acc) {
+        return {
+            types: Array.isArray(acc.types) ? acc.types.filter(Boolean) : [],
+            valid_periods: Array.isArray(acc.valid_periods) ? acc.valid_periods : []
+        };
+    }
+
+    // Виртуальный узел без записи в БД — остаётся только имя из черновика модалки
+    if (item?.is_virtual && item?.accounting_type_name) {
+        return {
+            types: [item.accounting_type_name],
+            valid_periods: [{ start: null, end: null }]
+        };
+    }
+
+    return { types: [], valid_periods: [] };
+}
+
+function getSubtreeNodeIds(rootNodeId) {
+    const normalizedRootId = Number(rootNodeId);
+    if (Number.isNaN(normalizedRootId)) return [];
+
+    const adjacency = new Map();
+    getCombinedTreeData().forEach(item => {
+        const parentId = Number(item?.node_id);
+        const childId = Number(item?.child_id);
+        if (Number.isNaN(parentId) || Number.isNaN(childId)) return;
+        if (!adjacency.has(parentId)) {
+            adjacency.set(parentId, new Set());
+        }
+        adjacency.get(parentId).add(childId);
+    });
+
+    const visited = new Set([normalizedRootId]);
+    const queue = [normalizedRootId];
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        const children = adjacency.get(current);
+        if (!children) continue;
+        children.forEach(childId => {
+            if (visited.has(childId)) return;
+            visited.add(childId);
+            queue.push(childId);
+        });
+    }
+
+    return Array.from(visited);
+}
+
+function parseVisNodeId(visNodeId) {
+    const match = String(visNodeId || '').match(/^node-(-?\d+)$/);
+    if (!match) return null;
+    const nodeId = parseInt(match[1], 10);
+    return Number.isNaN(nodeId) ? null : nodeId;
+}
+
+/** Внешняя карточка узла: node_id из rul_node (не расчётный параметр). */
+const EXTERNAL_NODE_VIEW_BASE = 'http://80.94.171.214:8080/Node/View';
+
+function getRulNodeIdForVisNode(visNodeId) {
+    const ncpId = parseVisNodeId(visNodeId);
+    if (ncpId == null) return null;
+    const row = getCombinedTreeData().find(r => Number(r.child_id) === Number(ncpId));
+    if (!row || row.rul_node_id == null || row.rul_node_id === '') return null;
+    return row.rul_node_id;
+}
+
+function openExternalNodeView(visNodeId) {
+    const rulNodeId = getRulNodeIdForVisNode(visNodeId);
+    if (rulNodeId == null) return;
+    const url = `${EXTERNAL_NODE_VIEW_BASE}?node_id=${encodeURIComponent(String(rulNodeId))}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function getDomEventFromNetworkParams(params) {
+    // vis.js кладет оригинальное DOM-событие в params.event.srcEvent
+    return params?.event?.srcEvent || params?.event || null;
+}
+
+function isCtrlLeftClick(domEvent) {
+    if (!domEvent) return false;
+    const isCtrlOrMeta = !!(domEvent.ctrlKey || domEvent.metaKey);
+    const isPrimaryButton =
+        domEvent.button === 0 ||
+        domEvent.which === 1 ||
+        domEvent.buttons === 1 ||
+        domEvent.pointerType === 'touch';
+    return isCtrlOrMeta && isPrimaryButton;
+}
+
+function isNodeManuallyDisabled(nodeIdOrVisId) {
+    const nodeId = typeof nodeIdOrVisId === 'string'
+        ? parseVisNodeId(nodeIdOrVisId)
+        : Number(nodeIdOrVisId);
+    if (nodeId == null || Number.isNaN(nodeId)) return false;
+    return manuallyDisabledNodeIds.has(nodeId);
+}
+
+function getPrimaryNodeActionConfig(nodeVisId) {
+    const nodeId = parseVisNodeId(nodeVisId);
+    const item = nodeId != null ? getNodeDataByParameterId(nodeId) : null;
+    const typeName = String(item?.node_type_name || '').toLowerCase();
+
+    if (typeName.includes('коммерческ')) {
+        return {
+            mode: 'recalculate',
+            label: 'Пересчитать',
+            iconClass: 'bi bi-arrow-repeat'
+        };
+    }
+
+    if (typeName.includes('баланс')) {
+        return {
+            mode: 'balance',
+            label: 'Сбалансировать',
+            iconClass: 'bi bi-shuffle'
+        };
+    }
+
+    return {
+        mode: 'balance',
+        label: 'Сбалансировать',
+        iconClass: 'bi bi-shuffle'
+    };
+}
+
+function updateNodeActionMenuState(nodeVisId) {
+    const actions = document.getElementById('nodeHoverActions');
+    const primaryButton = actions?.querySelector('[data-action="balance"]');
+    const toggleButton = actions?.querySelector('[data-action="toggle-disabled"]');
+    if (primaryButton) {
+        const primaryConfig = getPrimaryNodeActionConfig(nodeVisId);
+        primaryButton.title = primaryConfig.label;
+        primaryButton.setAttribute('aria-label', primaryConfig.label);
+        primaryButton.dataset.mode = primaryConfig.mode;
+        const primaryIcon = primaryButton.querySelector('i');
+        if (primaryIcon) {
+            primaryIcon.className = primaryConfig.iconClass;
+        }
+    }
+
+    if (!toggleButton) return;
+
+    const disabled = isNodeManuallyDisabled(nodeVisId);
+    const nextLabel = disabled ? 'Включить узел' : 'Выключить узел';
+    toggleButton.title = nextLabel;
+    toggleButton.setAttribute('aria-label', nextLabel);
+    const icon = toggleButton.querySelector('i');
+    if (icon) {
+        icon.className = disabled ? 'bi bi-toggle-on' : 'bi bi-toggle-off';
+    }
+}
+
+function toggleNodeDisabledState(nodeVisId) {
+    const nodeId = parseVisNodeId(nodeVisId);
+    if (nodeId == null) return;
+
+    if (manuallyDisabledNodeIds.has(nodeId)) {
+        manuallyDisabledNodeIds.delete(nodeId);
+    } else {
+        manuallyDisabledNodeIds.add(nodeId);
+    }
+
+    hideNodeInfoPopover();
+    hideNodeHoverActions();
+    buildNetworkGraph(getCombinedTreeData());
+}
+
+function getConnectionEntriesForNodeIds(nodeIds) {
+    const result = [];
+    const seenConnectionIds = new Set();
+
+    nodeIds.forEach(nodeId => {
+        const connections = getConnectionsForNode(nodeId);
+        connections.forEach(connection => {
+            const key = String(connection?.connection_id ?? `${nodeId}:${connection?.connection_name || ''}`);
+            if (seenConnectionIds.has(key)) return;
+            seenConnectionIds.add(key);
+            result.push(connection);
+        });
+    });
+
+    return result;
+}
+
+function formatAmountRu(value) {
+    const normalized = Number(value || 0);
+    return normalized.toLocaleString('ru-RU', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function formatRuDateTime(dtStr) {
+    if (!dtStr) return '';
+    const s = String(dtStr).trim();
+    // Строки из PostgreSQL без таймзоны: парсим как локальное время, без сдвига на сутки
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?)?/);
+    if (m) {
+        const y = Number(m[1]);
+        const mo = Number(m[2]) - 1;
+        const d = Number(m[3]);
+        const h = m[4] != null ? Number(m[4]) : 0;
+        const mi = m[5] != null ? Number(m[5]) : 0;
+        const sec = m[6] != null ? Number(m[6]) : 0;
+        const date = new Date(y, mo, d, h, mi, sec);
+        if (!Number.isNaN(date.getTime())) {
+            return date.toLocaleString('ru-RU');
+        }
+    }
+    try {
+        const date = new Date(s);
+        if (!Number.isNaN(date.getTime())) return date.toLocaleString('ru-RU');
+    } catch (_) {
+        /* ignore */
+    }
+    return s;
 }
 
 function getNodeDataByParameterId(nodeId) {
@@ -1481,6 +2484,452 @@ function hideNodeContextMenu() {
     currentContextMenuNodeId = null;
 }
 
+function hideNodeInfoPopover() {
+    const popover = document.getElementById('nodeInfoPopover');
+    if (popover) {
+        popover.classList.remove('open');
+        popover.setAttribute('aria-hidden', 'true');
+    }
+    currentInfoPopoverNodeId = null;
+}
+
+function hideNodeHoverActions(resetSelection = false) {
+    const actions = document.getElementById('nodeHoverActions');
+    if (actions) {
+        actions.classList.remove('open');
+        actions.setAttribute('aria-hidden', 'true');
+    }
+    if (resetSelection && network) {
+        network.unselectAll();
+    }
+    currentHoverActionNodeId = null;
+}
+
+function repositionNodeHoverActions() {
+    if (!network || !currentHoverActionNodeId) return;
+
+    const container = document.getElementById('network-container');
+    const actions = document.getElementById('nodeHoverActions');
+    if (!container || !actions) return;
+
+    const positions = network.getPositions([currentHoverActionNodeId]);
+    const canvasPosition = positions?.[currentHoverActionNodeId];
+    if (!canvasPosition) return;
+
+    const domPosition = network.canvasToDOM(canvasPosition);
+    const containerRect = container.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const centerX = Math.max(32, Math.min(containerRect.left + domPosition.x, Math.max(32, viewportWidth - 32)));
+    const centerY = Math.max(32, Math.min(containerRect.top + domPosition.y, Math.max(32, viewportHeight - 32)));
+    const radius = 84;
+    const buttonHalfSize = 23;
+    const centerRing = actions.querySelector('.node-action-center');
+
+    if (centerRing) {
+        centerRing.style.left = `${centerX}px`;
+        centerRing.style.top = `${centerY}px`;
+    }
+
+    actions.querySelectorAll('.node-hover-action-btn').forEach(button => {
+        const angleDeg = Number(button.dataset.angle || 0);
+        const angleRad = (angleDeg * Math.PI) / 180;
+        const rawLeft = centerX + Math.cos(angleRad) * radius;
+        const rawTop = centerY + Math.sin(angleRad) * radius;
+        const left = Math.max(buttonHalfSize + 8, Math.min(rawLeft, Math.max(buttonHalfSize + 8, viewportWidth - buttonHalfSize - 8)));
+        const top = Math.max(buttonHalfSize + 8, Math.min(rawTop, Math.max(buttonHalfSize + 8, viewportHeight - buttonHalfSize - 8)));
+
+        button.style.left = `${left}px`;
+        button.style.top = `${top}px`;
+    });
+}
+
+function repositionNodeInfoPopover() {
+    if (!network || !currentInfoPopoverNodeId) return;
+
+    const container = document.getElementById('network-container');
+    const popover = document.getElementById('nodeInfoPopover');
+    if (!container || !popover) return;
+
+    const positions = network.getPositions([currentInfoPopoverNodeId]);
+    const canvasPosition = positions?.[currentInfoPopoverNodeId];
+    if (!canvasPosition) return;
+
+    const domPosition = network.canvasToDOM(canvasPosition);
+    const containerRect = container.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const anchorX = containerRect.left + domPosition.x;
+    const anchorY = containerRect.top + domPosition.y;
+    const cardWidth = popover.offsetWidth || 360;
+    const cardHeight = popover.offsetHeight || 320;
+    const offsetX = 56;
+    const offsetY = 18;
+
+    let left = anchorX + offsetX;
+    if (left + cardWidth > viewportWidth - 16) {
+        left = anchorX - cardWidth - offsetX;
+    }
+    let top = anchorY - offsetY;
+    if (top + cardHeight > viewportHeight - 16) {
+        top = viewportHeight - cardHeight - 16;
+    }
+
+    left = Math.max(16, Math.min(left, Math.max(16, viewportWidth - cardWidth - 16)));
+    top = Math.max(16, Math.min(top, Math.max(16, viewportHeight - cardHeight - 16)));
+
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+}
+
+function renderNodeInfoPopover(item, nodeId, connections) {
+    const titleEl = document.getElementById('nodeInfoPopoverTitle');
+    const subtitleEl = document.getElementById('nodeInfoPopoverSubtitle');
+    const bodyEl = document.getElementById('nodeInfoPopoverBody');
+    if (!titleEl || !subtitleEl || !bodyEl) return;
+
+    const accountingInfo = getAccountingInfoForNode(item, nodeId);
+    const accountingTypes = accountingInfo.types;
+    const displayNodeId = item.child_id ?? item.node_id ?? nodeId;
+
+    titleEl.innerHTML = `${escapeHtml(item.node_name || `Узел ${nodeId}`)} <span class="node-info-title-id">ID ${escapeHtml(String(displayNodeId))}</span>`;
+    subtitleEl.textContent = '';
+
+    const chips = [
+        item.object_name ? `<span class="node-info-chip"><i class="bi bi-box-seam"></i>${escapeHtml(item.object_name)}</span>` : '',
+        item.line_name ? `<span class="node-info-chip"><i class="bi bi-bezier"></i>${escapeHtml(item.line_name)}</span>` : '',
+        item.node_type_name ? `<span class="node-info-chip"><i class="bi bi-diagram-3"></i>${escapeHtml(item.node_type_name)}</span>` : '',
+        item.parameter_type_name ? `<span class="node-info-chip"><i class="bi bi-sliders"></i>${escapeHtml(item.parameter_type_name)}</span>` : '',
+        item.is_virtual ? `<span class="node-info-chip"><i class="bi bi-stars"></i>Временный узел</span>` : ''
+    ].filter(Boolean).join('');
+
+    const accountingSection = accountingTypes.length > 0 ? `
+        <div class="node-info-section">
+            <h4 class="node-info-section-title">Способы учета</h4>
+            <div class="node-info-connection-list">
+                ${accountingTypes.map((typeName, idx) => {
+                    const period = accountingInfo.valid_periods[idx] || {};
+                    const startRaw = period.start;
+                    const endRaw = period.end;
+                    const start = startRaw ? formatRuDateTime(startRaw) : 'без даты начала';
+                    const end = endRaw ? formatRuDateTime(endRaw) : 'без даты окончания';
+                    return `
+                        <div class="node-info-accounting-item">
+                            <div class="node-info-accounting-name">${escapeHtml(typeName)}</div>
+                            <div class="node-info-accounting-period">${escapeHtml(start)} — ${escapeHtml(end)}</div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    ` : '';
+
+    const connectionsSection = connections.length > 0 ? `
+        <div class="node-info-section">
+            <h4 class="node-info-section-title">Подключения</h4>
+            <div class="node-info-connection-list">
+                ${connections.map((conn, idx) => {
+                    const start = formatRuDateTime(conn.start_date) || 'без даты начала';
+                    const end = conn.end_date ? formatRuDateTime(conn.end_date) : 'без даты окончания';
+                    return `
+                        <div class="node-info-connection-item">
+                            <div class="node-info-connection-name">${idx + 1}. ${escapeHtml(conn.connection_name || 'Без названия')}</div>
+                            <div class="node-info-connection-meta">${escapeHtml(start)} - ${escapeHtml(end)}</div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    ` : `
+        <div class="node-info-section">
+            <h4 class="node-info-section-title">Подключения</h4>
+            <div class="node-info-empty">Нет активных подключений в выбранном месяце</div>
+        </div>
+    `;
+
+    bodyEl.innerHTML = `
+        ${chips ? `<div class="node-info-chip-row">${chips}</div>` : ''}
+        ${accountingSection}
+        ${connectionsSection}
+    `;
+}
+
+function renderNodeExpensesPopover(item, nodeId, expenseData, subtreeNodeIds, connectionEntries) {
+    const titleEl = document.getElementById('nodeInfoPopoverTitle');
+    const subtitleEl = document.getElementById('nodeInfoPopoverSubtitle');
+    const bodyEl = document.getElementById('nodeInfoPopoverBody');
+    if (!titleEl || !subtitleEl || !bodyEl) return;
+
+    const displayNodeId = item?.child_id ?? item?.node_id ?? nodeId;
+    const summary = expenseData?.summary || {};
+    const total = Number(summary.total || 0);
+    const consumption = Number(summary.consumption || 0);
+    const losses = Number(summary.losses || 0);
+    const totalForChart = total > 0 ? total : 1;
+    const consumptionAngle = Math.max(0, Math.min(360, (consumption / totalForChart) * 360));
+    const monthLabel = selectedAccountingMonth || expenseData?.meta?.accounting_month || 'месяц не выбран';
+
+    titleEl.innerHTML = `${escapeHtml(item?.node_name || `Узел ${nodeId}`)} <span class="node-info-title-id">ID ${escapeHtml(String(displayNodeId))}</span>`;
+    subtitleEl.textContent = `Расходы по узлу и всей нижестоящей ветке за ${monthLabel}`;
+
+    const chips = [
+        item?.object_name ? `<span class="node-info-chip"><i class="bi bi-box-seam"></i>${escapeHtml(item.object_name)}</span>` : '',
+        item?.line_name ? `<span class="node-info-chip"><i class="bi bi-bezier"></i>${escapeHtml(item.line_name)}</span>` : '',
+        `<span class="node-info-chip"><i class="bi bi-diagram-2"></i>Узлов в ветке: ${escapeHtml(String(subtreeNodeIds.length))}</span>`,
+        `<span class="node-info-chip"><i class="bi bi-plug"></i>Подключений: ${escapeHtml(String(summary.connection_count || connectionEntries.length || 0))}</span>`
+    ].filter(Boolean).join('');
+
+    bodyEl.innerHTML = `
+        ${chips ? `<div class="node-info-chip-row">${chips}</div>` : ''}
+        <div class="node-expense-summary">
+            <div class="node-expense-donut-wrap">
+                <div class="node-expense-donut" style="--consumption-angle: ${consumptionAngle}deg;">
+                    <div class="node-expense-donut-center">
+                        <div class="node-expense-donut-value">${escapeHtml(formatAmountRu(total))}</div>
+                        <div class="node-expense-donut-label">Общий объем</div>
+                    </div>
+                </div>
+            </div>
+            <div class="node-expense-metrics">
+                <div class="node-expense-metric total">
+                    <div class="node-expense-metric-label">Общее</div>
+                    <div class="node-expense-metric-value">${escapeHtml(formatAmountRu(total))}</div>
+                    <div class="node-expense-metric-subtext">Потребление + потери по ветке</div>
+                </div>
+                <div class="node-expense-metric consumption">
+                    <div class="node-expense-metric-label">Потребление</div>
+                    <div class="node-expense-metric-value">${escapeHtml(formatAmountRu(consumption))}</div>
+                    <div class="node-expense-metric-subtext">Источник 1</div>
+                </div>
+                <div class="node-expense-metric losses">
+                    <div class="node-expense-metric-label">Потери</div>
+                    <div class="node-expense-metric-value">${escapeHtml(formatAmountRu(losses))}</div>
+                    <div class="node-expense-metric-subtext">Источник 2</div>
+                </div>
+            </div>
+        </div>
+        <div class="node-expense-legend">
+            <div class="node-expense-legend-item">
+                <span class="node-expense-legend-swatch" style="background:#38bdf8;"></span>
+                Потребление: ${escapeHtml(formatAmountRu(consumption))}
+            </div>
+            <div class="node-expense-legend-item">
+                <span class="node-expense-legend-swatch" style="background:#f59e0b;"></span>
+                Потери: ${escapeHtml(formatAmountRu(losses))}
+            </div>
+        </div>
+        <div class="node-expense-note">
+            Учитываются начисления по подключениям выбранного узла и всех нижестоящих узлов сети за выбранный месяц с фильтрацией по полям <code>start_date</code> и <code>end_date</code>.
+        </div>
+    `;
+}
+
+function showNodeInfoPopover(nodeVisId) {
+    const match = String(nodeVisId).match(/^node-(-?\d+)$/);
+    const popover = document.getElementById('nodeInfoPopover');
+    const bodyEl = document.getElementById('nodeInfoPopoverBody');
+    const titleEl = document.getElementById('nodeInfoPopoverTitle');
+    const subtitleEl = document.getElementById('nodeInfoPopoverSubtitle');
+    if (!match || !popover || !bodyEl || !titleEl || !subtitleEl) return;
+
+    const nodeId = parseInt(match[1], 10);
+    const item = getNodeDataByParameterId(nodeId);
+    const connections = getConnectionsForNode(nodeId);
+
+    if (!item) {
+        titleEl.textContent = 'Информация об узле';
+        subtitleEl.textContent = '';
+        bodyEl.innerHTML = '<div class="node-info-empty">Информация по выбранному узлу не найдена.</div>';
+    } else {
+        renderNodeInfoPopover(item, nodeId, connections);
+    }
+
+    currentInfoPopoverNodeId = nodeVisId;
+    popover.classList.add('open');
+    popover.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => repositionNodeInfoPopover());
+}
+
+async function showNodeExpensesPopover(nodeVisId) {
+    const match = String(nodeVisId).match(/^node-(-?\d+)$/);
+    const popover = document.getElementById('nodeInfoPopover');
+    const bodyEl = document.getElementById('nodeInfoPopoverBody');
+    const titleEl = document.getElementById('nodeInfoPopoverTitle');
+    const subtitleEl = document.getElementById('nodeInfoPopoverSubtitle');
+    if (!match || !popover || !bodyEl || !titleEl || !subtitleEl) return;
+
+    const nodeId = parseInt(match[1], 10);
+    const item = getNodeDataByParameterId(nodeId);
+
+    if (!selectedAccountingMonth) {
+        titleEl.textContent = item?.node_name || `Узел ${nodeId}`;
+        subtitleEl.textContent = '';
+        bodyEl.innerHTML = '<div class="node-info-empty">Для расчета расходов выберите месяц учета.</div>';
+        currentInfoPopoverNodeId = nodeVisId;
+        popover.classList.add('open');
+        popover.setAttribute('aria-hidden', 'false');
+        requestAnimationFrame(() => repositionNodeInfoPopover());
+        return;
+    }
+
+    const subtreeNodeIds = getSubtreeNodeIds(nodeId);
+    const connectionEntries = getConnectionEntriesForNodeIds(subtreeNodeIds);
+    const connectionIds = connectionEntries
+        .map(connection => Number(connection?.connection_id))
+        .filter(value => Number.isFinite(value) && value > 0);
+
+    titleEl.textContent = item?.node_name || `Узел ${nodeId}`;
+    subtitleEl.textContent = 'Считаем расходы по ветке сети...';
+    bodyEl.innerHTML = '<div class="node-info-empty">Подготовка данных о расходах...</div>';
+    currentInfoPopoverNodeId = nodeVisId;
+    popover.classList.add('open');
+    popover.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => repositionNodeInfoPopover());
+
+    if (connectionIds.length === 0) {
+        subtitleEl.textContent = '';
+        bodyEl.innerHTML = '<div class="node-info-empty">Для выбранного узла и нижестоящей ветки нет активных подключений в выбранном месяце.</div>';
+        requestAnimationFrame(() => repositionNodeInfoPopover());
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/network/charges-summary', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                connection_ids: connectionIds,
+                accounting_month: selectedAccountingMonth
+            })
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data?.success) {
+            throw new Error(data?.error || 'Не удалось получить расходы');
+        }
+
+        renderNodeExpensesPopover(item || {}, nodeId, data, subtreeNodeIds, connectionEntries);
+        requestAnimationFrame(() => repositionNodeInfoPopover());
+    } catch (error) {
+        titleEl.textContent = item?.node_name || `Узел ${nodeId}`;
+        subtitleEl.textContent = '';
+        bodyEl.innerHTML = `<div class="node-info-empty">Ошибка при расчете расходов: ${escapeHtml(error.message || 'Неизвестная ошибка')}</div>`;
+        requestAnimationFrame(() => repositionNodeInfoPopover());
+    }
+}
+
+function showNodeHoverActions(nodeVisId) {
+    const actions = document.getElementById('nodeHoverActions');
+    if (!actions || !network || !nodeVisId) return;
+
+    hideNodeContextMenu();
+    hideNodeInfoPopover();
+    currentHoverActionNodeId = nodeVisId;
+    updateNodeActionMenuState(nodeVisId);
+    actions.classList.add('open');
+    actions.setAttribute('aria-hidden', 'false');
+    repositionNodeHoverActions();
+}
+
+function handleNodeActionClick(event, action) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') {
+            event.stopImmediatePropagation();
+        }
+    }
+    handleNodeHoverAction(action);
+}
+
+function openNodeInfoFromAction(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') {
+            event.stopImmediatePropagation();
+        }
+    }
+
+    const nodeVisId = currentHoverActionNodeId;
+    if (!nodeVisId) return;
+
+    if (network) {
+        network.selectNodes([nodeVisId]);
+    }
+
+    hideNodeHoverActions();
+    showNodeInfoPopover(nodeVisId);
+}
+
+async function openNodeExpensesFromAction(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') {
+            event.stopImmediatePropagation();
+        }
+    }
+
+    const nodeVisId = currentHoverActionNodeId;
+    if (!nodeVisId) return;
+
+    if (network) {
+        network.selectNodes([nodeVisId]);
+    }
+
+    hideNodeHoverActions();
+    await showNodeExpensesPopover(nodeVisId);
+}
+
+function handleNodeHoverAction(action) {
+    const nodeVisId = currentHoverActionNodeId;
+    if (!nodeVisId) return;
+
+    if (network) {
+        network.selectNodes([nodeVisId]);
+    }
+
+    hideNodeHoverActions();
+
+    if (action === 'attach') {
+        openAttachNodeModal(nodeVisId);
+        return;
+    }
+
+    if (action === 'info') {
+        showNodeInfoPopover(nodeVisId);
+        return;
+    }
+
+    if (action === 'balance') {
+        const primaryConfig = getPrimaryNodeActionConfig(nodeVisId);
+        if (primaryConfig.mode === 'recalculate') {
+            alert('Функция "Пересчитать" пока не реализована.');
+        } else {
+            alert('Функция "Сбалансировать" пока не реализована.');
+        }
+        return;
+    }
+
+    if (action === 'expenses') {
+        showNodeExpensesPopover(nodeVisId);
+        return;
+    }
+
+    if (action === 'toggle-disabled') {
+        toggleNodeDisabledState(nodeVisId);
+        return;
+    }
+
+    if (action === 'connection') {
+        openConnectionModal(nodeVisId);
+        return;
+    }
+}
+
 function restoreSelectionAfterContextMenu() {
     if (!network) return;
 
@@ -1499,6 +2948,7 @@ function showNodeContextMenu(x, y, nodeVisId) {
     const menu = document.getElementById('networkNodeContextMenu');
     if (!menu) return;
 
+    hideNodeHoverActions();
     currentContextMenuNodeId = nodeVisId;
     menu.classList.add('open');
     menu.style.left = '0px';
@@ -1517,6 +2967,188 @@ function openAttachNodeModalFromContextMenu() {
     const nodeVisId = currentContextMenuNodeId;
     hideNodeContextMenu();
     openAttachNodeModal(nodeVisId);
+}
+
+function getDefaultConnectionDateRange() {
+    if (!selectedAccountingMonth) {
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        return { start: today, end: '' };
+    }
+
+    const [year, month] = selectedAccountingMonth.split('-').map(Number);
+    if (!year || !month) {
+        const now = new Date();
+        return { start: now.toISOString().slice(0, 10), end: '' };
+    }
+
+    const start = new Date(year, month - 1, 1);
+    return {
+        start: start.toISOString().slice(0, 10),
+        end: ''
+    };
+}
+
+function openConnectionModal(nodeVisId) {
+    const nodeId = parseVisNodeId(nodeVisId);
+    const nodeItem = nodeId != null ? getNodeDataByParameterId(nodeId) : null;
+    if (nodeId == null || !nodeItem) {
+        alert('Не удалось определить узел для подключения.');
+        return;
+    }
+
+    currentConnectionParentNodeVisId = nodeVisId;
+    const defaults = getDefaultConnectionDateRange();
+
+    document.getElementById('connectionModalHint').textContent =
+        `Подключение будет создано только визуально для узла "${nodeItem.node_name || ('Узел ' + nodeId)}".`;
+    document.getElementById('connectionConsumer').value = '';
+    document.getElementById('connectionContractStart').value = defaults.start;
+    document.getElementById('connectionContractEnd').value = defaults.end;
+    document.getElementById('connectionContractNumber').value = '';
+    document.getElementById('connectionServiceType').value = nodeItem.line_name && nodeItem.line_name !== 'root' ? nodeItem.line_name : '';
+    document.getElementById('connectionName').value = nodeItem.node_name ? `${nodeItem.node_name} - подключение` : 'Новое подключение';
+    document.getElementById('connectionNodeStart').value = defaults.start;
+    document.getElementById('connectionNodeEnd').value = defaults.end;
+    document.getElementById('connectionTariffGroup').value = '';
+    document.getElementById('connectionBaseTariff').value = '';
+    document.getElementById('connectionLossTariffGroup').value = '';
+    document.getElementById('connectionLossTariff').value = '';
+    document.getElementById('connectionMainOperation').value = '';
+    document.getElementById('connectionIndexOperation').value = '';
+    document.getElementById('connectionAdvanceOperation').value = '';
+    document.getElementById('connectionIgs').value = '1';
+    document.getElementById('connectionUnmetered').value = '';
+    document.getElementById('connectionBalancing').value = 'Нет';
+    document.getElementById('connectionDistribution').value = '';
+    document.getElementById('connectionRecalcTpu').value = 'Да';
+
+    document.getElementById('connectionModalOverlay')?.classList.add('open');
+}
+
+function closeConnectionModal() {
+    document.getElementById('connectionModalOverlay')?.classList.remove('open');
+    currentConnectionParentNodeVisId = null;
+}
+
+function submitConnectionForm(event) {
+    event.preventDefault();
+    if (!currentConnectionParentNodeVisId) return;
+
+    const nodeId = parseVisNodeId(currentConnectionParentNodeVisId);
+    const nodeItem = nodeId != null ? getNodeDataByParameterId(nodeId) : null;
+    if (nodeId == null || !nodeItem) {
+        alert('Не удалось определить узел для подключения.');
+        return;
+    }
+
+    const formData = {
+        consumer: document.getElementById('connectionConsumer').value.trim(),
+        contractStart: document.getElementById('connectionContractStart').value,
+        contractEnd: document.getElementById('connectionContractEnd').value,
+        contractNumber: document.getElementById('connectionContractNumber').value.trim(),
+        serviceType: document.getElementById('connectionServiceType').value,
+        connectionName: document.getElementById('connectionName').value.trim(),
+        nodeStart: document.getElementById('connectionNodeStart').value,
+        nodeEnd: document.getElementById('connectionNodeEnd').value,
+        tariffGroup: document.getElementById('connectionTariffGroup').value.trim(),
+        baseTariff: document.getElementById('connectionBaseTariff').value.trim(),
+        lossTariffGroup: document.getElementById('connectionLossTariffGroup').value.trim(),
+        lossTariff: document.getElementById('connectionLossTariff').value.trim(),
+        mainOperation: document.getElementById('connectionMainOperation').value,
+        indexOperation: document.getElementById('connectionIndexOperation').value,
+        advanceOperation: document.getElementById('connectionAdvanceOperation').value,
+        igs: document.getElementById('connectionIgs').value.trim(),
+        unmetered: document.getElementById('connectionUnmetered').value,
+        balancing: document.getElementById('connectionBalancing').value,
+        distribution: document.getElementById('connectionDistribution').value,
+        recalcTpu: document.getElementById('connectionRecalcTpu').value
+    };
+
+    if (!formData.consumer || !formData.contractStart || !formData.serviceType || !formData.connectionName || !formData.nodeStart || !formData.tariffGroup || !formData.mainOperation || !formData.unmetered || !formData.distribution || !formData.recalcTpu) {
+        alert('Заполните обязательные поля подключения.');
+        return;
+    }
+
+    virtualConnectionSequence += 1;
+    const virtualConnectionId = `virtual-connection-${virtualConnectionSequence}`;
+
+    if (!connectionData[nodeId]) {
+        connectionData[nodeId] = {
+            count: 0,
+            connections: []
+        };
+    }
+
+    connectionData[nodeId].connections.unshift({
+        connection_id: virtualConnectionId,
+        connection_name: formData.connectionName,
+        start_date: formData.nodeStart || formData.contractStart || null,
+        end_date: formData.nodeEnd || formData.contractEnd || null,
+        is_virtual: true,
+        consumer_name: formData.consumer,
+        contract_number: formData.contractNumber,
+        service_type: formData.serviceType,
+        contract_start_date: formData.contractStart,
+        contract_end_date: formData.contractEnd,
+        tariff_group: formData.tariffGroup,
+        base_tariff: formData.baseTariff,
+        loss_tariff_group: formData.lossTariffGroup,
+        loss_tariff: formData.lossTariff,
+        main_operation: formData.mainOperation,
+        index_operation: formData.indexOperation,
+        advance_operation: formData.advanceOperation,
+        igs: formData.igs,
+        unmetered: formData.unmetered,
+        balancing: formData.balancing,
+        distribution: formData.distribution,
+        recalc_tpu: formData.recalcTpu
+    });
+    connectionData[nodeId].count = connectionData[nodeId].connections.length;
+
+    pendingNodeSelectionId = currentConnectionParentNodeVisId;
+    closeConnectionModal();
+    buildNetworkGraph(getCombinedTreeData());
+}
+
+function handleContextMenuAction(action) {
+    if (!currentContextMenuNodeId) return;
+    const nodeVisId = currentContextMenuNodeId;
+    hideNodeContextMenu();
+
+    if (network) {
+        network.selectNodes([nodeVisId]);
+    }
+
+    if (action === 'info') {
+        showNodeDetails(nodeVisId);
+        return;
+    }
+
+    if (action === 'balance') {
+        const primaryConfig = getPrimaryNodeActionConfig(nodeVisId);
+        if (primaryConfig.mode === 'recalculate') {
+            alert('Функция "Пересчитать" пока не реализована.');
+        } else {
+            alert('Функция "Сбалансировать" пока не реализована.');
+        }
+        return;
+    }
+
+    if (action === 'expenses') {
+        showNodeExpensesPopover(nodeVisId);
+        return;
+    }
+
+    if (action === 'toggle-disabled') {
+        toggleNodeDisabledState(nodeVisId);
+        return;
+    }
+
+    if (action === 'connection') {
+        openConnectionModal(nodeVisId);
+        return;
+    }
 }
 
 function openAttachNodeModal(nodeVisId) {
@@ -1763,8 +3395,8 @@ async function onObjectChange() {
     const objectId = document.getElementById('objectSelect').value;
     
     // Сброс всех зависимых фильтров
-    setSearchableSelectOptions('nodeSelect', [], 'Сначала выберите объект', true);
-    setSearchableSelectOptions('parameterSelect', [], 'Сначала выберите узел', true);
+    setFilterNativeSelect('nodeSelect', [], 'Сначала выберите объект', true);
+    setFilterNativeSelect('parameterSelect', [], 'Сначала выберите узел', true);
     
     if (!objectId) return;
     
@@ -1777,7 +3409,7 @@ async function onObjectChange() {
             return;
         }
         
-        setSearchableSelectOptions(
+        setFilterNativeSelect(
             'nodeSelect',
             data.data.map(node => ({
                 value: node.node_id,
@@ -1796,7 +3428,7 @@ async function onNodeChange() {
     const nodeId = document.getElementById('nodeSelect').value;
     
     // Сброс зависимого фильтра
-    setSearchableSelectOptions('parameterSelect', [], 'Сначала выберите узел', true);
+    setFilterNativeSelect('parameterSelect', [], 'Сначала выберите узел', true);
     
     if (!nodeId) return;
     
@@ -1809,7 +3441,7 @@ async function onNodeChange() {
             return;
         }
         
-        setSearchableSelectOptions(
+        setFilterNativeSelect(
             'parameterSelect',
             data.data.map(param => ({
                 value: param.node_calculate_parameter_id,
@@ -1849,6 +3481,31 @@ function updateDisplayModeToggle() {
     btn.title = isLtr
         ? 'Режим отображения: слева направо'
         : 'Режим отображения: стандартный';
+}
+
+function applyNetworkSidebarState(shouldRedraw = true) {
+    const layout = document.querySelector('.network-layout');
+    const toggleButton = document.getElementById('networkSidebarToggle');
+    if (!layout || !toggleButton) return;
+
+    layout.classList.toggle('sidebar-collapsed', isNetworkSidebarCollapsed);
+    const label = isNetworkSidebarCollapsed ? 'Показать правую панель' : 'Скрыть правую панель';
+    toggleButton.title = label;
+    toggleButton.setAttribute('aria-label', label);
+    toggleButton.innerHTML = isNetworkSidebarCollapsed
+        ? '<i class="bi bi-layout-sidebar"></i>'
+        : '<i class="bi bi-layout-sidebar-inset"></i>';
+
+    if (shouldRedraw && network) {
+        requestAnimationFrame(() => {
+            network.redraw();
+        });
+    }
+}
+
+function toggleNetworkSidebar() {
+    isNetworkSidebarCollapsed = !isNetworkSidebarCollapsed;
+    applyNetworkSidebarState(true);
 }
 
 function toggleDisplayMode() {
@@ -2025,13 +3682,37 @@ function buildNetworkGraph(treeData) {
                 .filter(nodeId => !Number.isNaN(nodeId));
         }
 
-        const queue = roots.map(nodeId => ({ nodeId, blocked: false }));
+        const presentNodeIds = new Set();
+        treeData.forEach(row => {
+            [row.node_id, row.child_id, row.node_calculate_parameter_id].forEach(value => {
+                const nodeId = Number(value);
+                if (!Number.isNaN(nodeId)) {
+                    presentNodeIds.add(nodeId);
+                }
+            });
+        });
+
+        manuallyDisabledNodeIds = new Set(
+            Array.from(manuallyDisabledNodeIds).filter(nodeId => presentNodeIds.has(Number(nodeId)))
+        );
+        const manuallyDisabledInTree = new Set(Array.from(manuallyDisabledNodeIds));
+        const isNodeBlockedByRules = (nodeId) =>
+            manuallyDisabledInTree.has(nodeId) || !hasActiveAccounting(nodeId);
+
+        const queue = roots.map(nodeId => ({
+            nodeId,
+            blocked: isNodeBlockedByRules(nodeId)
+        }));
         const visitedStates = new Set();
         const reachableHealthy = new Set();
         const reachableBlocked = new Set();
 
-        queue.forEach(({ nodeId }) => {
-            reachableHealthy.add(nodeId);
+        queue.forEach(({ nodeId, blocked }) => {
+            if (blocked) {
+                reachableBlocked.add(nodeId);
+            } else {
+                reachableHealthy.add(nodeId);
+            }
         });
 
         while (queue.length > 0) {
@@ -2043,12 +3724,11 @@ function buildNetworkGraph(treeData) {
             const children = adjacency.get(nodeId);
             if (!children || children.size === 0) continue;
 
-            const parentHasAccounting = hasActiveAccounting(nodeId);
-
             children.forEach(childId => {
-                // Затемняем только последующие узлы:
-                // если на пути уже был проблемный узел ИЛИ текущий родитель без активного способа учета.
-                const nextBlocked = blocked || !parentHasAccounting;
+                // Затемняем сам проблемный узел и весь хвост ниже:
+                // узел считается проблемным, если он выключен вручную
+                // или у него нет активного способа учета.
+                const nextBlocked = blocked || isNodeBlockedByRules(childId);
                 if (nextBlocked) {
                     reachableBlocked.add(childId);
                 } else {
@@ -2395,7 +4075,6 @@ function buildNetworkGraph(treeData) {
             id: visNodeId,
             label: getNodeLabel(row, nodeId),
             baseLabel: getNodeLabel(row, nodeId),
-            title: buildNodeTitle(row, nodeId),
             shape: 'dot',
             size: hasConnections ? 24 : BASE_NODE_SIZE,
             level: Number.isFinite(Number(row?.level)) ? Number(row.level) : undefined,
@@ -2470,20 +4149,8 @@ function buildNetworkGraph(treeData) {
     const data = { nodes, edges };
 
     const options = {
-        physics: isLeftToRightMode ? {
+        physics: {
             enabled: false
-        } : {
-            enabled: document.getElementById('showPhysics')?.checked ?? true,
-            solver: 'forceAtlas2Based',
-            forceAtlas2Based: {
-                gravitationalConstant: -50,
-                centralGravity: 0.01,
-                springLength: 150,
-                springConstant: 0.08,
-                damping: 0.4,
-                avoidOverlap: 0.7
-            },
-            stabilization: { iterations: 150 }
         },
         layout: isLeftToRightMode ? {
             hierarchical: {
@@ -2524,7 +4191,7 @@ function buildNetworkGraph(treeData) {
         interaction: {
             hover: true,
             tooltipDelay: 200,
-            navigationButtons: true,
+            navigationButtons: false,
             keyboard: true,
             dragNodes: !isLeftToRightMode,
             dragView: true
@@ -2532,6 +4199,8 @@ function buildNetworkGraph(treeData) {
     };
 
     // Destroy previous network if exists
+    hideNodeHoverActions();
+    hideNodeInfoPopover();
     if (network) {
         network.destroy();
         network = null;
@@ -2546,26 +4215,44 @@ function buildNetworkGraph(treeData) {
         separationApplied = true;
         spreadVirtualNodes();
         enforceObjectSeparation();
-        if (isLeftToRightMode) {
+        if (typeof network.stopSimulation === 'function') {
+            network.stopSimulation();
+        }
+        network.setOptions({ physics: { enabled: false } });
+        const physicsToggle = document.getElementById('showPhysics');
+        if (physicsToggle) {
+            physicsToggle.checked = false;
+        }
+        container.classList.remove('network-hidden');
+        network.redraw();
+
+        if (isLeftToRightMode && !pendingNodeSelectionId) {
             network.fit({
                 animation: false
             });
+            const fittedScale = typeof network.getScale === 'function' ? network.getScale() : 1;
+            if (fittedScale > 0.95) {
+                network.moveTo({
+                    position: typeof network.getViewPosition === 'function' ? network.getViewPosition() : { x: 0, y: 0 },
+                    scale: 0.95,
+                    animation: false
+                });
+            }
         }
-        network.redraw();
-        container.classList.remove('network-hidden');
         if (pendingNodeSelectionId && nodes.get(pendingNodeSelectionId)) {
             network.selectNodes([pendingNodeSelectionId]);
             network.focus(pendingNodeSelectionId, {
                 scale: isLeftToRightMode ? 1 : 1.1,
-                animation: { duration: 250, easingFunction: 'easeInOutQuad' }
+                animation: false
             });
-            showNodeDetails(pendingNodeSelectionId);
+            showNodeInfoPopover(pendingNodeSelectionId);
             pendingNodeSelectionId = null;
         }
     };
 
-    setTimeout(applyObjectSeparationOnce, 250);
-    network.once('stabilized', applyObjectSeparationOnce);
+    requestAnimationFrame(() => {
+        requestAnimationFrame(applyObjectSeparationOnce);
+    });
 
     network.on('beforeDrawing', function(ctx) {
         if (!objectGroupsForDrawing || objectGroupsForDrawing.size === 0) return;
@@ -2660,36 +4347,45 @@ function buildNetworkGraph(treeData) {
             ctx.fillText(displayCount, pos.x, pos.y);
             ctx.restore();
         });
-    });
 
-    // Click node -> details
-    network.on('click', function(params) {
-        hideNodeContextMenu();
-        if (params.nodes.length > 0) {
-            const nodeVisId = params.nodes[0]; // "node-409"
-            network.selectNodes([nodeVisId]);
-            showNodeDetails(nodeVisId);
+        if (currentHoverActionNodeId) {
+            repositionNodeHoverActions();
         }
     });
 
-    // Ensure tooltips update with fresh accounting data
-    network.on('hoverNode', function(params) {
-        if (currentDisplayMode === 'ltr') return;
+    network.on('click', function(params) {
+        hideNodeContextMenu();
+        if (params.nodes.length > 0) {
+            const nodeVisId = params.nodes[0]; // "node-409" (id = node_calculate_parameter_id на схеме)
+            const domEvent = getDomEventFromNetworkParams(params);
+            if (isCtrlLeftClick(domEvent)) {
+                domEvent.preventDefault();
+                if (typeof domEvent.stopPropagation === 'function') {
+                    domEvent.stopPropagation();
+                }
+                openExternalNodeView(nodeVisId);
+                return;
+            }
+            network.selectNodes([nodeVisId]);
+            return;
+        }
 
-        const nodeVisId = params.node;
-        const m = String(nodeVisId).match(/^node-(-?\d+)$/);
-        if (!m) return;
-        const nodeIdNum = parseInt(m[1], 10);
+        hideNodeInfoPopover();
+        hideNodeHoverActions(true);
+    });
 
-        const node = nodes.get(nodeVisId);
-        if (!node) return;
+    network.on('dragStart', function() {
+        hideNodeInfoPopover();
+        hideNodeHoverActions(true);
+    });
 
-        // Rebuild title to include fresh accounting periods
-        // Find a hint row for display fields
-        const hintRow = treeData.find(r => r.child_id === nodeIdNum) || treeData.find(r => r.node_id === nodeIdNum) || {};
-        const newTitle = buildNodeTitle(hintRow, nodeIdNum);
-
-        nodes.update({ id: nodeVisId, title: newTitle });
+    network.on('zoom', function() {
+        if (currentHoverActionNodeId) {
+            repositionNodeHoverActions();
+        }
+        if (currentInfoPopoverNodeId) {
+            repositionNodeInfoPopover();
+        }
     });
 
     // Update stats if you have these functions
@@ -2706,72 +4402,76 @@ function buildNetworkGraph(treeData) {
 }
 
 function showNodeDetails(visNodeId) {
+    const detailsContainer = document.getElementById('nodeDetails');
+    if (!detailsContainer) return;
+
     const match = String(visNodeId).match(/^node-(-?\d+)$/);
-    if (!match) return;
+    if (!match) {
+        detailsContainer.innerHTML = '<div style="color: var(--text-muted);">Информация не найдена</div>';
+        return;
+    }
+
     const nodeId = parseInt(match[1], 10);
-    const items = getCombinedTreeData().filter(item => Number(item.child_id) === nodeId || Number(item.node_id) === nodeId);
+    const item = getNodeDataByParameterId(nodeId);
+    const connections = getConnectionsForNode(nodeId);
     
-    let html = '';
-    if (items.length > 0) {
-        const item = items[0];
-        const extraInfo = `
-            ${item.parameter_type_name ? `<div class="node-info"><strong>Тип расчетного параметра:</strong> ${item.parameter_type_name}</div>` : ''}
-            ${item.purpose_name ? `<div class="node-info"><strong>Назначение:</strong> ${item.purpose_name}</div>` : ''}
-            ${item.accounting_type_name ? `<div class="node-info"><strong>Выбранный способ учета:</strong> ${item.accounting_type_name}</div>` : ''}
-            ${item.is_virtual ? `<div class="node-info"><strong>Статус:</strong> Временный узел, только на схеме</div>` : ''}
-        `;
-        const connections = getConnectionsForNode(nodeId);
-        const connectionsBlock = connections.length > 0
-            ? `
+    if (!item) {
+        detailsContainer.innerHTML = '<div style="color: var(--text-muted);">Информация не найдена</div>';
+        return;
+    }
+
+    const blocks = [
+        `<div class="node-info"><strong>Node ID:</strong> ${item.child_id ?? item.node_id ?? nodeId}</div>`
+    ];
+
+    if (item.node_name) {
+        blocks.push(`<div class="node-info"><strong>Название узла:</strong> ${item.node_name}</div>`);
+    }
+
+    if (item.object_id != null || item.object_name) {
+        blocks.push(`<div class="node-info"><strong>Объект:</strong> ${item.object_name || 'N/A'}</div>`);
+        blocks.push(`<div class="node-info"><strong>Object ID:</strong> ${item.object_id != null ? item.object_id : 'N/A'}</div>`);
+    }
+
+    blocks.push(`<div class="node-info"><strong>Line:</strong> ${item.line_name || 'N/A'}</div>`);
+    blocks.push(`<div class="node-info"><strong>Line ID:</strong> ${item.line_id || 'N/A'}</div>`);
+    blocks.push(`<div class="node-info"><strong>Type:</strong> ${item.node_type_name || 'N/A'}</div>`);
+
+    if (item.parameter_type_name) {
+        blocks.push(`<div class="node-info"><strong>Тип расчетного параметра:</strong> ${item.parameter_type_name}</div>`);
+    }
+    if (item.purpose_name) {
+        blocks.push(`<div class="node-info"><strong>Назначение:</strong> ${item.purpose_name}</div>`);
+    }
+    if (item.accounting_type_name) {
+        blocks.push(`<div class="node-info"><strong>Выбранный способ учета:</strong> ${item.accounting_type_name}</div>`);
+    }
+    if (item.is_virtual) {
+        blocks.push('<div class="node-info"><strong>Статус:</strong> Временный узел, только на схеме</div>');
+    }
+
+    blocks.push(`<div class="node-info"><strong>Level:</strong> ${item.level ?? 'N/A'}</div>`);
+
+    if (item.path_str) {
+        blocks.push(`<div class="node-info"><strong>Path:</strong> <code style="font-size: 11px;">${item.path_str}</code></div>`);
+    }
+
+    if (connections.length > 0) {
+        blocks.push(`
             <div class="node-info">
                 <strong>Подключения:</strong>
                 ${connections.map((conn, idx) => {
                     const start = formatRuDateTime(conn.start_date) || 'без даты начала';
                     const end = conn.end_date ? formatRuDateTime(conn.end_date) : 'без даты окончания';
-                    return `${idx + 1}. ${conn.connection_name} (ID: ${conn.connection_id})<br><small>${start} — ${end}</small>`;
+                    return `${idx + 1}. ${conn.connection_name || 'Без названия'} (ID: ${conn.connection_id ?? 'N/A'})<br><small>${start} — ${end}</small>`;
                 }).join('<br>')}
-            </div>`
-            : `
-            <div class="node-info">
-                <strong>Подключения:</strong> Нет активных подключений в выбранном месяце
-            </div>`;
-        const objectBlock = (item.object_id != null || item.object_name)
-            ? `
-            <div class="node-info">
-                <strong>Объект:</strong> ${item.object_name || 'N/A'}
             </div>
-            <div class="node-info">
-                <strong>Object ID:</strong> ${item.object_id != null ? item.object_id : 'N/A'}
-            </div>`
-            : '';
-        html = `
-            <div class="node-info">
-                <strong>Node ID:</strong> ${item.child_id || item.node_id}
-            </div>
-            ${objectBlock}
-            <div class="node-info">
-                <strong>Line:</strong> ${item.line_name || 'N/A'}
-            </div>
-            <div class="node-info">
-                <strong>Line ID:</strong> ${item.line_id || 'N/A'}
-            </div>
-            <div class="node-info">
-                <strong>Type:</strong> ${item.node_type_name || 'N/A'}
-            </div>
-            ${extraInfo}
-            <div class="node-info">
-                <strong>Level:</strong> ${item.level}
-            </div>
-            <div class="node-info">
-                <strong>Path:</strong> <code style="font-size: 11px;">${item.path_str}</code>
-            </div>
-            ${connectionsBlock}
-        `;
+        `);
     } else {
-        html = '<div style="color: var(--text-muted);">Информация не найдена</div>';
+        blocks.push('<div class="node-info"><strong>Подключения:</strong> Нет активных подключений в выбранном месяце</div>');
     }
-    
-    document.getElementById('nodeDetails').innerHTML = html;
+
+    detailsContainer.innerHTML = blocks.join('');
 }
 
 function updateNetworkStats() {
@@ -2835,7 +4535,7 @@ function updateObjectLegend() {
 function updateNetworkOptions() {
     if (network && nodesData && edgesData) {
         const showLabels = document.getElementById('showLabels').checked;
-        const usePhysics = document.getElementById('showPhysics')?.checked ?? true;
+        const usePhysics = false;
         
         // Обновляем метки
         nodesData.forEach(node => {
